@@ -722,7 +722,10 @@ function renderStatus(kind) {
   const status = $('status');
   if (kind === 'loading') status.textContent = t('loading');
   else if (kind === 'error') status.textContent = t('loadFailed');
-  else {
+  else if (state.fromSnapshot) {
+    status.textContent = t('updatingShort', { time: fmtTime(state.data.loadedAt) });
+    status.title = '';
+  } else {
     status.textContent = t('updatedShort', { time: fmtTime(state.data.loadedAt) });
     status.title = `${fmtTime(state.data.loadedAt)} · ${t('sources')}`;
   }
@@ -2102,13 +2105,15 @@ function placeButton(legs, sizes, cost, errors) {
   const limit = weeklyLimit();
   const room = limit > 0 ? Math.max(0, limit - stakedThisWeek(state.account)) : Infinity;
   const over = cost > room;
-  const blocked = errors.length > 0 || sizes.length === 0 || short || over || !state.accountReady;
+  // Opened on the last board saved: bets wait for today's odds.
+  const updating = Boolean(state.fromSnapshot);
+  const blocked = errors.length > 0 || sizes.length === 0 || short || over || !state.accountReady || updating;
   return el('div', { class: 'place-row' }, [
     el('button', {
       class: 'primary-button place-button',
       type: 'button',
       disabled: blocked ? '' : null,
-      text: short ? t('placeShort', { v: fmtMoney(money, { sign: false }) }) : over ? t('limitHit', { v: fmtMoney(room, { sign: false }) }) : t('placeSlip', { v: fmtMoney(cost, { sign: false }) }),
+      text: updating ? t('placeUpdating') : short ? t('placeShort', { v: fmtMoney(money, { sign: false }) }) : over ? t('limitHit', { v: fmtMoney(room, { sign: false }) }) : t('placeSlip', { v: fmtMoney(cost, { sign: false }) }),
       onclick: () => {
         const slip = { id: newSlipId(), mode: state.slipMode, sizes, stake: state.slipStake, cost, legs: legs.map(legRecord) };
         const { account, error } = placeSlip(state.account, slip, new Date(), { extra: poolExtra(), limit });
@@ -5135,6 +5140,36 @@ function warmImages() {
   }, 300);
 }
 
+// The last board, kept on the device: the page opens on it at once and
+// swaps in today's odds when they arrive (bets wait for those). Tied to
+// this deploy, so a new version never opens on an old one's data.
+const SNAPSHOT_KEY = 'oddsStudy.board';
+const SNAPSHOT_MAX_AGE_MS = 6 * 3_600_000;
+const buildVersion = () => document.querySelector('meta[name="build-version"]')?.content || 'dev';
+function readSnapshot() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SNAPSHOT_KEY) || 'null');
+    if (!saved?.data?.games || saved.v !== buildVersion() || !(Date.now() - saved.at < SNAPSHOT_MAX_AGE_MS)) return null;
+    return saved.data;
+  } catch {
+    return null;
+  }
+}
+let snapshotTimer = null;
+function saveSnapshot() {
+  clearTimeout(snapshotTimer);
+  snapshotTimer = setTimeout(() => {
+    if (!state.data || state.fromSnapshot) return;
+    try {
+      localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ v: buildVersion(), at: Date.now(), data: state.data }));
+    } catch {
+      try {
+        localStorage.removeItem(SNAPSHOT_KEY);
+      } catch {}
+    }
+  }, 1000);
+}
+
 async function load() {
   renderStatus('loading');
   const booting = state.booting;
@@ -5154,12 +5189,56 @@ async function load() {
       }, BOOT_LIMIT_MS)
     : null;
   $('refresh').disabled = true;
+  // The last board saved opens the page at once; today's replaces it below.
+  const saved = booting ? readSnapshot() : null;
+  if (saved) {
+    state.data = saved;
+    state.fromSnapshot = true;
+    if (state.wantedTab && tabAvailable(state.wantedTab)) state.tab = state.wantedTab;
+    state.wantedTab = null;
+    renderAll();
+    openWantedGame();
+    clearTimeout(limit);
+    open();
+    refreshLive();
+  }
   try {
     // The main board first (the request queue serves it before anything else).
     const now = new Date();
-    state.data = await loadOdds(now, onProgress);
+    const fresh = await loadOdds(now, saved ? undefined : onProgress);
     const extraGames = loadExtraLeagues(now).catch(error => (console.error(error), []));
     const extraFutures = loadExtraFutures().catch(error => (console.error(error), []));
+    if (saved) {
+      // Swapped in whole (every league's games at once), so the list doesn't
+      // shrink to the main leagues and grow back.
+      const games = await within(extraGames, BOOT_LIMIT_MS, []);
+      const ids = new Set(fresh.games.map(g => g.id));
+      fresh.games = [...fresh.games, ...(games || []).filter(g => !ids.has(g.id))].sort((a, b) => a.startUtc.localeCompare(b.startUtc));
+      const futures = await within(extraFutures, 4000, null);
+      if (futures) {
+        const keys = new Set(fresh.futures.map(f => f.key));
+        fresh.futures = [...fresh.futures, ...futures.filter(f => !keys.has(f.key))];
+      }
+      state.data = fresh;
+      state.fromSnapshot = false;
+      renderAll();
+      openWantedGame();
+      warmImages();
+      saveSnapshot();
+      if (!futures)
+        extraFutures.then(async more => {
+          const keys = new Set(state.data.futures.map(f => f.key));
+          state.data.futures = [...state.data.futures, ...more.filter(f => !keys.has(f.key))];
+          renderAll();
+          saveSnapshot();
+          await loadFutureTeams(state.data.futures).catch(() => {});
+          renderFutures();
+          warmImages();
+        });
+      else loadFutureTeams(state.data.futures).then(() => (renderFutures(), warmImages())).catch(() => {});
+      return;
+    }
+    state.data = fresh;
     // A tab asked for in the address (#sim) that needed the odds opens now.
     if (state.wantedTab && state.tab !== state.wantedTab && tabAvailable(state.wantedTab)) state.tab = state.wantedTab;
     state.wantedTab = null;
@@ -5186,6 +5265,7 @@ async function load() {
       }
       renderAll();
       openWantedGame();
+      saveSnapshot();
       // Opened on the simulator: the page opens once its simulation is ready.
       if (state.tab === 'sim') await renderSim();
       await within(imagesReady($('panel-' + state.tab)), BOOT_IMAGES_MS);
@@ -5205,11 +5285,13 @@ async function load() {
           renderAll();
           openWantedGame();
           warmImages();
+          saveSnapshot();
         }
       });
     extraFutures.then(async futures => {
       addFutures(futures);
       renderAll();
+      saveSnapshot();
       // The clubs' logos: ESPN's team lists for the boards' leagues, then the boards again.
       await loadFutureTeams(state.data.futures).catch(() => {});
       renderFutures();

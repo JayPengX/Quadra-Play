@@ -324,8 +324,10 @@ export function fitTeamRuns(homeWinFair, totalLine, overFair, r = TEAM_RUNS_DISP
     const push = gridChance(g, (h, a) => h + a === totalLine);
     return gridChance(g, (h, a) => h + a > totalLine) / (1 - push);
   };
-  const bisect = (lo, hi, f) => {
-    for (let i = 0; i < 40; i++) {
+  // Halving down to `tol`: far finer than two-decimal odds can show, and a
+  // fraction of the work of a fixed 40 steps (this runs for every game).
+  const bisect = (lo, hi, f, tol) => {
+    while (hi - lo > tol) {
       const mid = (lo + hi) / 2;
       if (f(mid)) lo = mid;
       else hi = mid;
@@ -333,11 +335,11 @@ export function fitTeamRuns(homeWinFair, totalLine, overFair, r = TEAM_RUNS_DISP
     return (lo + hi) / 2;
   };
   // Total mean for a given home share, then the share for the win chance.
-  const totalFor = share => bisect(1, 25, t => overChance(scoreGrid(t * share, t * (1 - share), r)) < overFair);
+  const totalFor = share => bisect(1, 25, t => overChance(scoreGrid(t * share, t * (1 - share), r)) < overFair, 1e-4);
   const share = bisect(0.15, 0.85, s => {
     const t = totalFor(s);
     return gridChance(scoreGrid(t * s, t * (1 - s), r), (h, a) => h > a) < homeWinFair;
-  });
+  }, 1e-5);
   const total = totalFor(share);
   return { home: total * share, away: total * (1 - share) };
 }

@@ -49,7 +49,37 @@ export function errKeyOf(sport) {
 }
 
 // Each game's run and goal models, fitted once: fitting team runs is slow.
+// The fitted team runs are also kept on the device, so opening the page
+// again doesn't fit the same games anew.
 const modelCache = new Map();
+const MEANS_KEY = 'oddsStudy.teamRuns';
+let savedMeans = null;
+let meansTimer = null;
+// Tied to the deploy: a new version's model never reuses an old one's fits.
+const meansVersion = () => globalThis.document?.querySelector?.('meta[name="build-version"]')?.content || 'dev';
+function storedMeans() {
+  if (savedMeans) return savedMeans;
+  savedMeans = new Map();
+  try {
+    const saved = JSON.parse(globalThis.localStorage?.getItem(MEANS_KEY) || 'null');
+    const list = saved?.v === meansVersion() ? saved.list : null;
+    if (Array.isArray(list)) for (const [key, home, away] of list) if (Number.isFinite(home) && Number.isFinite(away)) savedMeans.set(key, { home, away });
+  } catch {}
+  return savedMeans;
+}
+function keepMeans(key, means) {
+  const store = storedMeans();
+  store.delete(key);
+  store.set(key, means);
+  if (!globalThis.localStorage || meansTimer) return;
+  meansTimer = setTimeout(() => {
+    meansTimer = null;
+    try {
+      const list = [...store].slice(-600).map(([k, m]) => [k, m.home, m.away]);
+      globalThis.localStorage.setItem(MEANS_KEY, JSON.stringify({ v: meansVersion(), list }));
+    } catch {}
+  }, 2000);
+}
 function gameModel(game, homeWin) {
   const key = `${game.id}|${game.total?.line}|${game.total?.overFair}|${homeWin}`;
   if (modelCache.has(key)) return modelCache.get(key);
@@ -59,7 +89,9 @@ function gameModel(game, homeWin) {
   // Each team's runs from the win chance (DraftKings', or the blended one
   // when it has none) and the total.
   if (baseball && game.total && homeWin != null) {
-    model.means = fitTeamRuns(homeWin, game.total.line, game.total.overFair);
+    const fitKey = `${homeWin}|${game.total.line}|${game.total.overFair}`;
+    model.means = storedMeans().get(fitKey) || fitTeamRuns(homeWin, game.total.line, game.total.overFair);
+    keepMeans(fitKey, model.means);
     model.grid = scoreGrid(model.means.home, model.means.away);
   }
   if (modelCache.size > 2000) modelCache.clear();
