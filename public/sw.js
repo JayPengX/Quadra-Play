@@ -1,6 +1,7 @@
 // Quadra Sportsbook's (Odds Study's) service worker: keeps the page's own files so the app opens
 // without a connection (with the last prices it saved) and can be installed.
-// Odds, scores and sync go to other sites and are never touched here.
+// Odds, scores and sync go to other sites and are never touched here;
+// team and league logos are kept (see the end of this file).
 //
 // A file with a ?v= version (every deploy stamps one) is served from the
 // cache first, since that exact version never changes; anything else (the
@@ -16,7 +17,9 @@ self.addEventListener('activate', event => {
   event.waitUntil(
     caches
       .keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      // Only this app's own old copies: the other Quadra apps share this site
+      // (and its caches), and the logos are kept for all of them.
+      .then(keys => Promise.all(keys.filter(k => k.startsWith('quadra-odds-') && k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -56,6 +59,7 @@ async function cacheFirst(request) {
 self.addEventListener('fetch', event => {
   const request = event.request;
   const url = new URL(request.url);
+  if (isLogo(request, url)) return event.respondWith(logo(event));
   if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.endsWith('/version.json')) return;
   event.respondWith(url.searchParams.has('v') && request.mode !== 'navigate' ? cacheFirst(request) : networkFirst(request));
 });
@@ -73,3 +77,73 @@ self.addEventListener('message', event => {
     )
   );
 });
+
+// ---- Team and league logos ----------------------------------------------------
+// ESPN tells browsers to keep a logo for 2 seconds, so without this every
+// open downloaded every logo again. Logos are kept here instead, in one
+// cache every Quadra app on this site shares (Sportsbook and Fixtures show
+// the same clubs): served straight from the device, and checked again in
+// the background once a week. Keep in sync with the other apps' sw.js.
+const LOGO_CACHE = 'quadra-logos-v1';
+const LOGO_HOSTS = ['a.espncdn.com', 'r2.thesportsdb.com'];
+const LOGO_FRESH_MS = 7 * 24 * 3600 * 1000;
+const LOGO_MAX = 800;
+const LOGO_AGE = 'x-quadra-cached-at';
+
+const isLogo = (request, url) => request.method === 'GET' && request.destination === 'image' && LOGO_HOSTS.includes(url.hostname);
+// When a logo was saved: on the copy itself (ESPN's, readable), or on a
+// small note beside it (TheSportsDB's, which the page may not read).
+const logoNote = url => `${self.registration.scope}__logo-saved?u=${encodeURIComponent(url)}`;
+
+async function saveLogo(url) {
+  const cache = await caches.open(LOGO_CACHE);
+  const now = String(Date.now());
+  if (new URL(url).hostname === 'a.espncdn.com') {
+    // ESPN allows reading its logos (CORS): kept with the time saved.
+    const res = await fetch(url, { mode: 'cors', credentials: 'omit' });
+    if (!res.ok) return null;
+    const copy = new Response(await res.blob(), { headers: { 'content-type': res.headers.get('content-type') || 'image/png', [LOGO_AGE]: now } });
+    await cache.put(url, copy.clone());
+    trimLogos(cache);
+    return copy;
+  }
+  // Not readable (TheSportsDB): kept as the page would get it.
+  const res = await fetch(url, { mode: 'no-cors', credentials: 'omit' });
+  if (res.type !== 'opaque' && !res.ok) return null;
+  await cache.put(url, res.clone());
+  await cache.put(logoNote(url), new Response(now));
+  trimLogos(cache);
+  return res;
+}
+
+async function logoAge(cache, url, hit) {
+  const saved = hit.type === 'opaque' ? await (await cache.match(logoNote(url)))?.text() : hit.headers.get(LOGO_AGE);
+  return Date.now() - (Number(saved) || 0);
+}
+
+// Oldest out first once there are too many.
+let trimming = false;
+async function trimLogos(cache) {
+  if (trimming || Math.random() > 0.05) return;
+  trimming = true;
+  try {
+    const keys = (await cache.keys()).filter(k => !k.url.includes('__logo-saved'));
+    for (const old of keys.slice(0, Math.max(0, keys.length - LOGO_MAX))) {
+      await cache.delete(old);
+      await cache.delete(logoNote(old.url));
+    }
+  } finally {
+    trimming = false;
+  }
+}
+
+async function logo(event) {
+  const url = event.request.url;
+  const cache = await caches.open(LOGO_CACHE);
+  const hit = await cache.match(url);
+  if (hit) {
+    if ((await logoAge(cache, url, hit)) > LOGO_FRESH_MS) event.waitUntil(saveLogo(url).catch(() => {}));
+    return hit;
+  }
+  return (await saveLogo(url).catch(() => null)) || fetch(event.request);
+}

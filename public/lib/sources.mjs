@@ -847,13 +847,41 @@ export async function loadLeagueTeams(sport) {
   const path = LEAGUES[sport]?.path ?? (sport.startsWith('espn:') ? sport.slice(5) : null);
   if (!path) return false;
   // Every club: ESPN's list stops at its first page (college football's is long) without a limit.
-  const data = await getJson(`${ESPN}/${path}/teams?limit=1000`).catch(() => null);
-  const teams = (data?.sports?.[0]?.leagues?.[0]?.teams ?? [])
-    .map(x => x.team)
-    .filter(t => t?.displayName && t.logos?.[0]?.href)
-    .map(t => ({ name: t.displayName, logo: t.logos[0].href, nick: t.name || t.shortDisplayName || t.displayName }));
+  const url = `${ESPN}/${path}/teams?limit=1000`;
+  let teams = await storedTeams(url);
+  if (!teams) {
+    const data = await getJson(url).catch(() => null);
+    teams = (data?.sports?.[0]?.leagues?.[0]?.teams ?? [])
+      .map(x => x.team)
+      .filter(t => t?.displayName && t.logos?.[0]?.href)
+      .map(t => ({ name: t.displayName, logo: t.logos[0].href, nick: t.name || t.shortDisplayName || t.displayName }));
+    if (teams.length) storeTeams(url, teams);
+  }
   if (teams.length) rememberTeams(sport, teams);
   return teams.length > 0;
+}
+
+// The team lists kept on the device for a week (clubs change once a
+// season), so opening the app doesn't download every league's again. In
+// the browser's Cache Storage, shared by the Quadra apps on this site; the
+// service workers never clear it.
+const TEAMS_CACHE = 'quadra-teams-v1';
+const TEAMS_FRESH_MS = 7 * 24 * 3600 * 1000;
+async function storedTeams(url) {
+  try {
+    const hit = await (await globalThis.caches?.open(TEAMS_CACHE))?.match(url);
+    if (!hit) return null;
+    const { at, teams } = await hit.json();
+    return Date.now() - at < TEAMS_FRESH_MS && Array.isArray(teams) && teams.length ? teams : null;
+  } catch {
+    return null;
+  }
+}
+async function storeTeams(url, teams) {
+  try {
+    const cache = await globalThis.caches?.open(TEAMS_CACHE);
+    await cache?.put(url, new Response(JSON.stringify({ at: Date.now(), teams }), { headers: { 'content-type': 'application/json' } }));
+  } catch {}
 }
 
 // A Kambi match in play as an outcome still pending: sets won so far (or the
