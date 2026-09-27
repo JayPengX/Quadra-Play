@@ -1,5 +1,5 @@
 // The simulated betting account: play money only. It starts with NT$10,000,
-// gets NT$1,000 once a week when the app is opened (Taiwan time, weeks from
+// gets ECONOMY.oddsWeekly (NT$500) once a week when the app is opened (Taiwan time, weeks from
 // Monday; it was NT$5,000 before the Quadra money pool), and buys
 // saved slips at the lottery's own prices; once every game on a slip is over,
 // the slip pays out like a real ticket (tax and payout cap included).

@@ -90,7 +90,7 @@ import { detectLocale, makeT } from './lib/i18n.mjs';
 import { f1Driver, f1Constructor, findTeamLogo, countryFlag, leagueLogo, teamLogo, teamZh, LEAGUES, familyOf, isSoccer, isSets, isNeutral, normalizeTeamName } from './lib/teams.mjs';
 import { houseRule, minLegsProblem } from './lib/rules.mjs';
 import { gameOptions, crowdPool, f1Podium } from './lib/board.mjs';
-import { ARCADE, STREAK, scorer, bestRound, earnedToday, roomToday, payRound, roundId, wageMinutes, stakeToLose, DERBY, pitchPlan, ballAt, swingResult, TYPING, ticketCode, groupCode, typedRight, SORT, SORT_LEAGUES, sortQuestion, sortPayout, FREE_THROW, shotPlan, markerAt, shotResult, ADAPT, adapt } from './lib/arcade.mjs';
+import { ARCADE, STREAK, scorer, bestRound, earnedToday, roomToday, payRound, roundId, wageMinutes, stakeToLose, DERBY, pitchPlan, ballAt, swingResult, ticketCode, groupCode, SORT, SORT_LEAGUES, sortQuestion, sortPayout, FREE_THROW, shotPlan, markerAt, shotResult, ADAPT, adapt } from './lib/arcade.mjs';
 import { auditPools, auditCrowd } from './lib/audit.mjs';
 import { recommend } from './lib/recommend.mjs';
 
@@ -4190,7 +4190,7 @@ function attachPad(input, { digits = 7, onEnter = null, label = '' } = {}) {
 // The games' tiles, today's winnings against the daily cap, and the game
 // being played. The game's own view is built once per round and kept, so the
 // page re-rendering (new odds, a sync) never interrupts a pitch.
-const ARCADE_ICON = { typing: '⌨️', sort: '🗂️', derby: '⚾', freethrow: '🏀' };
+const ARCADE_ICON = { sort: '🗂️', derby: '⚾', freethrow: '🏀' };
 const ARCADE_MAX = Object.fromEntries(ARCADE.games.map(game => [game, bestRound(game)]));
 
 function renderArcade() {
@@ -4248,7 +4248,7 @@ function openGame(game) {
   stopGame();
   state.arcadeGame = state.arcadeGame === game ? null : game;
   state.roundLive = Boolean(state.arcadeGame);
-  state.arcadeView = state.arcadeGame ? { typing: typingView, sort: sortView, derby: derbyView, freethrow: freeThrowView }[game]() : null;
+  state.arcadeView = state.arcadeGame ? { sort: sortView, derby: derbyView, freethrow: freeThrowView }[game]() : null;
   renderArcade();
   state.arcadeView?.focus({ preventScroll: true });
 }
@@ -5031,123 +5031,6 @@ function sortView() {
   return view;
 }
 
-// 打工：輸入彩券號碼: key in each ticket number on the page's own number pad
-// (no phone keyboard popping up; a real keyboard works too). Each one right
-// pays the same. The clock starts at the first key.
-function typingView() {
-  const t = state.t;
-  const hud = gameHud('typing');
-  const slot = el('div', { class: 'sort-slot', 'aria-live': 'polite' });
-  const entry = el('p', { class: 'typing-entry', 'aria-live': 'polite' });
-  const box = el('div', { class: 'arcade-actions' });
-  const score = scorer('typing');
-  let code = ticketCode();
-  let typed = '';
-  let right = 0;
-  let typos = 0;
-  let began = 0;
-  let done = false;
-  const update = () => hud.set({ done: right, of: TYPING.codes, earned: score.total, run: score.run });
-  const showEntry = () => {
-    // What's keyed so far, grouped like the ticket, with the rest as dashes.
-    entry.textContent = typed.padEnd(TYPING.digits, '·').replace(/(.{4})(?=.)/g, '$1 ');
-    entry.classList.toggle('full', typed.length === TYPING.digits);
-  };
-  const show = () => {
-    slot.replaceChildren(el('div', { class: 'lotto-ticket' }, [el('span', { class: 'lotto-head', text: t('lottoHead') }), el('p', { class: 'typing-code', text: groupCode(code) })]));
-    showEntry();
-    update();
-  };
-  const submit = () => {
-    if (done || typed.length < TYPING.digits) return;
-    if (typedRight(typed, code)) {
-      right++;
-      hud.flash(score.good(TYPING.pay), true);
-      code = ticketCode();
-      entry.classList.remove('typo');
-      slot.firstChild?.classList.add('fly', 'fly-2');
-      typed = '';
-      if (right === TYPING.codes) {
-        done = true;
-        update();
-        pad.remove();
-        entry.remove();
-        finishRound('typing', score.total, box, t('typingDone', { n: right, typos }), performance.now() - began, score, hud.round);
-        return;
-      }
-      later(show, 140);
-    } else {
-      typos++;
-      hud.flash(score.bad(), false);
-      entry.classList.remove('typo');
-      void entry.offsetWidth;
-      entry.classList.add('typo');
-      typed = '';
-      slot.firstChild?.classList.remove('shake');
-      void slot.firstChild?.offsetWidth;
-      slot.firstChild?.classList.add('shake');
-      showEntry();
-      update();
-    }
-  };
-  const press = key => {
-    if (done || pad.hidden) return;
-    began ||= performance.now();
-    if (key === 'back') typed = typed.slice(0, -1);
-    else if (key === 'enter') return submit();
-    else if (typed.length < TYPING.digits) typed += key;
-    showEntry();
-    // The tenth digit sends it: one less tap per ticket.
-    if (typed.length === TYPING.digits) submit();
-  };
-  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'back', '0', 'enter'];
-  const pad = el('div', { class: 'num-pad' },
-    keys.map(key =>
-      el('button', {
-        class: `num-key ${key.length > 1 ? `num-${key}` : ''}`,
-        type: 'button',
-        'aria-label': key === 'back' ? t('keyBack') : key === 'enter' ? t('typingEnter') : key,
-        text: key === 'back' ? '⌫' : key === 'enter' ? '✓' : key,
-        // pointerdown answers at once on phones (no 300 ms click wait).
-        onpointerdown: event => (event.preventDefault(), press(key))
-      })
-    )
-  );
-  // Nothing to type until the shift starts (the clock starts with it).
-  pad.hidden = true;
-  entry.hidden = true;
-  slot.replaceChildren(el('p', { class: 'muted', text: t('typingReady') }));
-  box.append(
-    el('button', {
-      class: 'primary-button game-big-button',
-      type: 'button',
-      text: t('arcadeStart'),
-      onclick: () => {
-        box.replaceChildren();
-        pad.hidden = false;
-        entry.hidden = false;
-        began = performance.now();
-        show();
-      }
-    })
-  );
-  update();
-  return el('div', {
-    class: 'arcade-game',
-    tabindex: '0',
-    onkeydown: e => {
-      if (/^\d$/.test(e.key)) press(e.key);
-      else if (e.key === 'Backspace') press('back');
-      else if (e.key === 'Enter') press('enter');
-      else return;
-      e.preventDefault();
-    }
-  }, [el('p', { class: 'note', text: `${t('typingRules', { n: TYPING.codes, pay: fmtMoney(TYPING.pay, { sign: false }) })} ${streakRule('typing')}` }), hud.node, slot, entry, pad, box]);
-}
-
-// ---- F1 -----------------------------------------------------------------------
-
-// Every driver the market prices, like the lottery's full list.
 function renderF1() {
   const t = state.t;
   const f1 = state.data.f1;

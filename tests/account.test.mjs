@@ -333,6 +333,7 @@ test('Quadra pool: extra money to bet with, the weekly limit, entries for the po
   // Two separate accounts folded together keep both starts and grants.
   const other = claimGrant(newAccount(new Date('2026-08-01T00:00:00Z')), new Date('2026-09-22T01:00:00Z'));
   const both = mergeDistinct(claimGrant(base, new Date('2026-09-22T01:00:00Z')), other);
-  assert.equal(balance(both), 2 * (10_000 + 1_000));
+  const { WEEKLY_GRANT } = await import('../public/lib/account.mjs');
+  assert.equal(balance(both), 2 * (10_000 + WEEKLY_GRANT));
   assert.equal(mergeDistinct(both, other).ledger.length, both.ledger.length);
 });

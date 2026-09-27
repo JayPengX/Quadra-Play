@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ARCADE, PACE, STREAK, ADAPT, adapt, payRound, scorer, scoreRound, bestRound, typicalPerMinute, earnedToday, roomToday, payGame, wageMinutes, stakeToLose, DERBY, pitchPlan, ballAt, swingResult, derbyPayout, TYPING, ticketCode, groupCode, typedRight, typingPayout, SORT, SORT_SETS, SORT_LEAGUES, SORT_SPORTS, sortQuestion, sortPayout, FREE_THROW, shotPlan, markerAt, shotResult, freeThrowPayout } from '../public/lib/arcade.mjs';
+import { ARCADE, PAY_SCALE, PACE, STREAK, ADAPT, adapt, payRound, scorer, scoreRound, bestRound, typicalPerMinute, earnedToday, roomToday, payGame, wageMinutes, stakeToLose, DERBY, pitchPlan, ballAt, swingResult, derbyPayout, ticketCode, groupCode, SORT, SORT_SETS, SORT_LEAGUES, SORT_SPORTS, sortQuestion, sortPayout, FREE_THROW, shotPlan, markerAt, shotResult, freeThrowPayout } from '../public/lib/arcade.mjs';
 import { leagueTeams, rememberTeams, normalizeTeamName, teamNick, familyOf } from '../public/lib/teams.mjs';
 import { newAccount, balance, mergeAccounts } from '../public/lib/account.mjs';
 
@@ -8,10 +8,10 @@ test('mini games pay into the ledger, at most the daily cap, and merge like any 
   const now = new Date('2026-09-26T04:00:00Z');
   let account = newAccount(now);
   let paid;
-  ({ account, paid } = payGame(account, 'derby', 700, now));
-  assert.equal(paid, 700);
+  ({ account, paid } = payGame(account, 'derby', ARCADE.dailyCap - 100, now));
+  assert.equal(paid, ARCADE.dailyCap - 100);
   ({ account, paid } = payGame(account, 'memory', 1000, now));
-  assert.equal(paid, ARCADE.dailyCap - 700);
+  assert.equal(paid, 100);
   assert.equal(roomToday(account, now), 0);
   assert.equal(payGame(account, 'value', 100, now).paid, 0);
   assert.equal(balance(account), 10_000 + ARCADE.dailyCap);
@@ -41,18 +41,14 @@ test('home run derby: timing decides, faster pitches, change-ups slow down', () 
   assert.equal(pitchPlan(ADAPT.start, () => 0).breakX, 0);
   // All home runs: their pay and the streak ladder (the 2nd in a row adds ladder[0], the rest ladder[1]).
   const [a, b] = STREAK.derby.ladder;
-  assert.equal(derbyPayout(Array(DERBY.pitches).fill('hr')), Math.round(DERBY.pitches * DERBY.pay.hr + a + (DERBY.pitches - 2) * b));
+  assert.equal(derbyPayout(Array(DERBY.pitches).fill('hr')), Math.round((DERBY.pitches * DERBY.pay.hr + a + (DERBY.pitches - 2) * b) * PAY_SCALE));
   assert.equal(derbyPayout(['hit', 'miss']), 0);
 });
 
-test('data entry: pure effort, the same pay for every number typed right', () => {
+test('the team quiz\'s tickets carry a ticket number', () => {
   const code = ticketCode();
   assert.match(code, /^\d{10}$/);
   assert.equal(groupCode('4829173506'), '4829 1735 06');
-  assert.ok(typedRight('4829 1735 06', '4829173506'));
-  assert.ok(typedRight('4829-1735-06', '4829173506'));
-  assert.ok(!typedRight('4829 1735 60', '4829173506'));
-  assert.equal(typingPayout(TYPING.codes), TYPING.codes * TYPING.pay);
 });
 
 test('every round is measured against the minimum wage and the lottery\'s take', () => {
@@ -100,10 +96,7 @@ test('team quiz: a new mixed question every ticket, one right box, never a coin 
   assert.equal(sortPayout(SORT.questions), Math.round(SORT.questions * SORT.pay));
 });
 
-test('risk by kind of game: typing is the safe earn, the skill games high risk, high pay', () => {
-  // Typing: a typo costs nothing, and a round pays nearly the same however it goes.
-  assert.equal(STREAK.typing.penalty, 0);
-  assert.ok(bestRound('typing') <= 1.1 * scoreRound('typing', PACE.typing.events).total);
+test('risk by kind of game: the skill games high risk, high pay', () => {
   // The skill games: misses cost money, a bad round pays about nothing, a good one two to three times typical, a perfect one never more than about four and a half.
   const n = 18;
   const bad = { derby: ['hit', 'miss', 'miss', 'hit', ...Array(n - 4).fill('miss')], freethrow: ['make', 'miss', 'miss', 'make', ...Array(n - 4).fill('miss')] };
@@ -123,8 +116,8 @@ test('risk by kind of game: typing is the safe earn, the skill games high risk, 
   // A streak pays its bonus on every `every`th in a row; a mistake resets it.
   const score = scorer('sort');
   for (let i = 0; i < STREAK.sort.every - 1; i++) assert.equal(score.good(1), 0);
-  assert.equal(score.good(1), STREAK.sort.bonus);
-  assert.equal(score.bad(), STREAK.sort.penalty);
+  assert.equal(score.good(1), STREAK.sort.bonus * PAY_SCALE);
+  assert.equal(score.bad(), STREAK.sort.penalty * PAY_SCALE);
   assert.equal(score.run, 0);
   // A round never pays under 0.
   assert.equal(scoreRound('freethrow', ['miss', 'miss', 'miss']).total, 0);
@@ -139,9 +132,9 @@ test('free throws: the arrow sweeps faster and the zone narrows; the middle swis
   assert.equal(shotResult(0.5, plan), 'swish');
   assert.equal(shotResult(0.5 + plan.zone / 3, plan), 'make');
   assert.equal(shotResult(0.9, plan), 'miss');
-  assert.equal(freeThrowPayout(['swish', 'make', 'miss']), Math.round(FREE_THROW.pay.swish + FREE_THROW.pay.make + STREAK.freethrow.ladder[0] - STREAK.freethrow.penalty));
+  assert.equal(freeThrowPayout(['swish', 'make', 'miss']), Math.round((FREE_THROW.pay.swish + FREE_THROW.pay.make + STREAK.freethrow.ladder[0] - STREAK.freethrow.penalty) * PAY_SCALE));
   // No math and no luck: every game is work or timing.
-  assert.deepEqual(ARCADE.games, ['typing', 'sort', 'derby', 'freethrow']);
+  assert.deepEqual(ARCADE.games, ['sort', 'derby', 'freethrow']);
 });
 
 test('no two leagues share a name, so every ticket (and board card) says which one it is', async () => {
@@ -169,7 +162,6 @@ test('every game takes about the same time: about a minute a round', () => {
   assert.equal(PACE.sort.events.length, SORT.questions);
   assert.equal(PACE.derby.events.length, DERBY.pitches);
   assert.equal(PACE.freethrow.events.length, FREE_THROW.shots);
-  assert.equal(PACE.typing.events.filter(e => e === 'ok').length, TYPING.codes);
 });
 
 test('the skill games\' difficulty follows the player', () => {
@@ -199,7 +191,7 @@ test('a round\'s money goes in as it\'s earned: one entry per round, kept up to 
   ({ account } = payRound(account, 'r1', 'derby', -5, now));
   assert.equal(balance(account), start);
   // Other rounds count towards the daily cap, this one's own money doesn't.
-  ({ account } = payRound(account, 'r2', 'typing', ARCADE.dailyCap - 10, now));
+  ({ account } = payRound(account, 'r2', 'sort', ARCADE.dailyCap - 10, now));
   const { account: after, paid } = payRound(account, 'r1', 'derby', 50, now);
   assert.equal(paid, 10);
   assert.equal(balance(after), start + ARCADE.dailyCap);

@@ -1,7 +1,8 @@
 // 小遊戲: small games that earn play money for the practice account, by
-// effort, not luck, and no math: typing ticket numbers and sorting tickets
-// (plain work), a home run derby and free throws (practice until your timing
-// is right). The pay is small on purpose: every round shows how many minutes
+// effort, not luck, and no math: sorting tickets by team (knowing your
+// leagues), a home run derby and free throws (practice until your timing is
+// right). (Typing ticket numbers, pure data entry with nothing to learn, was
+// dropped when the Quadra economy was balanced.) The pay is small on purpose: every round shows how many minutes
 // of a minimum-wage job it equals, and how little betting it takes to lose
 // it again, so the games are a reminder of how slowly money is
 // earned. All together they pay at most ARCADE.dailyCap a Taiwan day.
@@ -10,15 +11,17 @@
 // 'game'), so they sync and merge across devices the same way. The account's
 // betting result leaves them out, like the weekly grants.
 import { taipeiDayKey } from './sources.mjs';
+import { ECONOMY } from './quadra.mjs';
 import { leagueTeams, teamNick, familyOf, normalizeTeamName } from './teams.mjs';
 
 export const ARCADE = {
-  dailyCap: 1500,
-  // What every game pays for a minute of typical play (NT$).
-  perMinute: 25,
+  dailyCap: ECONOMY.gamesDailyCap.odds,
+  // What every game pays for a minute of typical play (NT$): the Quadra
+  // economy's rate for mini games (well under Words' pay for real study).
+  perMinute: ECONOMY.gamesPerMinute,
   // About how long a round of any game takes (s).
   roundSeconds: 60,
-  games: ['typing', 'sort', 'derby', 'freethrow'],
+  games: ['sort', 'derby', 'freethrow'],
   // Taiwan's minimum hourly wage in 2026 (NT$).
   minWage: 196,
   // What the lottery keeps of every NT$100 staked, on average (it pays out at most 78%).
@@ -28,15 +31,12 @@ export const ARCADE = {
 // Balanced pay and length: every round takes about a minute (ARCADE.roundSeconds)
 // and pays about ARCADE.perMinute for typical play, streaks and penalties
 // included, so none is the one to farm.
-// PACE is each game's typical round: how long it takes (typing about 7 s a
-// number on a phone, sorting 1.5 s a ticket, a pitch or a shot about 3.5 s
-// with the wait and the replay) and how an ordinary player does ('ok' and
-// 'bad' for the work games). Better players earn more, up to about 4 times.
+// PACE is each game's typical round: how long it takes (sorting 1.5 s a
+// ticket, a pitch or a shot about 3.5 s with the wait and the replay) and
+// how an ordinary player does ('ok' and 'bad' for the team quiz). Better players earn more, up to about 4 times.
 
 // Risk by kind of game, none of it extreme, since this is work:
-// - typing is the safe earn: a typo costs nothing (retype it), a small bonus
-//   for keeping it up, and nearly the same pay every round;
-// - the team quiz is in between: a wrong box costs a little;
+// - the team quiz is the steady earn: a wrong box costs a little;
 // - the derby and free throws are high risk, high pay, and paid mostly for
 //   streaks: one success pays little, each one in a row after it adds a
 //   bonus (`ladder`: the 2nd adds `ladder[0]`, the 3rd on `ladder[1]`), a
@@ -45,7 +45,6 @@ export const ARCADE = {
 //   skill. A bad round pays about nothing, a good one about twice typical.
 // `every` + `bonus`: that many right in a row adds the bonus; `penalty`: what a mistake costs.
 export const STREAK = {
-  typing: { every: 5, bonus: 1, penalty: 0 },
   sort: { every: 4, bonus: 2, penalty: 1 },
   freethrow: { ladder: [3, 6], penalty: 1 },
   derby: { ladder: [3, 6], penalty: 1 }
@@ -60,6 +59,10 @@ export function adapt(level, result) {
   return Math.min(1, Math.max(0, level + step));
 }
 
+// Every pay, bonus and penalty below is in points, scaled to NT$ here so a
+// typical minute pays ARCADE.perMinute (the points were set for NT$25).
+export const PAY_SCALE = ECONOMY.gamesPerMinute / 25;
+
 // A round's running score: good(pay) for a success (returns the streak
 // bonus it earned, if any), bad() for a mistake (returns what it cost). The
 // round's pay never goes under 0.
@@ -71,18 +74,19 @@ export function scorer(game) {
   let penalty = 0;
   return {
     good(pay) {
-      sum += pay;
+      sum += pay * PAY_SCALE;
       run++;
-      const extra = rule.ladder ? (run === 1 ? 0 : rule.ladder[Math.min(run - 2, rule.ladder.length - 1)]) : run % rule.every === 0 ? rule.bonus : 0;
+      const extra = (rule.ladder ? (run === 1 ? 0 : rule.ladder[Math.min(run - 2, rule.ladder.length - 1)]) : run % rule.every === 0 ? rule.bonus : 0) * PAY_SCALE;
       sum += extra;
       bonus += extra;
       return extra;
     },
     bad() {
       run = 0;
-      sum -= rule.penalty;
-      penalty += rule.penalty;
-      return rule.penalty;
+      const cost = rule.penalty * PAY_SCALE;
+      sum -= cost;
+      penalty += cost;
+      return cost;
     },
     get total() {
       return Math.max(0, Math.round(sum));
@@ -101,7 +105,6 @@ export function scorer(game) {
 
 // What each event pays before streaks ('bad' and 'miss' are mistakes).
 const EVENT_PAY = {
-  typing: { ok: () => TYPING.pay },
   sort: { ok: () => SORT.pay },
   derby: { hr: () => DERBY.pay.hr, hit: () => DERBY.pay.hit },
   freethrow: { swish: () => FREE_THROW.pay.swish, make: () => FREE_THROW.pay.make }
@@ -118,7 +121,6 @@ export function scoreRound(game, events) {
   return score;
 }
 export const PACE = {
-  typing: { seconds: 63, events: [...run(5, 'ok'), 'bad', ...run(3, 'ok')] },
   sort: { seconds: 60, events: [...run(4, 'ok'), 'bad', ...run(3, 'ok'), 'bad', ...run(2, 'ok'), 'bad', ...run(3, 'ok'), 'bad', 'bad', ...run(2, 'ok'), 'bad'] },
   derby: { seconds: 60, events: ['hr', 'hit', 'miss', 'hit', 'hit', 'hr', 'miss', 'hit', 'miss', 'hr', 'hit', 'miss', 'hit', 'hit', 'hr', 'miss', 'hit', 'miss'] },
   freethrow: { seconds: 60, events: ['swish', 'make', 'miss', 'make', 'make', 'swish', 'miss', 'make', 'miss', 'swish', 'make', 'miss', 'make', 'make', 'swish', 'miss', 'make', 'miss'] }
@@ -207,22 +209,12 @@ export function swingResult(position) {
 
 export const derbyPayout = results => scoreRound('derby', results).total;
 
-// ---- 打工：輸入彩券號碼 (data entry) ---------------------------------------------------
-//
-// Plain work: type each ticket number exactly as shown. Every one typed right
-// pays the same; a typo pays nothing and the number stays until it's right.
-// Nothing is left to chance: the more you type, the more you earn.
-export const TYPING = { codes: 8, digits: 10, pay: 3 };
-
-// A ticket number: ten digits, shown in groups of four ("4829 1735 06").
+// A ticket number (the team quiz's tickets show one): ten digits, shown in
+// groups of four ("4829 1735 06").
 export function ticketCode(random = Math.random) {
-  return Array.from({ length: TYPING.digits }, () => Math.floor(random() * 10)).join('');
+  return Array.from({ length: 10 }, () => Math.floor(random() * 10)).join('');
 }
 export const groupCode = code => code.replace(/(\d{4})(?=\d)/g, '$1 ');
-// Typed right: the same digits, whatever spaces or dashes.
-export const typedRight = (typed, code) => typed.replace(/\D/g, '') === code;
-
-export const typingPayout = right => Math.round(right * TYPING.pay);
 
 // ---- 整理彩券 (the team quiz) ----------------------------------------------------------
 //
@@ -346,6 +338,6 @@ export function typicalPerMinute(game) {
   return (scoreRound(game, PACE[game].events).total / PACE[game].seconds) * 60;
 }
 export function bestRound(game) {
-  const best = { typing: ['ok', TYPING.codes], sort: ['ok', SORT.questions], derby: ['hr', DERBY.pitches], freethrow: ['swish', FREE_THROW.shots] }[game];
+  const best = { sort: ['ok', SORT.questions], derby: ['hr', DERBY.pitches], freethrow: ['swish', FREE_THROW.shots] }[game];
   return scoreRound(game, Array(best[1]).fill(best[0])).total;
 }
