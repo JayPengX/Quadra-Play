@@ -152,6 +152,15 @@ test('F1 winner from ESPN, championship winner from Polymarket', () => {
     ] }]
   };
   assert.deepEqual(parseEspnRace(race, '2026-09-13T13:00:00Z'), { status: 'final', winner: 'Kimi Antonelli' });
+  // ESPN's 'session complete' (not yet final, no winner flag) already has the order.
+  const complete = { events: [{ competitions: [{ type: { abbreviation: 'Race' }, date: '2026-09-26T11:00Z', status: { type: { name: 'STATUS_SESSION_COMPLETE', state: 'in', completed: false } }, competitors: [
+    { order: 3, athlete: { displayName: 'Isack Hadjar' } }, { order: 1, athlete: { displayName: 'George Russell' } }, { order: 2, athlete: { displayName: 'Max Verstappen' } }
+  ] }] }] };
+  assert.deepEqual(parseEspnRace(complete, '2026-09-26T11:00:00Z'), { status: 'final', winner: 'George Russell', podium: ['George Russell', 'Max Verstappen', 'Isack Hadjar'] });
+  // A pick's start a day off the race still finds it.
+  assert.equal(parseEspnRace(complete, '2026-09-25T12:00:00Z').winner, 'George Russell');
+  const running = { events: [{ competitions: [{ type: { abbreviation: 'Race' }, date: '2026-09-26T11:00Z', status: { type: { name: 'STATUS_IN_PROGRESS', state: 'in' } }, competitors: [] }] }] };
+  assert.deepEqual(parseEspnRace(running, '2026-09-26T11:00:00Z'), { status: 'pending' });
   assert.equal(parseFutureResult([{ closed: false, markets: [] }]).status, 'pending');
   const done = parseFutureResult([{ closed: true, markets: [
     { question: 'Will the New York Yankees win the 2026 World Series?', outcomes: '["Yes","No"]', outcomePrices: '["0","1"]' },

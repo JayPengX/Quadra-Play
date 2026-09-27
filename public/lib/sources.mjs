@@ -5,7 +5,7 @@
 import { americanToProbability, devigProportional, devigPower } from './odds.mjs';
 import { normalizeTeamName, teamZh, LEAGUES, familyOf, isSoccer, rememberLogo, rememberTeams, hasTeams } from './teams.mjs';
 import { runOrder } from './live.mjs';
-import { fetchKambiLeague, fetchKambiLive, decidedFromLive, setsWon } from './kambi.mjs';
+import { fetchKambiLeague, decidedFromLive, decidedTeamGame, parseKambiLiveData, kambiLiveDataUrl, setsWon } from './kambi.mjs';
 import { KAMBI_LEAGUES } from './teams.mjs';
 
 export const PROXY_URL = 'https://sports-proxy.pengzjay.workers.dev';
@@ -551,23 +551,30 @@ export function parseEspnResults(data, sport) {
   return games;
 }
 
-// The race winner from ESPN's F1 scoreboard: { status, winner } for the race
-// starting near `startUtc`.
+// The race winner from ESPN's F1 scoreboard: { status, winner, podium } for
+// the race nearest `startUtc` (within four days: the pick's start can be the
+// weekend's rather than the race's). ESPN can take hours to mark a race
+// final; its "session complete" already has the finishing order, so it
+// counts as the result too.
 export function parseEspnRace(data, startUtc) {
+  let best = null;
   for (const event of data.events || []) {
     for (const comp of event.competitions || []) {
       if (comp.type?.abbreviation !== 'Race') continue;
-      if (Math.abs(Date.parse(comp.date) - Date.parse(startUtc)) > MATCH_TOLERANCE_MS) continue;
-      const type = comp.status?.type || {};
-      if (VOID_STATUS.test(type.name || '')) return { status: 'void' };
-      if (!type.completed) return { status: 'pending' };
-      const first = (comp.competitors || []).find(c => c.winner) ?? (comp.competitors || []).find(c => Number(c.order) === 1);
-      const name = c => c.athlete?.displayName || c.athlete?.fullName;
-      const podium = [...(comp.competitors || [])].filter(c => Number(c.order) >= 1).sort((a, b) => Number(a.order) - Number(b.order)).slice(0, 3).map(name);
-      return first ? { status: 'final', winner: name(first), ...(podium.length === 3 ? { podium } : {}) } : { status: 'pending' };
+      const gap = Math.abs(Date.parse(comp.date) - Date.parse(startUtc));
+      if (gap <= 4 * DAY_MS && (!best || gap < best.gap)) best = { gap, comp };
     }
   }
-  return null;
+  if (!best) return null;
+  const comp = best.comp;
+  const type = comp.status?.type || {};
+  if (VOID_STATUS.test(type.name || '')) return { status: 'void' };
+  if (!type.completed && !/SESSION_COMPLETE|FINAL/.test(type.name || '')) return { status: 'pending' };
+  const ranked = [...(comp.competitors || [])].filter(c => Number(c.order) >= 1).sort((a, b) => Number(a.order) - Number(b.order));
+  const first = (comp.competitors || []).find(c => c.winner) ?? ranked[0];
+  const name = c => c.athlete?.displayName || c.athlete?.fullName;
+  const podium = ranked.slice(0, 3).map(name);
+  return first ? { status: 'final', winner: name(first), ...(podium.length === 3 ? { podium } : {}) } : { status: 'pending' };
 }
 
 // A championship's winner once Polymarket has resolved the market.
@@ -636,9 +643,13 @@ export async function fetchOutcomes(legs, now = new Date()) {
       }
       if (!leg.start || Date.parse(leg.start) > now.getTime()) return;
       if (leg.kind === 'f1' || leg.kind === 'f1podium') {
-        const data = await page(`${ESPN}/racing/f1/scoreboard?dates=${yyyymmdd(new Date(leg.start))}`);
-        const result = data && parseEspnRace(data, leg.start);
-        if (result) out.set(leg.id, result);
+        // The race's day and the two after (the start kept with a pick can be
+        // a little before the race itself).
+        for (const days of [0, 1, 2]) {
+          const data = await page(`${ESPN}/racing/f1/scoreboard?dates=${yyyymmdd(new Date(Date.parse(leg.start) + days * DAY_MS))}`);
+          const result = data && parseEspnRace(data, leg.start);
+          if (result) return out.set(leg.id, result);
+        }
         return;
       }
       const league = LEAGUES[leg.sport];
@@ -650,13 +661,13 @@ export async function fetchOutcomes(legs, now = new Date()) {
           return;
         }
       }
-      // Kambi's sports: the result once the live score shows the match decided.
+      // Kambi's sports: the result from the match's own live data, once the
+      // score shows it decided (see decidedTeamGame / decidedFromLive).
       if (league?.kambi && leg.kambiId) {
-        if (!pages.has('kambi-live')) pages.set('kambi-live', fetchKambiLive(getJson).catch(() => null));
-        const live = await pages.get('kambi-live');
-        const result = live && decidedFromLive(live.get(leg.kambiId), leg.sport);
-        if (result) out.set(leg.id, result);
-        else if (live?.get(leg.kambiId)) out.set(leg.id, kambiInPlay(live.get(leg.kambiId), leg.sport));
+        const live = parseKambiLiveData(await page(kambiLiveDataUrl(leg.kambiId)));
+        if (!live) return;
+        const result = decidedFromLive(live, leg.sport) ?? decidedTeamGame(live, leg.sport, leg.start, now);
+        out.set(leg.id, result ?? kambiInPlay(live, leg.sport));
         return;
       }
       const path = ESPN_PATH[leg.sport];

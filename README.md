@@ -1,6 +1,6 @@
 # 四方運彩 Quadra Sportsbook (Odds Study)
 
-**Live site: https://jaypengx.github.io/Odds-Study/**
+**Live site: https://jaypengx.github.io/Quadra-Sportsbook/**
 
 ## Quadra 四方
 
@@ -14,8 +14,8 @@ This app is part of **Quadra 四方**, four apps sharing one account:
 | **四方單字 Quadra Words** | Orbit Vocab 英單力 | A big mini game with real benefit: English words that pay |
 
 - **The Quadra Pass 四方通行碼**: one 10-character code for all four apps and
-  every device (Shared-Proxy's `/eco` route). New syncs are passes only; an
-  old app-only code still works until it's upgraded or merged.
+  every device (Shared-Proxy's `/eco` route). Passes are the only kind of
+  code; an old app-only code is upgraded to one the next time its app opens.
 - **One money pool**: Securities' NT$ cash and Sportsbook's balance are the
   same money. Sportsbook's bets and winnings, Words' study rewards and
   transfers between passes all land in it, with records on every side.
@@ -25,8 +25,10 @@ This app is part of **Quadra 四方**, four apps sharing one account:
   right answer and NT$20 a newly mastered word (NT$800 a day at most);
   Securities' and Sportsbook's mini games pay for skill, up to NT$1,000 and
   NT$1,500 a day. Sportsbook has a weekly betting limit you can set.
-- **Merge tool** (`/Stock-Study/merge.html`): every old code in, one new
-  pass out; the old codes and their data are removed.
+- **One pass, signed in everywhere**: the same Quadra Pass panel in all four
+  apps; links between the apps carry the pass (in the address's #hash), so
+  the app they open is already signed in, even in the iPhone pop-up browser.
+  An old one-app code turns into a pass by itself.
 - **Installed only** on phones and tablets (added to the home screen), and
   every app checks for a new deploy on opening, on coming back and every
   five minutes, clearing old cached files before it reloads.
@@ -75,7 +77,7 @@ The page stays simple: odds, colours and the amounts that matter. What the numbe
   - 全壘打大賽 (home run derby), drawn on a canvas: 18 pitches at a difficulty that follows the batter (`ADAPT`: up after a hit, more after a home run, down after a miss, shown as a 難度 meter): faster pitches, then change-ups, then breaking balls; a home run (NT$1) needs a swing within about 30 ms and shows its distance, a hit NT$0.5;
   - 罰球 (free throws): 18 shots at a difficulty that follows the shooter; stop the sweeping arrow in the green (the better you shoot, the faster the arrow and the narrower the green; it moves fastest through the green); the ball arcs to the hoop, swishes (NT$1), rims in (NT$0.5) or bounces off.
   **Risk by kind of game** (`STREAK`), none of it extreme since it's work: data entry is the safe earn (a typo costs nothing, NT$1 every 5 in a row, every round pays about the same); the team quiz is in between (NT$2 every 4 right, NT$1 a wrong or late answer); the derby and free throws are high risk, high pay, and paid mostly for streaks: one success pays little, the 2nd in a row adds NT$3 and each from the 3rd on NT$6, a miss costs NT$1 and ends the streak (about three quarters of a typical round's money is streak bonus; a bad round pays about nothing, a good one about twice typical). A round never pays under 0. The HUD shows progress, the difficulty (skill games), the round's money, the streak and each bonus or penalty as it happens.
-  **Balanced length and pay:** every round takes about a minute, and every game pays about NT$25 a minute of typical play, streaks and penalties included (`PACE`: a round's usual length and an ordinary player's results; a test keeps all four within 15%), so none is the one to farm; practice pays more. All of them pay at most NT$1,500 a Taiwan day. After every round the page shows how many minutes of a job at Taiwan's minimum wage (NT$196 an hour) the pay equals (a short round's pay stretched to an hour read oddly high) and how much betting loses it again on average (the lottery keeps about 22%), as a reminder of how slowly money is earned. While a round is on, nothing around the game is redrawn: the balance and today's total update in place and the full account card waits for the round's end (a redraw used to replay the money popup, restart the quiz's timer bar, move the page and swallow taps). Championship boards find their clubs' logos in ESPN's team lists (loosely matched, a few aliases; the UEFA competitions search their entrants and every European league), F1 constructors get a team-coloured badge, national teams a flag. Hover colours apply only where there's a mouse (a tapped button on a phone kept its hover colour). The page also carries Match-Find's iOS Safari fix: empty passive touch/pointer listeners on the whole document, so a gesture on the games or the number pad never leaves the next tap needing two. Money goes into the account as it's earned, not at the end: each round has one ledger entry (`payRound`), set to the round's running total every time it changes (a bonus shows in the balance at once, a penalty takes it back, never under 0 for the round), within the daily cap. Winnings are ledger entries like the grants: they sync and merge the same way, and the account's betting result leaves them out.
+  **Balanced length and pay:** every round takes about a minute, and every game pays about NT$25 a minute of typical play, streaks and penalties included (`PACE`: a round's usual length and an ordinary player's results; a test keeps all four within 15%), so none is the one to farm; practice pays more. All of them pay at most NT$1,500 a Taiwan day. After every round the page shows how many minutes of a job at Taiwan's minimum wage (NT$196 an hour) the pay equals (a short round's pay stretched to an hour read oddly high) and how much betting loses it again on average (the lottery keeps about 22%), as a reminder of how slowly money is earned. While a round is on, nothing around the game is redrawn: the balance and today's total update in place and the full account card waits for the round's end (a redraw used to replay the money popup, restart the quiz's timer bar, move the page and swallow taps). Championship boards find their clubs' logos in ESPN's team lists (loosely matched, a few aliases; the UEFA competitions search their entrants and every European league), F1 constructors get a team-coloured badge, national teams a flag. Hover colours apply only where there's a mouse (a tapped button on a phone kept its hover colour). The page also carries Quadra Fixtures' iOS Safari fix: empty passive touch/pointer listeners on the whole document, so a gesture on the games or the number pad never leaves the next tap needing two. Money goes into the account as it's earned, not at the end: each round has one ledger entry (`payRound`), set to the round's running total every time it changes (a bonus shows in the balance at once, a penalty takes it back, never under 0 for the round), within the daily cap. Winnings are ledger entries like the grants: they sync and merge the same way, and the account's betting result leaves them out.
 - **Boards:** F1 (drivers with team-coloured badges, and whether the odds are before or after qualifying) and every championship: World Series, AL, NL, NBA, Premier League, and from Polymarket's search NFL, NHL, WNBA, college football, Champions League, Europa League, La Liga, Serie A, Bundesliga, Ligue 1, MLS, and the F1 drivers' and constructors' titles.
 
 ### House rules, the house cut and recommendations

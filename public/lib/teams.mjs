@@ -270,7 +270,7 @@ export function teamLogo(sport, name, dark = false) {
 export function leagueLogo(sport, dark = false) {
   const size = dark ? '500-dark' : '500';
   // The lion alone: ESPN's own resizer crops the top of its logo, clear of
-  // the "Premier League" wordmark (the same crop Match-Find uses).
+  // the "Premier League" wordmark (the same crop Quadra Fixtures uses).
   if (sport === 'epl') return 'https://a.espncdn.com/combiner/i?img=/i/leaguelogos/soccer/500/23.png&w=128&h=80&scale=crop&location=origin';
   if (['mlb', 'nba', 'f1', 'nfl', 'nhl', 'wnba'].includes(sport)) return `https://a.espncdn.com/i/teamlogos/leagues/${size}/${sport}.png`;
   if (sport === 'ncaaf') return 'https://a.espncdn.com/i/espn/misc_logos/500/ncaa_football.png';
