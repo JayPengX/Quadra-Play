@@ -68,6 +68,7 @@ import { readSync, writeSync, cleanPasscode, isPassCode, readPass, writePass, cr
 import {
   PASS_PATTERN,
   ODDS_LIMIT_KEY,
+  ECONOMY,
   formatPass,
   storedPass,
   storePass,
@@ -1666,7 +1667,7 @@ function renderParlay() {
       setTimeout(rerender);
     }
   });
-  attachPad(stakeInput, { digits: 5, label: t('slipStake') });
+  numberField(stakeInput, { digits: 5 });
   ticket.push(
     el('label', { class: 'slip-field' }, [
       el('span', { text: t('slipStake') }),
@@ -1797,7 +1798,18 @@ function poolExtra() {
 function funds(account = state.account) {
   return balance(account) + poolExtra();
 }
-const weeklyLimit = () => (onPass() ? Number(setting(state.wallet, ODDS_LIMIT_KEY, 0)) || 0 : Number(localStorage.getItem('oddsStudy.weeklyLimit')) || 0);
+// The weekly betting limit: your own (0 for none), or ECONOMY.oddsDefaultLimit
+// until you set one.
+function weeklyLimit() {
+  let own = null;
+  if (onPass()) own = setting(state.wallet, ODDS_LIMIT_KEY, null);
+  else {
+    try {
+      own = localStorage.getItem('oddsStudy.weeklyLimit');
+    } catch {}
+  }
+  return own == null || own === '' ? ECONOMY.oddsDefaultLimit : Number(own) || 0;
+}
 
 // The weekly grant arrives by itself when the app is opened in a new week.
 function applyGrant() {
@@ -3776,7 +3788,7 @@ function sparkline(path) {
   return svg;
 }
 
-attachPad($('lookup-number'), { digits: 6, onEnter: () => $('lookup-form').requestSubmit() });
+numberField($('lookup-number'), { digits: 6, onEnter: () => $('lookup-form').requestSubmit() });
 $('lookup-form').addEventListener('submit', event => {
   event.preventDefault();
   const n = Number($('lookup-number').value);
@@ -4105,84 +4117,27 @@ function renderSimTable(bands, characters, weeks) {
   );
 }
 
-// ---- Number pad ----------------------------------------------------------------------
+// ---- Number fields ---------------------------------------------------------------------
 
-// Every number on the page is keyed on the page's own pad, like a game's
-// controls, not the phone's keyboard: tapping the field opens a pad that
-// slides up from the bottom (1-9, 0, delete, OK). A real keyboard still works
-// in the field. On OK the field changes and `onEnter` runs.
-function attachPad(input, { digits = 7, onEnter = null, label = '' } = {}) {
-  input.readOnly = true;
-  input.setAttribute('inputmode', 'none');
-  input.classList.add('pad-field');
-  const commit = value => {
-    input.value = value;
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-    onEnter?.(value);
-  };
-  const open = () => {
-    if (document.querySelector('.pad-sheet')) return;
-    const t = state.t;
-    let value = input.value.replace(/\D/g, '');
-    let fresh = true;
-    const shown = el('p', { class: 'pad-value', 'aria-live': 'polite' });
-    const draw = () => (shown.textContent = value || '0');
-    const close = () => {
-      backdrop.remove();
-      document.removeEventListener('keydown', onKey, true);
-      input.focus({ preventScroll: true });
-    };
-    const press = key => {
-      if (key === 'enter') {
-        close();
-        return commit(value || '0');
-      }
-      if (key === 'back') value = fresh ? '' : value.slice(0, -1);
-      // The first digit replaces the old number; the rest add to it.
-      else if (fresh) value = key === '0' ? '' : key;
-      else if (value.length < digits) value = (value + key).replace(/^0+/, '');
-      fresh = false;
-      draw();
-    };
-    const onKey = e => {
-      if (/^\d$/.test(e.key)) press(e.key);
-      else if (e.key === 'Backspace') press('back');
-      else if (e.key === 'Enter') press('enter');
-      else if (e.key === 'Escape') close();
-      else return;
-      e.preventDefault();
-      e.stopPropagation();
-    };
-    const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'back', '0', 'enter'];
-    const sheet = el('div', { class: 'pad-sheet', role: 'dialog', 'aria-label': label || input.getAttribute('aria-label') || '' }, [
-      el('div', { class: 'pad-top' }, [el('span', { class: 'muted', text: label || input.getAttribute('aria-label') || '' }), shown]),
-      el('div', { class: 'num-pad' },
-        keys.map(key =>
-          el('button', {
-            class: `num-key ${key.length > 1 ? `num-${key}` : ''}`,
-            type: 'button',
-            'aria-label': key === 'back' ? t('keyBack') : key === 'enter' ? t('keyOk') : key,
-            text: key === 'back' ? '⌫' : key === 'enter' ? t('keyOk') : key,
-            onpointerdown: event => (event.preventDefault(), press(key))
-          })
-        )
-      )
-    ]);
-    const backdrop = el('div', { class: 'pad-backdrop', onpointerdown: event => event.target === backdrop && close() }, sheet);
-    document.body.append(backdrop);
-    document.addEventListener('keydown', onKey, true);
-    draw();
-  };
-  input.addEventListener('click', open);
-  input.addEventListener('keydown', event => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      open();
-    } else if (/^\d$/.test(event.key)) {
-      open();
-    }
+// Numbers are typed on the phone's own number keyboard, as in Quadra
+// Securities (inputmode numeric, no autocomplete), not a pad of the page's
+// own: digits only, at most `digits` of them; Enter (the keyboard's Go/Done)
+// runs `onEnter`, and leaving the field commits it (its change event).
+function numberField(input, { digits = 7, onEnter = null } = {}) {
+  input.setAttribute('inputmode', 'numeric');
+  input.setAttribute('autocomplete', 'off');
+  input.setAttribute('enterkeyhint', onEnter ? 'go' : 'done');
+  input.setAttribute('pattern', '[0-9]*');
+  input.addEventListener('input', () => {
+    const clean = input.value.replace(/\D/g, '').slice(0, digits);
+    if (clean !== input.value) input.value = clean;
   });
-  return input;
+  input.addEventListener('keydown', event => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    onEnter ? onEnter(input.value) : input.blur();
+  });
 }
 
 // ---- 小遊戲 (mini games) ------------------------------------------------------------
@@ -5069,7 +5024,7 @@ function renderF1() {
 // Empty, passive, page-wide touch/pointer listeners. They do nothing; their
 // existence is the fix. iOS WebKit handles a tap differently depending on
 // whether the spot touched has touch/pointer listeners; with listeners only
-// on some elements (the mini games' canvases and pads, the number pad) a
+// on some elements (the mini games' canvases and pads) a
 // gesture there can leave its tap handling stuck, and the next tap
 // elsewhere is used up clearing it. With listeners on the whole document
 // every tap goes down the same path. Passive, so they never block
