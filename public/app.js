@@ -1883,10 +1883,20 @@ function commitAccount(next, { quiet = false } = {}) {
 }
 
 let pushTimer = null;
+// Leaving the page with a sync still waiting: send it now.
+addEventListener('pagehide', () => {
+  if (!pushTimer || !state.sync.code) return;
+  clearTimeout(pushTimer);
+  pushTimer = null;
+  syncNow();
+});
 function pushSoon() {
   if (!state.sync.code) return;
   clearTimeout(pushTimer);
-  pushTimer = setTimeout(() => syncNow(), 1200);
+  pushTimer = setTimeout(() => {
+    pushTimer = null;
+    syncNow();
+  }, 1200);
 }
 
 // Reads the synced copy, merges it with this device's and writes the result
@@ -2125,6 +2135,10 @@ function placeButton(legs, sizes, cost, errors) {
         state.parlay = [];
         state.freshSlips.add(slip.id);
         commitAccount(account);
+        // Synced at once, not in a moment: going straight back to Quadra
+        // Fixtures should find the new slip there.
+        clearTimeout(pushTimer);
+        if (state.sync.code) syncNow();
         renderGames();
         renderLive();
         renderF1();
