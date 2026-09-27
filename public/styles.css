@@ -476,21 +476,10 @@ button.pick:active { transform: scale(0.98); }
 .math-step h3 { font-size: 0.9rem; margin-bottom: 3px; display: flex; gap: 6px; align-items: center; }
 .math-step p { color: var(--text-secondary); font-size: 0.84rem; }
 
-/* ---- Loading screen ------------------------------------------------------------------ */
-.loading { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: #fff; color: var(--text-primary); padding: 16px; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .loading { background: #000; } }
+/* The loading screen is the Quadra one (quadra.css). */
 :root[data-theme='dark'] .loading { background: #000; }
-.loading-box { width: min(360px, 100%); text-align: center; display: grid; justify-items: center; gap: 12px; }
-.loading-logo { width: 72px; height: 72px; border-radius: 18px; box-shadow: var(--shadow); }
-.loading-title { font-weight: 800; font-size: 1.2rem; }
-.loading-box p { color: var(--text-secondary); font-size: 0.9rem; }
-.spinner { width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--grid); border-top-color: var(--accent); animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner, .icon-button:disabled svg { animation-duration: 3s; } }
-.loading-bar { width: 100%; height: 6px; border-radius: 3px; background: var(--surface-sunken); overflow: hidden; }
-.loading-bar span { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.25s; }
-.loading-box .loading-eta { font-size: 0.78rem; color: var(--text-muted); min-height: 1.2em; font-variant-numeric: tabular-nums; }
-.loading-error { display: grid; gap: 10px; justify-items: center; }
 
 /* ---- Ticket analysis ------------------------------------------------------------ */
 .split-bar { display: flex; height: 16px; border-radius: 8px; overflow: hidden; background: var(--surface-sunken); }

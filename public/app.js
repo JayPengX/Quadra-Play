@@ -1880,7 +1880,10 @@ async function syncPass() {
     const have = new Set((remote.wallet?.entries || []).map(e => e.id));
     const entries = poolEntries(merged).filter(e => !have.has(e.id));
     const open = merged.slips.filter(s => s.status === 'open').reduce((sum, s) => sum + s.cost, 0);
-    const snap = remote.wallet?.snap?.odds?.open === open ? undefined : { odds: { open, t: Date.now() } };
+    // Open picks, for Quadra Fixtures to show on its matches (openPicks).
+    const bets = openPicks(merged);
+    const had = remote.wallet?.snap?.odds;
+    const snap = had?.open === open && JSON.stringify(had?.bets || []) === JSON.stringify(bets) ? undefined : { odds: { open, bets, t: Date.now() } };
     const changed = !remote.account || JSON.stringify(merged) !== JSON.stringify(remote.account);
     let wallet = remote.wallet;
     if (changed || entries.length || snap) wallet = await writePass(code, changed ? merged : null, { entries, snap });
@@ -2172,6 +2175,28 @@ function passBox() {
   const sync = state.sync;
   state.passPanel.update({ pass: onPass() ? sync.code : '', busy: Boolean(sync.busy), error: sync.error || '', note: sync.note || (sync.fresh ? t('syncKeep') : ''), syncedAt: sync.at ? Date.parse(sync.at) : 0 });
   return state.passPanel.el;
+}
+
+// The picks still open, compact, for Quadra Fixtures (in the wallet's
+// snap.odds.bets): the game (Sportsbook's id, before the first "|"), the
+// pick, its odds, the stake of its slip and when the game starts; the
+// soonest first, as many as fit the wallet's room for it.
+function openPicks(account) {
+  const picks = [];
+  for (const slip of account.slips) {
+    if (slip.status !== 'open') continue;
+    for (const leg of slip.legs) {
+      if (leg.result || leg.kind === 'future') continue;
+      picks.push({ g: String(leg.id).split('|')[0], p: leg.shortLabel || leg.label || '', o: Math.round(leg.odds * 100) / 100, c: slip.cost, s: leg.start || null, k: leg.sport || '' });
+    }
+  }
+  picks.sort((a, b) => String(a.s).localeCompare(String(b.s)));
+  const out = [];
+  for (const pick of picks) {
+    if (JSON.stringify([...out, pick]).length > 3400) break;
+    out.push(pick);
+  }
+  return out;
 }
 
 // The shared pool, broken down, and what the other apps put in or took out.
@@ -5428,7 +5453,7 @@ if ('ResizeObserver' in window) {
 window.__oddsStarted = true;
 // Phones and tablets: from the home screen only. Always the newest deploy.
 installGate('odds', state.locale);
-watchUpdates({ current: document.querySelector('meta[name="build-version"]')?.content, key: 'oddsStudy', busy: () => state.roundLive });
+watchUpdates({ current: document.querySelector('meta[name="build-version"]')?.content, key: 'oddsStudy', cachePrefix: 'quadra-odds-', busy: () => state.roundLive });
 state.account = newAccount();
 state.sync = { ...state.sync, code: loadSyncCode() };
 if (onPass()) state.wallet = cachedWallet(state.sync.code);
