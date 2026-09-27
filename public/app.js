@@ -5218,39 +5218,89 @@ function renderAll() {
 }
 
 // Longest the loading screen waits at start-up; after that the page opens and
-// whatever is still loading finishes in the background.
+// whatever is still loading finishes in the background. Each part after the
+// main odds (other leagues, championships, logos, games in play) gets at
+// most BOOT_PART_MS of its own.
 const BOOT_LIMIT_MS = 45_000;
+const BOOT_PART_MS = 12_000;
+const within = (promise, ms, fallback) => Promise.race([Promise.resolve(promise).catch(() => fallback), new Promise(resolve => setTimeout(() => resolve(fallback), ms))]);
+// Every picture in `root` loaded (or failed): no logo pops in after the page opens.
+function imagesReady(root) {
+  const images = [...(root?.querySelectorAll('img') || [])].filter(img => img.getAttribute('src') && !img.complete);
+  return Promise.all(images.map(img => new Promise(resolve => {
+    img.addEventListener('load', resolve, { once: true });
+    img.addEventListener('error', resolve, { once: true });
+  })));
+}
 
 async function load() {
   renderStatus('loading');
   const booting = state.booting;
   const onProgress = booting ? () => showLoading() : undefined;
   if (booting) onProgress(0);
-  const limit = booting ? setTimeout(() => ((state.booting = false), hideLoading()), BOOT_LIMIT_MS) : null;
+  // Past the limit the page opens with whatever has arrived; the rest joins as it comes.
+  const limit = booting
+    ? setTimeout(() => {
+        state.booting = false;
+        if (state.data) renderAll();
+        hideLoading();
+      }, BOOT_LIMIT_MS)
+    : null;
   $('refresh').disabled = true;
   try {
-    state.data = await loadOdds(new Date(), onProgress);
+    // The main board first (the request queue serves it before anything
+    // else), then the rest. At start-up the loading screen waits for all of
+    // it (each part within its own limit), so the page opens complete
+    // instead of filling in for a few more seconds.
+    const now = new Date();
+    state.data = await loadOdds(now, onProgress);
+    const extraGames = loadExtraLeagues(now).catch(error => (console.error(error), []));
+    const extraFutures = loadExtraFutures().catch(error => (console.error(error), []));
     // A tab asked for in the address (#sim) that needed the odds opens now.
     if (state.wantedTab && state.tab !== state.wantedTab && tabAvailable(state.wantedTab)) state.tab = state.wantedTab;
     state.wantedTab = null;
-    renderAll();
-    openWantedGame();
-    // The other leagues and championships join once they arrive.
-    loadExtraLeagues(new Date()).then(games => {
+    const addGames = games => {
       if (!games.length || !state.data) return;
       const ids = new Set(state.data.games.map(g => g.id));
       state.data.games = [...state.data.games, ...games.filter(g => !ids.has(g.id))].sort((a, b) => a.startUtc.localeCompare(b.startUtc));
-      renderAll();
-      openWantedGame();
-    }, error => console.error(error));
-    loadExtraFutures().then(futures => {
+    };
+    const addFutures = futures => {
       if (!futures.length || !state.data) return;
       const keys = new Set(state.data.futures.map(f => f.key));
       state.data.futures = [...state.data.futures, ...futures.filter(f => !keys.has(f.key))];
+    };
+    if (booting) {
+      const [games, futures] = await Promise.all([within(extraGames, BOOT_PART_MS, []), within(extraFutures, BOOT_PART_MS, [])]);
+      addGames(games);
+      addFutures(futures);
+      // The championship boards' club logos, and the games in play.
+      await Promise.all([within(loadFutureTeams(state.data.futures), BOOT_PART_MS), within(refreshLive(), BOOT_PART_MS)]);
       renderAll();
-      // The clubs' logos: ESPN's team lists for the boards' leagues, then the boards again.
-      loadFutureTeams(state.data.futures).then(() => renderFutures());
-    }, error => console.error(error));
+      openWantedGame();
+      // The first screen's pictures, loaded before it shows.
+      await within(imagesReady($('panel-' + state.tab)), 2500);
+      // Anything past its limit still joins when it arrives.
+      extraGames.then(late => {
+        const before = state.data.games.length;
+        addGames(late);
+        if (state.data.games.length !== before) renderAll();
+      });
+    } else {
+      renderAll();
+      openWantedGame();
+      // The other leagues and championships join once they arrive.
+      extraGames.then(games => {
+        addGames(games);
+        renderAll();
+        openWantedGame();
+      });
+      extraFutures.then(futures => {
+        addFutures(futures);
+        renderAll();
+        // The clubs' logos: ESPN's team lists for the boards' leagues, then the boards again.
+        loadFutureTeams(state.data.futures).then(() => renderFutures());
+      });
+    }
     // Opened on the simulator: the page opens once its simulation is ready.
     if (state.booting && state.tab === 'sim') await renderSim();
   } catch (error) {
@@ -5498,7 +5548,6 @@ loadAccount().then(account => {
 });
 load().then(() => {
   if (state.accountReady) checkResults();
-  refreshLive();
 });
 // Open slips with games in play update every 30 seconds while 紀錄 is on screen.
 setInterval(() => {
