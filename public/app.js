@@ -635,6 +635,7 @@ function renderStatic() {
   $('loading-title').textContent = t('title');
   $('title').textContent = t('title');
   $('notice').textContent = t('notice');
+  $('games-footnote').textContent = t('notice');
   $('refresh').setAttribute('aria-label', t('refresh'));
   $('refresh').title = t('refresh');
   $('footer').textContent = t('footer');
