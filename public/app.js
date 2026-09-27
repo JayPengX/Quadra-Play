@@ -1943,10 +1943,11 @@ async function syncPass() {
     const have = new Set((remote.wallet?.entries || []).map(e => e.id));
     const entries = poolEntries(merged).filter(e => !have.has(e.id));
     const open = merged.slips.filter(s => s.status === 'open').reduce((sum, s) => sum + s.cost, 0);
-    // Open picks, for Quadra Fixtures to show on its matches (openPicks).
-    const bets = openPicks(merged);
+    // Open slips, for Quadra Fixtures to show (openSlips).
+    const { kinds, slips, n } = openSlips(merged);
     const had = remote.wallet?.snap?.odds;
-    const snap = had?.open === open && JSON.stringify(had?.bets || []) === JSON.stringify(bets) ? undefined : { odds: { open, bets, t: Date.now() } };
+    const same = had?.open === open && had?.n === n && JSON.stringify(had?.slips || []) === JSON.stringify(slips) && JSON.stringify(had?.kinds || {}) === JSON.stringify(kinds);
+    const snap = same ? undefined : { odds: { open, n, kinds, slips, t: Date.now() } };
     const changed = !remote.account || JSON.stringify(merged) !== JSON.stringify(remote.account);
     let wallet = remote.wallet;
     if (changed || entries.length || snap) wallet = await writePass(code, changed ? merged : null, { entries, snap });
@@ -2241,26 +2242,46 @@ function passBox() {
   return state.passPanel.el;
 }
 
-// The picks still open, compact, for Quadra Fixtures (in the wallet's
-// snap.odds.bets): the game (Sportsbook's id, before the first "|"), the
-// pick, its odds, the stake of its slip and when the game starts; the
-// soonest first, as many as fit the wallet's room for it.
-function openPicks(account) {
-  const picks = [];
-  for (const slip of account.slips) {
-    if (slip.status !== 'open') continue;
-    for (const leg of slip.legs) {
-      if (leg.result || leg.kind === 'future') continue;
-      picks.push({ g: String(leg.id).split('|')[0], p: leg.shortLabel || leg.label || '', o: Math.round(leg.odds * 100) / 100, c: slip.cost, s: leg.start || null, k: leg.sport || '' });
-    }
-  }
-  picks.sort((a, b) => String(a.s).localeCompare(String(b.s)));
+// The open slips, compact, for Quadra Fixtures (the wallet's snap.odds.slips):
+// each one's play (m: single, parlay or system, z: a system's sizes), its
+// cost (c) and the most it can still pay (x), and its picks: the game
+// (Sportsbook's id, before the first "|"), the pick, its market (k), odds,
+// start, league and result so far. The market names go along in both
+// languages (kinds). The soonest slips first, as many as fit the wallet's
+// room for it.
+const slipTagZh = makeT('zh');
+const slipTagEn = makeT('en');
+function openSlips(account) {
+  const kinds = {};
+  const tagName = (t, kind) => {
+    const key = { inning: 'topInningShort', f1: 'f1Short' }[kind] ?? kindKey(kind);
+    return key ? t(key) : '';
+  };
+  const firstStart = slip => slip.legs.map(leg => leg.start || '').filter(Boolean).sort()[0] || '';
+  const slips = account.slips
+    .filter(slip => slip.status === 'open')
+    .sort((a, b) => firstStart(a).localeCompare(firstStart(b)))
+    .map(slip => {
+      const range = slipRange(slip);
+      return {
+        id: slip.id,
+        m: slip.mode,
+        z: slip.mode === 'system' ? slip.sizes : undefined,
+        c: slip.cost,
+        x: Math.max(0, Math.round(slip.cost + range.most)),
+        l: slip.legs.map(leg => {
+          if (leg.kind && !kinds[leg.kind]) kinds[leg.kind] = [tagName(slipTagZh, leg.kind), tagName(slipTagEn, leg.kind)];
+          return { g: String(leg.id).split('|')[0], p: leg.shortLabel || leg.label || '', k: leg.kind || '', o: Math.round(leg.odds * 100) / 100, s: leg.start || null, sp: leg.sport || '', r: leg.result || undefined, live: leg.live || undefined };
+        })
+      };
+    });
   const out = [];
-  for (const pick of picks) {
-    if (JSON.stringify([...out, pick]).length > 3400) break;
-    out.push(pick);
+  for (const slip of slips) {
+    if (JSON.stringify({ kinds, slips: [...out, slip] }).length > 3500) break;
+    out.push(slip);
   }
-  return out;
+  const used = new Set(out.flatMap(slip => slip.l.map(leg => leg.k)));
+  return { kinds: Object.fromEntries(Object.entries(kinds).filter(([k]) => used.has(k))), slips: out, n: slips.length };
 }
 
 // The shared pool at a glance: its total and each app's part (each one's own
