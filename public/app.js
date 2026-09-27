@@ -75,8 +75,11 @@ import {
   cachedWallet,
   cacheWallet,
   othersBalance,
-  entriesNotFrom,
-  describeEntry,
+  poolBalance,
+  poolParts,
+  poolPartName,
+  APPS,
+  appUrl,
   setting,
   settingPatch,
   ecoMerge,
@@ -2217,11 +2220,10 @@ function renderAccount() {
       ]),
       grantLine,
       el('p', { class: 'muted small', text: t('accountNote', { start: fmtMoney(START_BALANCE, { sign: false }), v: fmtMoney(WEEKLY_GRANT, { sign: false }) }) }),
-      pass ? poolBox(own) : null,
+      pass ? poolBox() : null,
       limitBox(),
       passBox(),
-      pass ? transferBox() : null,
-      backupBox()
+      pass ? transferBox() : null
     ])
   );
   renderArcade();
@@ -2261,28 +2263,29 @@ function openPicks(account) {
   return out;
 }
 
-// The shared pool, broken down, and what the other apps put in or took out.
-function poolBox(own) {
+// The shared pool at a glance: its total and each app's part (each one's own
+// records are in its history, so none are repeated here).
+function poolBox() {
   const t = state.t;
   const w = state.wallet;
-  const stockCash = w?.snap?.stock?.cash ?? 0;
-  const other = othersBalance(w, 'odds') - stockCash;
-  const lines = entriesNotFrom(w, 'odds').filter(e => e.app !== 'stock').slice(0, 30);
-  const row = (label, value) => el('div', { class: 'pool-line' }, [el('span', { class: 'pool-label', text: label }), el('strong', { class: 'pool-value', text: fmtMoney(value, { sign: false }) })]);
-  return el('details', { class: 'sync pool' }, [
-    el('summary', { text: t('poolTitle') }),
-    el('p', { class: 'muted small', text: t('poolNote') }),
-    row(t('poolMine'), own),
-    row(t('poolStock'), stockCash),
-    row(t('poolOther'), other),
-    el('h4', { class: 'pool-head', text: t('poolRecords') }),
-    lines.length
-      ? el('ul', { class: 'pool-records' }, lines.map(e => el('li', {}, [
-          el('span', { class: 'pool-when', text: fmtTime(new Date(e.t).toISOString()) }),
-          el('span', { class: 'pool-what', text: describeEntry(e, state.locale) }),
-          el('strong', { class: e.amount < 0 ? 'back-low' : 'back-high', text: fmtMoney(e.amount) })
-        ])))
-      : el('p', { class: 'muted', text: t('poolNone') })
+  if (!w) return null;
+  const parts = poolParts(w);
+  const plus = parts.filter(p => p.amount > 0).reduce((sum, p) => sum + p.amount, 0);
+  const color = app => APPS[app]?.color || 'var(--q-muted)';
+  const openBets = w.snap?.odds?.open || 0;
+  const part = p => {
+    const inner = [
+      el('span', { class: 'qpool-dot', style: `background:${color(p.app)}` }),
+      el('span', { class: 'qpool-name', text: poolPartName(p.app, state.locale) }, [p.app === 'odds' && openBets > 0 ? el('small', { text: t('poolRiding', { v: fmtMoney(openBets, { sign: false }) }) }) : null]),
+      el('strong', { class: `qpool-amt${p.amount < 0 ? ' neg' : ''}`, text: fmtMoney(p.amount) })
+    ];
+    return el('li', {}, [APPS[p.app] && p.app !== 'odds' ? el('a', { class: 'qpool-part', href: appUrl(p.app) }, inner) : el('div', { class: 'qpool-part' }, inner)]);
+  };
+  return el('div', { class: 'sync pool' }, [
+    el('div', { class: 'qpool-top' }, [el('span', { text: t('poolTitle') }), el('strong', { text: fmtMoney(poolBalance(w), { sign: false }) })]),
+    plus > 0 ? el('div', { class: 'qpool-bar', 'aria-hidden': 'true' }, parts.filter(p => p.amount > 0).map(p => el('i', { style: `flex:${p.amount / plus};background:${color(p.app)}` }))) : null,
+    el('ul', { class: 'qpool-parts' }, parts.map(part)),
+    el('p', { class: 'qpool-note', text: t('poolNote') })
   ]);
 }
 
@@ -2341,50 +2344,6 @@ function transferBox() {
         renderAccount();
       }
     }, [amount, to, note, el('button', { class: 'ghost-button', type: 'submit', text: t('transferGo') })])
-  ]);
-}
-
-// Every slip is kept for good: in this browser, in the sync (when on), and in
-// a backup file you download. Restoring a file adds what it has to the
-// account (nothing is lost or counted twice: the same merge as the sync).
-function backupBox() {
-  const t = state.t;
-  const file = el('input', {
-    type: 'file',
-    accept: 'application/json,.json',
-    hidden: '',
-    onchange: async event => {
-      const f = event.target.files?.[0];
-      if (!f) return;
-      try {
-        const backup = JSON.parse(await f.text());
-        if (!isAccount(backup)) throw new Error('not an account');
-        commitAccount(compactAccount(mergeAccounts(state.account, backup)));
-        state.backupNote = t('backupRestored', { n: backup.slips.length });
-      } catch {
-        state.backupNote = t('backupBad');
-      }
-      renderAccount();
-    }
-  });
-  const download = () => {
-    const day = taipeiDayKey(new Date().toISOString());
-    const blob = new Blob([JSON.stringify(state.account)], { type: 'application/json' });
-    const a = el('a', { href: URL.createObjectURL(blob), download: `quadra-sportsbook-backup-${day}.json` });
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
-  };
-  return el('details', { class: 'sync' }, [
-    el('summary', { text: t('backupTitle') }),
-    el('p', { class: 'muted', text: t('backupIntro', { n: state.account.slips.length }) }),
-    el('div', { class: 'button-row' }, [
-      el('button', { class: 'ghost-button', type: 'button', text: t('backupDownload'), onclick: download }),
-      el('button', { class: 'ghost-button', type: 'button', text: t('backupRestore'), onclick: () => file.click() }),
-      file
-    ]),
-    state.backupNote ? el('p', { class: 'note', text: state.backupNote }) : null
   ]);
 }
 
