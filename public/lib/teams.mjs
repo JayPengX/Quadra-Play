@@ -173,6 +173,12 @@ export const LEAGUES = {
   mls: { family: 'soccer', path: 'soccer/usa.1', logo: 19 },
   ligamx: { family: 'soccer', path: 'soccer/mex.1', logo: 22 },
   jleague: { family: 'soccer', path: 'soccer/jpn.1', logo: 2199 },
+  // More leagues ESPN carries with winner odds; everything past the winner comes
+  // from our own model (lines.mjs), so they get the full board too.
+  brasileirao: { family: 'soccer', path: 'soccer/bra.1', logo: 85 },
+  argentina: { family: 'soccer', path: 'soccer/arg.1', logo: 1 },
+  superlig: { family: 'soccer', path: 'soccer/tur.1', logo: 18 },
+  scotland: { family: 'soccer', path: 'soccer/sco.1', logo: 45 },
   // From Kambi's public odds (one bookmaker's line). Asian baseball and
   // basketball use their kind of sport's markets; the rest are played in
   // sets (`sets`: best of how many, and what a set is made of). Only tennis

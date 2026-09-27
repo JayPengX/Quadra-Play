@@ -68,9 +68,6 @@
     <p class="loading-brand">四方 QUADRA</p>
     <p id="loading-title" class="loading-title">四方運彩</p>
     <div id="loading-spinner" class="spinner" aria-hidden="true"></div>
-    <p id="loading-text" class="loading-text"></p>
-    <div id="loading-bar" class="loading-bar"><span id="loading-fill"></span></div>
-    <p id="loading-eta" class="loading-eta"></p>
     <div id="loading-error" class="loading-error" hidden>
       <p id="loading-error-text"></p>
       <div class="button-row">
@@ -122,6 +119,10 @@
   <div id="mobile-bar" class="mobile-bar"></div>
 
   <div id="panel-games" class="tab-panel" role="tabpanel" aria-labelledby="tab-games">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input id="game-search" type="search" autocomplete="off" enterkeyhint="search" />
+    </div>
     <div class="toolbar">
       <nav id="sport-filter" class="chips" aria-label="sport"></nav>
       <nav id="league-filter" class="chips league-chips" aria-label="league" hidden></nav>

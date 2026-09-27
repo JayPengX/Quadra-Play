@@ -33,6 +33,7 @@ import {
 import { pointsModel, pointsMarkets, goalMarkets, fitHockey, baseballMarkets, setsMarkets, marketOdds, unitModel, unitLineMarkets, guessBestOf } from './markets.mjs';
 import { fitGoals } from './live.mjs';
 import { houseCut, houseRule } from './rules.mjs';
+import { withModelLines } from './lines.mjs';
 import { LEAGUES, familyOf, isSoccer, isSets } from './teams.mjs';
 
 // Lines besides the lottery's own: totals this many either side of the main
@@ -49,14 +50,16 @@ export function errKeyOf(sport) {
 
 // Each game's run and goal models, fitted once: fitting team runs is slow.
 const modelCache = new Map();
-function gameModel(game) {
-  const key = `${game.id}|${game.total?.line}|${game.total?.overFair}|${game.draftKings?.home}`;
+function gameModel(game, homeWin) {
+  const key = `${game.id}|${game.total?.line}|${game.total?.overFair}|${homeWin}`;
   if (modelCache.has(key)) return modelCache.get(key);
   const model = {};
   const baseball = familyOf(game.sport) === 'baseball';
   if (game.total && !isSets(game.sport)) model.mu = fitTotalRuns(game.total.line, game.total.overFair, baseball ? MLB_TOTAL_DISPERSION : GOALS_DISPERSION);
-  if (baseball && game.total && game.draftKings) {
-    model.means = fitTeamRuns(game.draftKings.home, game.total.line, game.total.overFair);
+  // Each team's runs from the win chance (DraftKings', or the blended one
+  // when it has none) and the total.
+  if (baseball && game.total && homeWin != null) {
+    model.means = fitTeamRuns(homeWin, game.total.line, game.total.overFair);
     model.grid = scoreGrid(model.means.home, model.means.away);
   }
   if (modelCache.size > 2000) modelCache.clear();
@@ -66,10 +69,14 @@ function gameModel(game) {
 
 // Totals, run lines and team totals of baseball and soccer: the lottery's own
 // lines (MLB's checked against its prices) and the wider range.
-function lineOptions(game, base) {
+function lineOptions(game, base, probs) {
   const out = [];
-  const model = gameModel(game);
+  const homeWin = game.draftKings?.home ?? probs.home / (probs.home + probs.away);
+  const model = gameModel(game, homeWin);
   const total = game.total;
+  // A total from our own model (lines.mjs), not a bookmaker's: never "the
+  // lottery's line", and a little more room for error.
+  const modeled = Boolean(total?.modeled);
   const mlb = game.sport === 'mlb';
   const baseball = familyOf(game.sport) === 'baseball';
   const cut = (k, steps) => houseCut({ base: k, sport: game.sport, steps });
@@ -77,8 +84,8 @@ function lineOptions(game, base) {
   // 大小分. MLB: the lottery's three lines, from one line; elsewhere the
   // bookmaker's own half line; then the wider range from the model.
   const totals = new Map();
-  if (total && mlb) for (const l of lotteryTotalLines(total.line, total.overFair)) totals.set(l.line, { ...l, posted: true });
-  else if (total && total.line % 1 !== 0) totals.set(total.line, { line: total.line, over: total.overFair, main: true, posted: true });
+  if (total && mlb && !modeled) for (const l of lotteryTotalLines(total.line, total.overFair)) totals.set(l.line, { ...l, posted: true });
+  else if (total && total.line % 1 !== 0) totals.set(total.line, { line: total.line, over: total.overFair, main: true, posted: !modeled });
   if (model.mu != null) {
     const r = baseball ? MLB_TOTAL_DISPERSION : GOALS_DISPERSION;
     const main = [...totals.values()].find(l => l.main)?.line ?? Math.floor(model.mu) + 0.5;
@@ -104,8 +111,8 @@ function lineOptions(game, base) {
         posted,
         market: `total|${line}`,
         // The main line's margin is the usual source gap; lines either side add the model's error.
-        fairMargin: main ? null : posted ? 0.02 : 0.03,
-        errKey: !mlb ? errKeyOf(game.sport) : posted ? 'mlbTotal' : 'mlbTotalExtra',
+        fairMargin: modeled ? 0.04 : main ? null : posted ? 0.02 : 0.03,
+        errKey: modeled ? 'extra' : !mlb ? errKeyOf(game.sport) : posted ? 'mlbTotal' : 'mlbTotalExtra',
         fairChance: p,
         cut: k,
         estOdds: estimateLineOdds(p, k)
@@ -276,6 +283,9 @@ function unitLineOptions(game, base) {
 export function gameOptions(game) {
   const blend = blendOutcomes(game.draftKings, game.polymarket);
   if (!blend) return [];
+  // No total posted (a game only Polymarket or Kambi prices the winner of):
+  // our own, so it gets every market all the same.
+  game = withModelLines(game, blend.probs);
   const base = { gameId: game.id, game, sport: game.sport, start: game.startUtc };
   const sides = isSoccer(game.sport) ? ['home', 'draw', 'away'] : ['away', 'home'];
   // The winner at the measured cut for its source, more for a league the
@@ -298,7 +308,7 @@ export function gameOptions(game) {
   }));
   const family = familyOf(game.sport);
   if (family === 'sets') out.push(...unitLineOptions(game, base));
-  if (family === 'baseball' || family === 'soccer') out.push(...lineOptions(game, base));
+  if (family === 'baseball' || family === 'soccer') out.push(...lineOptions(game, base, blend.probs));
   out.push(...sideOptions(game, base, blend.probs));
   // 得分最高單局: the lottery's own (nearly fixed) table, its cut removed;
   // every baseball league (the table barely moves from game to game).

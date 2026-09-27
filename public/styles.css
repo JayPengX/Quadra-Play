@@ -573,6 +573,13 @@ details.market[open] > summary { margin-bottom: 6px; }
 .link-button { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; font-weight: 800; text-align: left; }
 @media (hover: hover) { .link-button:hover { text-decoration: underline; } }
 
+/* ---- The search bar: Quadra Securities' own ---- */
+.search-box { position: relative; margin-bottom: 12px; }
+.search-box svg { position: absolute; left: 13px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); fill: none; stroke: var(--text-muted); stroke-width: 2.2; stroke-linecap: round; }
+.search-box input { width: 100%; min-width: 0; border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 10px 16px 10px 40px; font: inherit; font-size: 1rem; font-weight: 500; color: var(--text-primary); box-shadow: var(--shadow-sm); }
+.search-box input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+body.searching #live, body.searching #f1, body.searching #futures, body.searching .toolbar { display: none; }
+
 /* ---- Sport tiles and the day strip: compact, one row each (side by side on desktop) ---- */
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
 .toolbar .chips { margin: 0; padding: 2px 0; }

@@ -635,6 +635,8 @@ function renderStatic() {
   $('loading-title').textContent = t('title');
   $('title').textContent = t('title');
   $('notice').textContent = t('notice');
+  $('game-search').placeholder = t('searchPlaceholder');
+  $('game-search').setAttribute('aria-label', t('searchPlaceholder'));
   $('games-footnote').textContent = t('notice');
   $('refresh').setAttribute('aria-label', t('refresh'));
   $('refresh').title = t('refresh');
@@ -717,13 +719,34 @@ function betIcon(bet) {
 
 // ---- Games --------------------------------------------------------------------
 
+// The search bar: teams (Chinese or English) and leagues, every day and
+// sport at once; the filters step aside while it's in use.
+state.query = '';
+const searchKey = text => normalizeTeamName(String(text || '')).replace(/\s+/g, '') || String(text || '').toLowerCase().replace(/\s+/g, '');
+function gameMatches(game, query) {
+  const t = state.t;
+  const hay = [game.away.en, game.away.zh, game.home.en, game.home.zh, t(`sport_${game.sport}`), gameSeries(game)].filter(Boolean);
+  const want = searchKey(query);
+  return hay.some(text => searchKey(text).includes(want) || String(text).includes(query));
+}
+function searchGames() {
+  const q = state.query;
+  document.body.classList.toggle('searching', Boolean(q));
+  return state.data.games.filter(g => gameMatches(g, q)).sort((a, b) => a.startUtc.localeCompare(b.startUtc));
+}
+
 function renderGames() {
   const t = state.t;
   const container = $('games-list');
-  const games = state.data.games.filter(g => inSport(g.sport) && dayKey(g.startUtc) === state.day);
+  const searching = Boolean(state.query);
+  document.body.classList.toggle('searching', searching);
+  const games = searching ? searchGames() : state.data.games.filter(g => inSport(g.sport) && dayKey(g.startUtc) === state.day);
+  if (searching) $('games-title').textContent = t('searchResults', { q: state.query, n: games.length });
+  else renderDayFilter();
   $('games').hidden = games.length === 0 && !(inSport('f1') && state.data.f1);
   if (games.length === 0) {
-    container.replaceChildren(el('p', { class: 'muted', text: t('noBets') }));
+    container.replaceChildren(el('p', { class: 'muted', text: t(searching ? 'searchNone' : 'noBets') }));
+    if (searching) $('games').hidden = false;
     return;
   }
   const byGame = groupBy(state.bets, b => b.gameId);
@@ -766,7 +789,7 @@ function gameCard(game, bets) {
       el('span', { class: 'game-series', text: gameSeries(game) }),
       game.live
         ? el('span', { class: 'game-time live-state' }, [el('span', { class: 'live-dot', text: t('tagLive') }), document.createTextNode(liveStateText(game.live))])
-        : el('span', { class: 'game-time', text: hhmm(game.startUtc) })
+        : el('span', { class: 'game-time', text: state.query ? `${dayKey(game.startUtc).slice(5).replace('-', '/')} ${hhmm(game.startUtc)}` : hhmm(game.startUtc) })
     ]),
     el('div', { class: 'team-rows' }, rows),
     open ? gameMore(game, others) : null,
@@ -3052,23 +3075,13 @@ function crowdKey(sportBets, weeks) {
   return `${weeks}|${poolKeys.get(sportBets)}`;
 }
 
-// Loading screen progress. At start-up it spans both stages, odds (first 35%)
-// then the simulation; later only the simulation. The time left is estimated
-// from the pace so far.
-const BOOT_ODDS_SHARE = 0.35;
-const loadingClock = { start: 0, key: '' };
-
-function showLoading(text, progress = 0, stage = 'boot') {
-  const box = $('loading');
-  if (box.hidden || loadingClock.key !== stage) Object.assign(loadingClock, { start: performance.now(), key: stage });
-  box.hidden = false;
+// The loading screen: the Quadra one, the same in every app (icon, name,
+// spinner, nothing more). Callers still pass what's loading and how far
+// along; it isn't shown.
+function showLoading() {
+  $('loading').hidden = false;
   $('loading-error').hidden = true;
   $('loading-spinner').hidden = false;
-  $('loading-text').textContent = text;
-  $('loading-fill').style.width = `${Math.round(progress * 100)}%`;
-  const elapsed = (performance.now() - loadingClock.start) / 1000;
-  const left = progress > 0.08 && progress < 1 ? Math.ceil((elapsed / progress) * (1 - progress)) : null;
-  $('loading-eta').textContent = left == null ? '' : state.t('loadingEta', { pct: Math.round(progress * 100), s: left });
 }
 
 function hideLoading() {
@@ -3088,9 +3101,8 @@ function crowdStats(sportBets, weeks, { quiet = false } = {}) {
     worker = null;
     crowdJob.reject(new Error('cancelled'));
   }
-  const label = () => state.t('loadingSim', { n: fmtCount(SIM_PLAYERS_SHOWN), period: periodName(weeks) });
-  // At start-up the simulation is the second stage of one bar.
-  const report = quiet ? () => {} : p => (state.booting ? showLoading(label(), BOOT_ODDS_SHARE + (1 - BOOT_ODDS_SHARE) * p) : showLoading(label(), p, 'sim'));
+  // The loading screen (the plain Quadra one) while it runs.
+  const report = quiet ? () => {} : () => showLoading();
   report(0);
   let resolve;
   let reject;
@@ -5212,9 +5224,7 @@ const BOOT_LIMIT_MS = 45_000;
 async function load() {
   renderStatus('loading');
   const booting = state.booting;
-  // The simulation runs at start-up only when the page opens on its tab.
-  const oddsShare = state.tab === 'sim' ? BOOT_ODDS_SHARE : 1;
-  const onProgress = booting ? p => showLoading(state.t('loading'), oddsShare * p) : undefined;
+  const onProgress = booting ? () => showLoading() : undefined;
   if (booting) onProgress(0);
   const limit = booting ? setTimeout(() => ((state.booting = false), hideLoading()), BOOT_LIMIT_MS) : null;
   $('refresh').disabled = true;
@@ -5326,7 +5336,17 @@ const snapMonths = m => PERIOD_MONTHS.reduce((best, x) => (Math.abs(x - m) < Mat
 $('sim-months').addEventListener('input', event => ($('period-value').textContent = periodName(monthWeeks(snapMonths(Number(event.target.value))))));
 $('sim-months').addEventListener('change', event => setPeriod(snapMonths(Number(event.target.value))));
 
+// Everything opened on a tab folds back when you leave it (a game's 更多玩法,
+// every folding card), so coming back starts tidy, not where you left off.
+function collapseAll() {
+  const had = state.open.size > 0;
+  state.open.clear();
+  for (const d of document.querySelectorAll('.tab-panel details[open]')) d.open = false;
+  if (had && state.data) renderGames();
+}
+
 function showTab(tab) {
+  if (tab !== state.tab) collapseAll();
   state.tab = tab;
   try {
     history.replaceState(null, '', `#${tab}`);
@@ -5342,6 +5362,10 @@ function showTab(tab) {
 }
 
 for (const button of document.querySelectorAll('#tabs .tab')) button.addEventListener('click', () => showTab(button.dataset.tab));
+$('game-search').addEventListener('input', event => {
+  state.query = event.target.value.trim();
+  if (state.data) renderGames();
+});
 $('tabs').addEventListener('keydown', event => {
   const visible = TABS.filter(tab => !$(`tab-${tab}`).hidden);
   const i = visible.indexOf(state.tab);
@@ -5482,6 +5506,12 @@ setInterval(() => {
 }, LIVE_REFRESH_MS);
 
 // Back on the tab: pick up what another device did, and any games that ended.
+// After ten minutes or more away, everything opened is folded again.
+let hiddenAt = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') hiddenAt = Date.now();
+  else if (hiddenAt && Date.now() - hiddenAt > 10 * 60_000) collapseAll();
+});
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   applyGrant();

@@ -207,6 +207,38 @@ Every estimate carries its **margin of error**:
 
 The calibration data is the real lottery prices in `tests/fixtures/lottery-mlb-2026-09-25.json` `tests/fixtures/lottery-f1-2026-09-26.json` and, for live odds, `tests/fixtures/lottery-live-2026-09-26.json`. Soccer, the Kambi sports and the new plays haven't been checked against the lottery yet.
 
+### Our own lines (`lines.mjs`)
+
+Every market past the winner (totals, handicaps, team totals, halves,
+quarters, first five innings, margins, correct scores, both teams to score…)
+is priced from two numbers: the win chance and the game's expected total.
+The win chance always exists (DraftKings, Polymarket or Kambi). The total
+used to come only from DraftKings, so a game without its line got little
+more than the winner. Now, when no total is posted, it comes from a model:
+
+- **Soccer**: each team's mean goals fitted to the game's own 1X2 chances (a
+  likely draw means fewer goals), scaled up 12% (real games draw more often
+  than independent goal counts say) and blended 70/30 with the league's own
+  average.
+- **Everything else**: the league's average total (`LEAGUE_TOTALS`), plus a
+  little for one-sided basketball and football games.
+
+The line is the half line nearest the mean, priced with the same spreads
+the bookmaker lines use (negative binomial for runs and goals, normal for
+points), and shown as the model's own (never as the lottery's line, with
+more room for error in the recommendations).
+
+Checked against the bookmakers' totals on one day's slate (2026-09-27),
+mean gap between our total and theirs: MLB 0.7 runs (no bias), NPB 0.45,
+KBO 0.9, CPBL 0.6, B.League 5 points, WNBA 10 (a four-game playoff sample),
+NFL 2.9 points, NCAAF 0.4, MLS 0.2 goals, Liga MX 0.1. Game-to-game
+differences (pitchers, parks, injuries) are what the model can't see; its
+averages are unbiased.
+
+With this, a league needs only a winner price to get the full board: the
+Brasileirão, Argentina's Liga Profesional, the Süper Lig and the Scottish
+Premiership were added this way (ESPN's DraftKings winner odds).
+
 ## How it works
 
 A static site with no build step and no dependencies. The browser fetches odds live through the `sports-proxy` Cloudflare Worker from [Shared-Proxy](https://github.com/JayPengX/Shared-Proxy) (`PROXY_URL` in `public/lib/sources.mjs`). The Worker adds the CORS headers Polymarket doesn't send, and caches responses. A failed request is retried once. Team logos load straight from ESPN's image server; for the leagues ESPN doesn't cover (NPB, KBO, CPBL, B.League, EuroLeague, and the badminton, table tennis, snooker and WTA tours) they come from TheSportsDB's free badges, matched by the words the club names share. Players (tennis and the like) show initials.

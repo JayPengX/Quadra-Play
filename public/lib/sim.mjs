@@ -787,6 +787,11 @@ export const SIM_SPORTS = {
   ligamx: { family: 'soccer', kind: 'soccer', pop: 0.3, games: w => (between(w, 1, 21) || between(w, 28, 50) ? 9 : 0) },
   // J1 League (autumn-spring from August 2026, a winter break December-February).
   jleague: { family: 'soccer', kind: 'soccer', pop: 0.8, games: w => (between(w, 31, 50) || between(w, 7, 21) ? 10 : 0) },
+  // Brasileirão and Argentina: calendar-year seasons (April-December, February-December).
+  brasileirao: { family: 'soccer', kind: 'soccer', pop: 0.3, games: w => (between(w, 14, 49) ? 10 : 0) },
+  argentina: { family: 'soccer', kind: 'soccer', pop: 0.2, games: w => (between(w, 5, 49) ? 12 : 0) },
+  superlig: { family: 'soccer', kind: 'soccer', pop: 0.3, games: euroLeague(9) },
+  scotland: { family: 'soccer', kind: 'soccer', pop: 0.2, games: euroLeague(6) },
   // Tennis: ATP and WTA main-draw singles, about 60 and 50 matches a week.
   tennis: { family: 'sets', kind: 'tennis', pop: 2, headline: true, games: tourWeek(60) },
   wta: { family: 'sets', kind: 'tennis', pop: 1, games: tourWeek(50) },
