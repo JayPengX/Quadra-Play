@@ -5,7 +5,7 @@
 import { americanToProbability, devigProportional, devigPower } from './odds.mjs';
 import { normalizeTeamName, teamZh, LEAGUES, familyOf, isSoccer, rememberLogo, rememberTeams, hasTeams } from './teams.mjs';
 import { runOrder } from './live.mjs';
-import { fetchKambiLeague, decidedFromLive, decidedTeamGame, parseKambiLiveData, kambiLiveDataUrl, setsWon } from './kambi.mjs';
+import { fetchKambiLeague, decidedFromLive, decidedTeamGame, parseKambiLiveData, kambiLiveDataUrl, setsWon, watchKambiMatches, fetchKeptKambi } from './kambi.mjs';
 import { KAMBI_LEAGUES } from './teams.mjs';
 
 export const PROXY_URL = 'https://sports-proxy.pengzjay.workers.dev';
@@ -628,6 +628,9 @@ function espnDates(startUtc) {
 // legResult in account.mjs). Legs whose results can't be fetched are left out.
 export async function fetchOutcomes(legs, now = new Date()) {
   const out = new Map();
+  const kambiGone = [];
+  // Kambi matches with bets on them: the Worker keeps their scores from now on.
+  watchKambiMatches(legs.filter(l => LEAGUES[l.sport]?.kambi && l.kambiId)).catch(() => {});
   const pages = new Map();
   const page = url => {
     if (!pages.has(url)) pages.set(url, getJson(url).catch(() => null));
@@ -662,10 +665,11 @@ export async function fetchOutcomes(legs, now = new Date()) {
         }
       }
       // Kambi's sports: the result from the match's own live data, once the
-      // score shows it decided (see decidedTeamGame / decidedFromLive).
+      // score shows it decided (see decidedTeamGame / decidedFromLive). Once
+      // Kambi has dropped it, from the Worker's kept copy (below).
       if (league?.kambi && leg.kambiId) {
         const live = parseKambiLiveData(await page(kambiLiveDataUrl(leg.kambiId)));
-        if (!live) return;
+        if (!live) return kambiGone.push(leg);
         const result = decidedFromLive(live, leg.sport) ?? decidedTeamGame(live, leg.sport, leg.start, now);
         out.set(leg.id, result ?? kambiInPlay(live, leg.sport));
         return;
@@ -689,6 +693,17 @@ export async function fetchOutcomes(legs, now = new Date()) {
       }
     })
   );
+  if (kambiGone.length) {
+    const kept = await fetchKeptKambi([...new Set(kambiGone.map(l => String(l.kambiId)))]).catch(() => new Map());
+    for (const leg of kambiGone) {
+      const entry = kept.get(String(leg.kambiId));
+      const live = entry?.live && parseKambiLiveData({ liveData: entry.live });
+      if (!live) continue;
+      const result = decidedFromLive(live, leg.sport) ?? decidedTeamGame(live, leg.sport, leg.start, now, { ended: Boolean(entry.gone) });
+      if (result) out.set(leg.id, result);
+      else if (!entry.gone) out.set(leg.id, kambiInPlay(live, leg.sport));
+    }
+  }
   return out;
 }
 

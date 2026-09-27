@@ -49,3 +49,15 @@ test('set sports settle from the same live data', () => {
   const live = parseKambiLiveData({ liveData: { score: { home: '2', away: '0', info: '' }, statistics: { sets: { home: [21, 21, -1], away: [15, 18, -1] } } } });
   assert.equal(decidedFromLive(live, 'badminton').homeScore, 2);
 });
+
+test('the Worker\'s kept copy of a dropped match settles at once', () => {
+  // Nine innings, the last score only five minutes before Kambi dropped it.
+  const changed = Date.parse('2026-09-26T12:55:00Z');
+  const live = parseKambiLiveData(baseball('0-1 | 0-0 | 2-0 | 0-0 | 1-0 | 0-0 | 2-1 | 2-0 | 0-0', 7, 2, changed));
+  const now = at('2026-09-26T13:00:00Z');
+  assert.equal(decidedTeamGame(live, 'npb', '2026-09-26T10:00:00Z', now), null);
+  assert.equal(decidedTeamGame(live, 'npb', '2026-09-26T10:00:00Z', now, { ended: true }).homeScore, 7);
+  // Dropped in the eighth: still not a result.
+  const early = parseKambiLiveData(baseball('0-1 | 0-0 | 2-0 | 0-0 | 1-0 | 0-0 | 2-1 | 2-0', 7, 2, changed));
+  assert.equal(decidedTeamGame(early, 'npb', '2026-09-26T10:00:00Z', now, { ended: true }), null);
+});

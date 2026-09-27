@@ -146,6 +146,28 @@ export function decidedFromLive(live, sport) {
 // regulation innings or quarters are played, the score isn't level (or
 // baseball's extra innings have run out) and it hasn't changed for a while.
 
+// Shared-Proxy's /kambi: it keeps the last live data of the matches bets are
+// on after Kambi drops them (a few hours after the end). Sportsbook tells it
+// which matches to watch, and reads its copy when Kambi's is gone.
+export const KAMBI_WATCH_URL = 'https://orbit-workers-proxy.pengzjay.workers.dev/kambi';
+const watched = new Set();
+export async function watchKambiMatches(legs) {
+  const events = legs.filter(l => l.kambiId && l.start && !watched.has(String(l.kambiId))).map(l => ({ id: String(l.kambiId), start: l.start }));
+  if (!events.length) return;
+  for (const e of events) watched.add(e.id);
+  await fetch(KAMBI_WATCH_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ events: events.slice(0, 30) }), signal: AbortSignal.timeout(15_000) }).catch(() => {
+    for (const e of events) watched.delete(e.id);
+  });
+}
+// The Worker's copies: id -> { live, gone, seen }.
+export async function fetchKeptKambi(ids) {
+  if (!ids.length) return new Map();
+  const res = await fetch(`${KAMBI_WATCH_URL}?ids=${ids.slice(0, 30).map(encodeURIComponent).join(',')}`, { signal: AbortSignal.timeout(15_000) });
+  if (!res.ok) return new Map();
+  const data = await res.json().catch(() => ({}));
+  return new Map(Object.entries(data.results || {}));
+}
+
 export const kambiLiveDataUrl = id => `${KAMBI}/event/${encodeURIComponent(id)}/livedata.json?lang=en_GB&market=GB`;
 
 // Each period's score, home first ("0-1 | 2-0" for innings, "Q1: 11-16 | Q2: 22-24"
@@ -184,8 +206,10 @@ export const KAMBI_QUIET_MS = 30 * 60_000;
 const TIE_INNINGS = { npb: 12, cpbl: 12, kbo: 11 };
 
 // The result of a baseball or basketball game from its live data, or null
-// while it may still be going. `start` is the scheduled start.
-export function decidedTeamGame(live, sport, start, now = new Date()) {
+// while it may still be going. `start` is the scheduled start; `ended`: the
+// data is the last Kambi had before dropping the match (kept by the Worker's
+// /kambi watch), so the game is over whenever its score says it can be.
+export function decidedTeamGame(live, sport, start, now = new Date(), { ended = false } = {}) {
   const family = LEAGUES[sport]?.family;
   if (!live || (family !== 'baseball' && family !== 'basketball')) return null;
   const { home, away } = live.score;
@@ -195,12 +219,12 @@ export function decidedTeamGame(live, sport, start, now = new Date()) {
   // The score's own timestamp when it's a sensible one; if not, a generous
   // time after the start.
   const changed = live.changedAt && live.changedAt >= began && live.changedAt <= t + 3_600_000 ? live.changedAt : null;
-  const quiet = changed ? t - changed >= KAMBI_QUIET_MS : began && t - began >= (family === 'baseball' ? 5 : 3.5) * 3_600_000;
+  const quiet = ended || (changed ? t - changed >= KAMBI_QUIET_MS : began && t - began >= (family === 'baseball' ? 5 : 3.5) * 3_600_000);
   let over = false;
   if (family === 'baseball') over = n >= 9 && quiet && (home !== away || n >= (TIE_INNINGS[sport] ?? 99));
   else {
     const clockDone = live.clock && !live.clock.running && live.clock.left === 0 && /QUARTER4|OVERTIME|OT/i.test(live.clock.period);
-    over = n >= 4 && home !== away && (clockDone ? t - (changed ?? 0) >= 5 * 60_000 : quiet);
+    over = n >= 4 && home !== away && (ended || (clockDone ? t - (changed ?? 0) >= 5 * 60_000 : quiet));
   }
   if (!over) return null;
   return { status: 'final', homeScore: home, awayScore: away, homeInnings: live.periods.home, awayInnings: live.periods.away };
