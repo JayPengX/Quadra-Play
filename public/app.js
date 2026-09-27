@@ -595,7 +595,20 @@ function logoPicture(light, dark, cls, fallback) {
   if (!light) return fallback();
   const img = el('img', { class: cls, src: light, alt: '', loading: 'lazy', decoding: 'async' });
   const picture = el('picture', { class: 'logo-wrap' }, [dark ? el('source', { srcset: dark, media: '(prefers-color-scheme: dark)' }) : null, img]);
-  img.addEventListener('error', () => picture.replaceWith(fallback()), { once: true });
+  // A logo that fails is tried once more (a slow or dropped connection),
+  // then gives way to the fallback.
+  let retried = false;
+  img.addEventListener('error', () => {
+    if (retried || !navigator.onLine) return picture.replaceWith(fallback());
+    retried = true;
+    // The same address again (TheSportsDB refuses any extra ?query).
+    setTimeout(() => {
+      const source = picture.querySelector('source');
+      if (source) source.srcset = dark;
+      img.removeAttribute('src');
+      img.setAttribute('src', light);
+    }, 1500);
+  });
   return picture;
 }
 
@@ -5053,22 +5066,65 @@ function renderAll() {
   renderF1();
   renderAccount();
   renderSaved();
+  warmImages();
 }
 
-// Longest the loading screen waits at start-up; after that the page opens and
-// whatever is still loading finishes in the background. Each part after the
-// main odds (other leagues, championships, logos, games in play) gets at
-// most BOOT_PART_MS of its own.
+// Start-up shows the first screen as soon as it is ready: the main odds,
+// then the other leagues and the games in play (both on the first screen,
+// fetched side by side, each within BOOT_PART_MS) and the logos in view.
+// Everything a scroll or a tab away (championship boards, their club logos,
+// the other tabs' pictures) loads in the background after the page opens.
+// The page never opens empty: past BOOT_LIMIT_MS (a very slow connection)
+// it opens with whatever has arrived.
 const BOOT_LIMIT_MS = 45_000;
-const BOOT_PART_MS = 12_000;
+const BOOT_PART_MS = 6_000;
+const BOOT_IMAGES_MS = 4_000;
 const within = (promise, ms, fallback) => Promise.race([Promise.resolve(promise).catch(() => fallback), new Promise(resolve => setTimeout(() => resolve(fallback), ms))]);
-// Every picture in `root` loaded (or failed): no logo pops in after the page opens.
+// Every picture on screen in `root` loaded (or failed): no logo pops in as
+// the page opens. Pictures further down wait for their turn (lazy), then
+// warmImages fetches them in the background.
 function imagesReady(root) {
-  const images = [...(root?.querySelectorAll('img') || [])].filter(img => img.getAttribute('src') && !img.complete);
-  return Promise.all(images.map(img => new Promise(resolve => {
-    img.addEventListener('load', resolve, { once: true });
-    img.addEventListener('error', resolve, { once: true });
-  })));
+  const bottom = window.innerHeight;
+  const images = [...(root?.querySelectorAll('img') || [])].filter(img => {
+    if (!img.getAttribute('src') || img.complete) return false;
+    const box = img.getBoundingClientRect();
+    return box.height > 0 && box.top < bottom && box.bottom > 0;
+  });
+  return Promise.all(
+    images.map(img => {
+      img.loading = 'eager';
+      return new Promise(resolve => {
+        img.addEventListener('load', resolve, { once: true });
+        img.addEventListener('error', resolve, { once: true });
+      });
+    })
+  );
+}
+
+// Every logo on the page (other tabs, further down, dark-mode versions)
+// fetched quietly a few at a time once the first screen is up, so a tab or
+// a scroll finds them already loaded.
+const warmed = new Set();
+let warmTimer = null;
+function warmImages() {
+  if (state.booting) return;
+  clearTimeout(warmTimer);
+  warmTimer = setTimeout(() => {
+    const urls = new Set();
+    for (const img of document.querySelectorAll('main img[src]')) if (!img.complete) urls.add(img.src);
+    for (const source of document.querySelectorAll('main picture source[srcset]')) if (matchMedia(source.media || 'all').matches) urls.add(source.srcset);
+    const queue = [...urls].filter(u => !warmed.has(u));
+    queue.forEach(u => warmed.add(u));
+    const next = () => {
+      const url = queue.shift();
+      if (!url) return;
+      const img = new Image();
+      img.decoding = 'async';
+      img.onload = img.onerror = next;
+      img.src = url;
+    };
+    for (let i = 0; i < 6; i++) next();
+  }, 300);
 }
 
 async function load() {
@@ -5076,20 +5132,22 @@ async function load() {
   const booting = state.booting;
   const onProgress = booting ? () => showLoading() : undefined;
   if (booting) onProgress(0);
+  const open = () => {
+    if (!state.booting) return;
+    state.booting = false;
+    hideLoading();
+    warmImages();
+  };
   // Past the limit the page opens with whatever has arrived; the rest joins as it comes.
   const limit = booting
     ? setTimeout(() => {
-        state.booting = false;
         if (state.data) renderAll();
-        hideLoading();
+        open();
       }, BOOT_LIMIT_MS)
     : null;
   $('refresh').disabled = true;
   try {
-    // The main board first (the request queue serves it before anything
-    // else), then the rest. At start-up the loading screen waits for all of
-    // it (each part within its own limit), so the page opens complete
-    // instead of filling in for a few more seconds.
+    // The main board first (the request queue serves it before anything else).
     const now = new Date();
     state.data = await loadOdds(now, onProgress);
     const extraGames = loadExtraLeagues(now).catch(error => (console.error(error), []));
@@ -5107,49 +5165,54 @@ async function load() {
       const keys = new Set(state.data.futures.map(f => f.key));
       state.data.futures = [...state.data.futures, ...futures.filter(f => !keys.has(f.key))];
     };
+    let gamesIn = false;
     if (booting) {
-      const [games, futures] = await Promise.all([within(extraGames, BOOT_PART_MS, []), within(extraFutures, BOOT_PART_MS, [])]);
-      addGames(games);
-      addFutures(futures);
-      // The championship boards' club logos, and the games in play.
-      await Promise.all([within(loadFutureTeams(state.data.futures), BOOT_PART_MS), within(refreshLive(), BOOT_PART_MS)]);
+      // Drawn behind the loading screen now, so the main games' logos load
+      // while the other leagues and the games in play arrive.
+      renderAll();
+      // The first screen: every league's games and the games in play.
+      const [games] = await Promise.all([within(extraGames, BOOT_PART_MS, null), within(refreshLive(), BOOT_PART_MS)]);
+      if (games) {
+        addGames(games);
+        gamesIn = true;
+      }
       renderAll();
       openWantedGame();
-      // The first screen's pictures, loaded before it shows.
-      await within(imagesReady($('panel-' + state.tab)), 2500);
-      // Anything past its limit still joins when it arrives.
-      extraGames.then(late => {
-        const before = state.data.games.length;
-        addGames(late);
-        if (state.data.games.length !== before) renderAll();
-      });
+      // Opened on the simulator: the page opens once its simulation is ready.
+      if (state.tab === 'sim') await renderSim();
+      await within(imagesReady($('panel-' + state.tab)), BOOT_IMAGES_MS);
+      clearTimeout(limit);
+      open();
     } else {
       renderAll();
       openWantedGame();
-      // The other leagues and championships join once they arrive.
-      extraGames.then(games => {
-        addGames(games);
-        renderAll();
-        openWantedGame();
-      });
-      extraFutures.then(futures => {
-        addFutures(futures);
-        renderAll();
-        // The clubs' logos: ESPN's team lists for the boards' leagues, then the boards again.
-        loadFutureTeams(state.data.futures).then(() => renderFutures());
-      });
     }
-    // Opened on the simulator: the page opens once its simulation is ready.
-    if (state.booting && state.tab === 'sim') await renderSim();
+    // The rest, in the background: the other leagues (if they missed the
+    // first screen), the championship boards and their clubs' logos.
+    if (!gamesIn)
+      extraGames.then(games => {
+        const before = state.data.games.length;
+        addGames(games);
+        if (state.data.games.length !== before) {
+          renderAll();
+          openWantedGame();
+          warmImages();
+        }
+      });
+    extraFutures.then(async futures => {
+      addFutures(futures);
+      renderAll();
+      // The clubs' logos: ESPN's team lists for the boards' leagues, then the boards again.
+      await loadFutureTeams(state.data.futures).catch(() => {});
+      renderFutures();
+      warmImages();
+    });
   } catch (error) {
     console.error(error);
     renderStatus('error');
   } finally {
     clearTimeout(limit);
-    if (booting) {
-      state.booting = false;
-      hideLoading();
-    }
+    open();
     $('refresh').disabled = false;
   }
 }
