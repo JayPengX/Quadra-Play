@@ -134,6 +134,7 @@ const state = {
   slipSizes: new Set([2, 'all']),
   slipStake: 100,
   day: null,
+  dayPicked: false,
   // True until the first simulation is ready: the loading screen covers the page.
   booting: true,
   sport: 'all',
@@ -556,7 +557,13 @@ function dayLabel(day) {
 function renderDayFilter() {
   const t = state.t;
   const days = [...new Set(state.bets.filter(b => inSport(b.sport)).map(b => dayKey(b.start)))].sort();
-  if (!days.includes(state.day)) state.day = days[0] ?? null;
+  // The earliest day with games (today, unless today's are all under way),
+  // until a day is picked: games arriving later (the other leagues, a
+  // refresh after midnight) move it to the new earliest day too.
+  if (!state.dayPicked || !days.includes(state.day)) {
+    state.day = days[0] ?? null;
+    state.dayPicked = false;
+  }
   // One day only (the usual case): no picker, the day goes in the heading.
   $('day-filter').hidden = days.length <= 1;
   const [, gm, gd] = (state.day ?? '').split('-').map(Number);
@@ -574,6 +581,7 @@ function renderDayFilter() {
         'aria-pressed': String(day === state.day),
         onclick: () => {
           state.day = day;
+          state.dayPicked = true;
           rerenderFiltered();
         }
       }, [
@@ -5290,10 +5298,15 @@ $('sim-months').addEventListener('change', event => setPeriod(snapMonths(Number(
 // Everything opened on a tab folds back when you leave it (a game's 更多玩法,
 // every folding card), so coming back starts tidy, not where you left off.
 function collapseAll() {
-  const had = state.open.size > 0;
+  const had = state.open.size > 0 || state.dayPicked;
   state.open.clear();
+  // Back to the earliest day as well.
+  state.dayPicked = false;
   for (const d of document.querySelectorAll('.tab-panel details[open]')) d.open = false;
-  if (had && state.data) renderGames();
+  if (had && state.data) {
+    renderDayFilter();
+    renderGames();
+  }
 }
 
 function showTab(tab) {
@@ -5349,6 +5362,7 @@ function openWantedGame() {
   state.wantedGame = null;
   state.tab = 'games';
   state.day = dayKey(game.startUtc);
+  state.dayPicked = true;
   state.sport = 'all';
   state.open.add(game.id);
   renderAll();
