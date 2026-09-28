@@ -85,18 +85,22 @@ export function historyStats(account) {
     if (slip.payout > 0) paidSlips++;
     const profit = slip.payout - slip.cost;
     if (profit > 0) profitSlips++;
-    for (const [map, key] of [
-      [byMode, modeKey(slip)],
-      [byLegs, legsGroup(slip.legs.length)]
-    ]) {
-      if (!map.has(key)) map.set(key, money());
-      addMoney(map.get(key), slip);
+    // A slip recovered from the money records has no picks: it counts in the
+    // totals, not in the per-play tables.
+    if (!slip.recovered) {
+      for (const [map, key] of [
+        [byMode, modeKey(slip)],
+        [byLegs, legsGroup(slip.legs.length)]
+      ]) {
+        if (!map.has(key)) map.set(key, money());
+        addMoney(map.get(key), slip);
+      }
+      // A slip all from one sport counts its money there too.
+      const sports = new Set(slip.legs.map(l => l.sport));
+      const sportKey = sports.size === 1 ? [...sports][0] : 'mixed';
+      if (!bySport.has(sportKey)) bySport.set(sportKey, { ...money(), ...picks() });
+      addMoney(bySport.get(sportKey), slip);
     }
-    // A slip all from one sport counts its money there too.
-    const sports = new Set(slip.legs.map(l => l.sport));
-    const sportKey = sports.size === 1 ? [...sports][0] : 'mixed';
-    if (!bySport.has(sportKey)) bySport.set(sportKey, { ...money(), ...picks() });
-    addMoney(bySport.get(sportKey), slip);
 
     if (!records.best || profit > records.best.profit) records.best = { slip, profit };
     if (!records.worst || profit < records.worst.profit) records.worst = { slip, profit };

@@ -27,16 +27,28 @@ cards, all with the one Quadra balance.
   the simulator's crowd now only serves analysis (紀錄's "you against the
   crowd").
 
-### 首頁 Home (For you)
+### 首頁 Home
 
-`public/home.js`. Every pick on the board ranked by Quadra's shared
-recommender (`rank` in `quadra.mjs`): what the person bets on, opens and
-follows (Fixtures included) weighs most, with decaying weight; each pick's
-quality comes from the board (its average back per NT$100, the house's
-recommendation tag, closeness to even money, how soon it starts); at most
-one pick per game, no league filling the list, and a dismissed pick sinks.
-Then your teams' next games, what starts soonest, the lottery's jackpots,
-and the open slips.
+`public/home.js`.
+
+- **The header card:** the Quadra balance, the money in open bets and the
+  most they can pay, and the ways in: games, lottery, scratch cards, history.
+- **Games you follow:** the teams and leagues followed in Quadra Fixtures
+  (the wallet's `follow:match`), their games on the board, soonest first;
+  without follows, a link to follow in Fixtures.
+- **For you:** every pick on the board ranked by Quadra's shared recommender
+  (`rank` in `quadra.mjs`). What's followed in Fixtures weighs most (a
+  followed team as much as the strongest habit, followed leagues and the
+  first sports a little less), then what the person bets on and opens, with
+  decaying weight; each pick's quality comes from the board (its average
+  back per NT$100, the house's tag, closeness to even money, how soon it
+  starts); at most one pick per game, no league filling the list, and a
+  dismissed pick sinks. Team logos on every card.
+- Then the open slips (picks, cost, most to win), the lottery jackpots and
+  what starts soonest.
+
+Notices: a slip settling (won, or not) and a winning lottery ticket, as a
+banner on screen or a system notice when allowed.
 
 ### 賽事 Games: every match, more sports
 
@@ -85,6 +97,12 @@ and the open slips.
   10,000 times its price. The prize is fixed when the card is bought (crypto
   random, by the card's table); scratching (on a canvas, with a finger)
   reveals the face, laid out to show exactly that prize.
+- **Buying:** each game card shows the time to the draw and the latest
+  numbers, with a one-tap quick pick. A game's sheet shows your numbers as
+  you pick them (with progress), a basket (add this bet, or quick pick 5)
+  paid in one go from a buy bar that stays in view, then a done panel.
+  My tickets lists those waiting for a draw and those drawn, with the total
+  won.
 - Tickets live on the account beside the slips (ledger entries
   `lotto-<id>` and `prize-<id>`), merge across devices like slips, and pay
   into the one pool.
@@ -162,7 +180,8 @@ The page stays simple: odds, colours and the amounts that matter. What the numbe
 
 - **錢從哪裡來、到哪裡去 (where the money came from and went)** at the top of 統計分析 (`moneySources` in `history.mjs`): a bar of all money in (the start, weekly grants, mini games, payouts) and one of all stakes, each with amounts and shares; then betting's net result on settled slips, what the lottery kept (stakes minus payouts before tax) and the tax withheld, what work earned and how many minutes of a minimum-wage job it equals, how many mini-game rounds betting's losses would take to earn back, and money still out on open slips. Below it, mini games by game (rounds, total, average and best round, about how long played and the hourly rate), and each week's grants, mini games, betting and change. Shown as soon as there's a grant or a round, before any slip; the balance chart marks mini-game money too.
 
-- **Play money only:** a new account has NT$10,000. From the next week on, NT$5,000 can be claimed once a week, from Monday 00:00 Taiwan time; unclaimed weeks don't add up.
+- **Play money only:** the money is the Quadra Pass's one pool (Quadra pays the month and the week); there's no betting limit and no sending money to another pass.
+- **Kept on the pass:** the account is Play's data on the Quadra Pass, merged with this device's copy (never saved over when the pass's copy can't be read). A bet the account lost but the pass's money records still hold comes back as a recovered slip (cost, time and payout; picks lost), listed on its own and left out of the per-play tables.
 - **模擬下注 (place with play money)** on the slip buys it at the odds shown: the cost comes off the balance at once, and the page opens the 紀錄 (history) tab with the slip in **我的投注單 (my slips)**. A slip costing more than the balance can't be placed.
 - **Settling:** opening the 紀錄 tab (or coming back to it) checks every open slip whose games have started, at most every 90 seconds, or at once with 檢查結果:
   - MLB and Premier League from ESPN's final scores (innings for the top-scoring inning);

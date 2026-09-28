@@ -77,7 +77,8 @@ import {
   accountButton,
   recordAffinity,
   affinityPatch,
-  activityPatch
+  activityPatch,
+  notify
 } from './lib/quadra.mjs';
 import { pack, unpack } from './lib/codec.mjs';
 import { historyStats, outlookOf, chanceOf, funFacts, crowdPercentile, moneySources } from './lib/history.mjs';
@@ -1839,11 +1840,34 @@ function saveAccountLocal() {
 // Every change goes to this device at once and to the pass shortly after.
 function commitAccount(next) {
   if (next === state.account || !state.accountReady) return;
+  noticeSettled(state.account, next);
   state.account = next;
   saveAccountLocal();
   renderAccount();
   renderSaved();
   pushSoon();
+}
+
+// A slip or lottery ticket just settled: a notice (a banner on screen, a
+// system notice when Play is in the background and they're allowed).
+function noticeSettled(prev, next) {
+  if (!prev) return;
+  const was = new Map(prev.slips.map(x => [x.id, x.status]));
+  for (const slip of next.slips) {
+    if (slip.status !== 'settled' || was.get(slip.id) !== 'open') continue;
+    const won = slip.payout > 0;
+    notify(q, {
+      title: won ? state.t('noticeSlipWon', { v: fmtMoney(slip.payout, { sign: false }) }) : state.t('noticeSlipLost'),
+      body: slip.legs.map(l => l.shortLabel || l.label).slice(0, 3).join('、'),
+      tag: `slip:${slip.id}`,
+      hash: 'history'
+    });
+  }
+  const had = new Map((prev.tickets || []).map(x => [x.id, x.status]));
+  for (const ticket of next.tickets || []) {
+    if (ticket.status !== 'settled' || had.get(ticket.id) !== 'open' || !(ticket.prize > 0) || ticket.card) continue;
+    notify(q, { title: state.t('noticeTicketWon', { v: fmtMoney(ticket.prize, { sign: false }) }), body: '', tag: `ticket:${ticket.id}`, hash: 'lottery' });
+  }
 }
 
 let pushTimer = null;
@@ -3507,7 +3531,7 @@ q.on('active', live => {
 
 // What the home tab and the lottery need from here.
 function homeCtx() {
-  return { state, q, el, fmtMoney, fmtOdds, fmtTime, pickTitle, gameSeries, matchupText, logoImg, leagueImg, toggleLeg, showTab, openGame: id => ((state.wantedGame = id), openWantedGame()), betKeys, track, funds };
+  return { state, q, el, fmtMoney, fmtOdds, fmtTime, pickTitle, gameSeries, matchupText, logoImg, leagueImg, toggleLeg, showTab, openGame: id => ((state.wantedGame = id), openWantedGame()), betKeys, track, funds, slipRange };
 }
 lotteryUi = mountLottery({ state, q, el, fmtMoney, funds, commitAccount, track, getAccount: () => state.account, syncNow });
 
