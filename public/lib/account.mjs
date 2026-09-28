@@ -8,16 +8,21 @@
 // ids ('start', 'grant-<Monday>', 'stake-<slip>', 'payout-<slip>'), so two
 // devices' copies merge by taking the union, and nothing counts twice.
 import { settleSlip } from './odds.mjs';
+import { mergeTickets } from './lottery.mjs';
 import { taipeiDayKey } from './sources.mjs';
-import { isSoccer } from './teams.mjs';
-import { ECONOMY } from './quadra.mjs';
+import { isSoccer, f1Driver } from './teams.mjs';
 
-export const START_BALANCE = ECONOMY.oddsStart;
-export const WEEKLY_GRANT = ECONOMY.oddsWeekly;
+// What Play itself gave before Quadra paid into the pool (from the week of
+// 2026-10-05, GRANTS_UNTIL_WEEK, Quadra pays the week, whichever app is
+// opened; a pass made since then gets its opening money from Quadra).
+export const START_BALANCE = 10_000;
+export const WEEKLY_GRANT = 500;
+export const GRANTS_UNTIL_WEEK = '2026-10-05';
 
-export function newAccount(now = new Date()) {
+// start: false for an account funded by the Quadra pool alone.
+export function newAccount(now = new Date(), { start = true } = {}) {
   const t = now.toISOString();
-  return { v: 1, created: t, updated: t, ledger: [{ id: 'start', t, kind: 'start', amount: START_BALANCE }], slips: [] };
+  return { v: 1, created: t, updated: t, ledger: start ? [{ id: 'start', t, kind: 'start', amount: START_BALANCE }] : [], slips: [] };
 }
 
 export function balance(account) {
@@ -41,6 +46,7 @@ export function nextGrantAt(now) {
 // the next week on, once a week, and doesn't pile up over skipped weeks.
 export function canClaim(account, now = new Date()) {
   const week = weekKey(now);
+  if (week >= GRANTS_UNTIL_WEEK) return false;
   return weekKey(new Date(account.created)) !== week && !account.ledger.some(e => e.id === `grant-${week}`);
 }
 
@@ -118,6 +124,16 @@ export function legResult(leg, outcome) {
   if (leg.kind === 'f1') return win(norm(outcome.winner) === norm(leg.driver));
   if (leg.kind === 'future') return win(norm(outcome.winner) === norm(leg.team));
   if (leg.kind === 'f1podium') return outcome.podium ? win(outcome.podium.some(name => norm(name) === norm(leg.driver))) : null;
+  if (leg.kind === 'f1top6' || leg.kind === 'f1top10' || leg.kind === 'f1h2h') {
+    if (!outcome.order) return null;
+    const at = name => {
+      const i = outcome.order.findIndex(x => norm(x) === norm(name));
+      return i < 0 ? Infinity : i;
+    };
+    if (leg.kind === 'f1h2h') return at(leg.driver) === at(leg.rival) ? 'void' : win(at(leg.driver) < at(leg.rival));
+    return win(at(leg.driver) < (leg.kind === 'f1top6' ? 6 : 10));
+  }
+  if (leg.kind === 'f1team') return win(norm(f1Driver(outcome.winner).team) === norm(leg.team));
   const away = Number(outcome.awayScore);
   const home = Number(outcome.homeScore);
   if (!Number.isFinite(away) || !Number.isFinite(home)) return null;
@@ -265,13 +281,16 @@ export function mergeAccounts(a, b) {
     else if (other.status !== 'settled' && slip.status === 'settled') slips.set(slip.id, slip);
     else if (other.status !== 'settled') slips.set(slip.id, { ...other, legs: other.legs.map((leg, i) => ({ ...leg, result: leg.result ?? slip.legs[i]?.result ?? null, ...(leg.final ?? slip.legs[i]?.final ? { final: leg.final ?? slip.legs[i]?.final } : {}) })) });
   }
-  return {
+  const out = {
     v: 1,
     created: a.created < b.created ? a.created : b.created,
     updated: a.updated > b.updated ? a.updated : b.updated,
     ledger: [...ledger.values()].sort((x, y) => x.t.localeCompare(y.t)),
     slips: [...slips.values()].sort((x, y) => y.t.localeCompare(x.t))
   };
+  // Lottery tickets (lottery.mjs): a settled copy wins over an open one.
+  if (a.tickets || b.tickets) out.tickets = mergeTickets(a.tickets, b.tickets);
+  return out;
 }
 
 // Another, separate account folded into this one (the Quadra merge tool):

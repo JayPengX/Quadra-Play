@@ -426,3 +426,60 @@ export function f1Podium(drivers) {
     return { fair, odds, ...houseRule('f1podium', odds) };
   });
 }
+
+// More F1 markets from the same win chances: each driver's chance of a top
+// six or top ten finish, of beating their teammate, and each team's chance
+// of the win. Finishing orders are drawn by Harville (the next place goes as
+// the win chances of the drivers left), 40,000 times with a fixed seed, so
+// the board is the same on every device. Priced like the podium: to return
+// what the winner board does on average, at most 500.
+export function f1Markets(drivers, { runs = 40_000, seed = 7 } = {}) {
+  const n = drivers.length;
+  const p = drivers.map(d => Math.max(1e-6, d.fair));
+  let a = seed >>> 0;
+  const rand = () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const top6 = new Float64Array(n);
+  const top10 = new Float64Array(n);
+  const place = new Int32Array(n);
+  const teams = [...new Set(drivers.map(d => d.team).filter(Boolean))];
+  const pairs = teams.map(team => drivers.map((d, i) => (d.team === team ? i : -1)).filter(i => i >= 0)).filter(x => x.length === 2);
+  const ahead = pairs.map(() => 0);
+  const left = new Float64Array(n);
+  for (let r = 0; r < runs; r++) {
+    left.set(p);
+    let total = p.reduce((x, y) => x + y, 0);
+    for (let pos = 0; pos < n; pos++) {
+      let u = rand() * total;
+      let k = 0;
+      while (k < n - 1 && (left[k] === 0 || (u -= left[k]) > 0)) k++;
+      if (left[k] === 0) k = left.findIndex(v => v > 0);
+      place[k] = pos;
+      total -= left[k];
+      left[k] = 0;
+      if (pos < 6) top6[k]++;
+      if (pos < 10) top10[k]++;
+    }
+    pairs.forEach(([i, j], x) => place[i] < place[j] && ahead[x]++);
+  }
+  const sum = p.reduce((x, y) => x + y, 0) || 1;
+  const back = drivers.reduce((s, d) => s + (d.fair / sum) * d.fair * d.odds, 0);
+  const price = (fair, kind) => {
+    const odds = Math.min(500, Math.max(1.01, Math.round((back / Math.min(0.995, fair)) * 100) / 100));
+    return { fair: Math.min(0.995, fair), odds, ...houseRule(kind, odds) };
+  };
+  return {
+    top6: drivers.map((d, i) => price(top6[i] / runs, 'f1top')),
+    top10: drivers.map((d, i) => price(top10[i] / runs, 'f1top')),
+    h2h: pairs.flatMap(([i, j], x) => {
+      const pi = ahead[x] / runs;
+      return [{ driver: i, rival: j, ...price(pi, 'f1h2h') }, { driver: j, rival: i, ...price(1 - pi, 'f1h2h') }];
+    }),
+    teams: teams.map(team => price(drivers.reduce((s, d) => s + (d.team === team ? d.fair / sum : 0), 0), 'f1team')).map((x, k) => ({ team: teams[k], ...x }))
+  };
+}

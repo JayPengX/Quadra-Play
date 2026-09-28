@@ -69,3 +69,29 @@ test('new kinds of picks settle from the final score and periods', () => {
   const hockey = { status: 'final', awayScore: 3, homeScore: 2, awayInnings: [1, 0, 1, 1], homeInnings: [0, 2, 0, 0] };
   assert.equal(legResult({ kind: 'regulation', side: 'draw' }, hockey), 'won');
 });
+
+test('F1: top six, top ten, teammates and the winning team from the win chances', async () => {
+  const { f1Markets } = await import('../public/lib/board.mjs');
+  const { legResult } = await import('../public/lib/account.mjs');
+  const fair = [0.35, 0.25, 0.12, 0.08, 0.06, 0.05, 0.03, 0.02, 0.015, 0.01, 0.01, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005];
+  const teams = Array.from({ length: 20 }, (_, i) => `T${Math.floor(i / 2)}`);
+  const drivers = fair.map((f, i) => ({ fair: f, odds: 0.85 / f, team: teams[i] }));
+  const m = f1Markets(drivers, { runs: 20_000 });
+  // Six places: the top-six chances add up to six, ten to ten.
+  assert.ok(Math.abs(m.top6.reduce((s, x) => s + x.fair, 0) - 6) < 0.05);
+  assert.ok(Math.abs(m.top10.reduce((s, x) => s + x.fair, 0) - 10) < 0.05);
+  assert.ok(m.top6[0].fair > m.top6[5].fair && m.top10[0].fair >= m.top6[0].fair);
+  // Teammates: the favourite beats their teammate more often than not; the two sides add up to one.
+  const first = m.h2h.filter(x => (x.driver === 0 && x.rival === 1) || (x.driver === 1 && x.rival === 0));
+  assert.ok(Math.abs(first[0].fair + first[1].fair - 1) < 1e-9);
+  assert.ok(first.find(x => x.driver === 0).fair > 0.5);
+  assert.ok(Math.abs(m.teams.find(x => x.team === 'T0').fair - 0.6 / fair.reduce((s, x) => s + x, 0)) < 1e-9);
+  // Settled from the finishing order.
+  const order = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'];
+  const outcome = { status: 'final', winner: 'A', order };
+  assert.equal(legResult({ kind: 'f1top6', driver: 'F' }, outcome), 'won');
+  assert.equal(legResult({ kind: 'f1top6', driver: 'G' }, outcome), 'lost');
+  assert.equal(legResult({ kind: 'f1top10', driver: 'J' }, outcome), 'won');
+  assert.equal(legResult({ kind: 'f1h2h', driver: 'K', rival: 'B' }, outcome), 'lost');
+  assert.equal(legResult({ kind: 'f1h2h', driver: 'C', rival: 'Z' }, outcome), 'won');
+});

@@ -26,7 +26,7 @@ test('weeks start on Monday, Taiwan time', () => {
   assert.equal(weekKey(at('2026-09-27T16:30:00Z')), '2026-09-28');
 });
 
-test('a new account starts with NT$10,000 and gets its weekly grant once a week from the next week', () => {
+test('a new account starts with NT$10,000 and gets its weekly grant once a week, until Quadra pays it', () => {
   let account = newAccount(at('2026-09-25T00:00:00Z'));
   assert.equal(balance(account), START_BALANCE);
   assert.equal(canClaim(account, at('2026-09-26T00:00:00Z')), false);
@@ -36,9 +36,11 @@ test('a new account starts with NT$10,000 and gets its weekly grant once a week 
   assert.equal(balance(account), START_BALANCE + WEEKLY_GRANT);
   assert.equal(canClaim(account, monday), false);
   assert.equal(claimGrant(account, monday), account);
-  // Skipped weeks don't pile up: two weeks later, one more grant.
-  account = claimGrant(account, at('2026-10-14T02:00:00Z'));
-  assert.equal(balance(account), START_BALANCE + 2 * WEEKLY_GRANT);
+  // From the week of 2026-10-05 Quadra pays the week into the pool itself.
+  assert.equal(canClaim(account, at('2026-10-06T02:00:00Z')), false);
+  assert.equal(claimGrant(account, at('2026-10-14T02:00:00Z')), account);
+  // A pool-funded account opens empty.
+  assert.equal(balance(newAccount(at('2026-10-01T00:00:00Z'), { start: false })), 0);
 });
 
 const slip = (id, cost, legs, extra = {}) => ({ id, mode: 'parlay', sizes: [legs.length], stake: cost, cost, legs, ...extra });

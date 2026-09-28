@@ -5,14 +5,14 @@
 import { americanToProbability, devigProportional, devigPower } from './odds.mjs';
 import { normalizeTeamName, teamZh, LEAGUES, familyOf, isSoccer, rememberLogo, rememberTeams, hasTeams } from './teams.mjs';
 import { runOrder } from './live.mjs';
-import { fetchKambiLeague, decidedFromLive, decidedTeamGame, parseKambiLiveData, kambiLiveDataUrl, setsWon, watchKambiMatches, fetchKeptKambi } from './kambi.mjs';
+import { useKambiToken, fetchKambiLeague, decidedFromLive, decidedTeamGame, parseKambiLiveData, kambiLiveDataUrl, setsWon, watchKambiMatches, fetchKeptKambi } from './kambi.mjs';
 import { KAMBI_LEAGUES } from './teams.mjs';
 
 export const PROXY_URL = 'https://sports-proxy.pengzjay.workers.dev';
 const ESPN = 'https://site.api.espn.com/apis/site/v2/sports';
 const GAMMA = 'https://gamma-api.polymarket.com';
 const POLYMARKET_TAG = { mlb: 100381, epl: 306, f1: 100389, nba: 745 };
-const MLB_DAYS_AHEAD = 4;
+const MLB_DAYS_AHEAD = 8;
 // Soccer rounds can be two weeks apart (international breaks).
 const EPL_DAYS_AHEAD = 21;
 const MATCH_TOLERANCE_MS = 6 * 60 * 60 * 1000;
@@ -65,23 +65,11 @@ export function nextMatchweek(games) {
   return week;
 }
 
-// What the page lists, like the lottery: MLB up to the end of tomorrow (Taiwan
-// time), the Premier League's whole next matchweek (it has far fewer games)
-// once that round is close.
+// What the page lists: every game the sources have that hasn't started yet
+// (no cut-off at tomorrow or the next matchweek), in start order.
 export function lotteryGames(games, now) {
-  const windowEnd = lotteryWindowEnd(now).getTime();
-  const within = (g, days) => Date.parse(g.startUtc) < lotteryWindowEnd(now, days).getTime();
-  const round = nextMatchweek(games.filter(g => g.sport === 'epl'));
-  const epl = round.length && Date.parse(round[0].startUtc) < lotteryWindowEnd(now, EPL_OPEN_DAYS).getTime() ? round : [];
-  const rest = games.filter(g => {
-    if (g.sport === 'epl') return false;
-    const family = familyOf(g.sport);
-    // Weekly sports (football, soccer) a few days ahead; daily ones to the end of tomorrow.
-    if (family === 'football') return within(g, 5);
-    if (family === 'soccer') return within(g, EPL_OPEN_DAYS);
-    return Date.parse(g.startUtc) < windowEnd;
-  });
-  return [...rest, ...epl].sort((a, b) => a.startUtc.localeCompare(b.startUtc));
+  const t = now.getTime();
+  return games.filter(g => Date.parse(g.startUtc) > t).sort((a, b) => a.startUtc.localeCompare(b.startUtc));
 }
 
 // Championship markets. Polymarket lists next season's market before this
@@ -121,8 +109,16 @@ export function futureTeamName(market) {
   return /^Will (?:the )?(.+?) (?:win the|be (?:named )?the) /i.exec(market.question || '')?.[1] ?? null;
 }
 
-export function proxied(url, trim) {
-  return `${PROXY_URL}/sports-proxy?url=${encodeURIComponent(url)}${trim ? `&trim=${trim}` : ''}`;
+// The proxy answers signed-in apps only: the Quadra session (quadra.mjs)
+// supplies the token.
+let session = null;
+export function useSourcesSession(s) {
+  session = s;
+  useKambiToken(() => session?.token || '');
+}
+
+export function proxied(url, trim, token = session?.token || '') {
+  return `${PROXY_URL}/sports-proxy?url=${encodeURIComponent(url)}${trim ? `&trim=${trim}` : ''}${token ? `&qt=${encodeURIComponent(token)}` : ''}`;
 }
 
 // At most this many requests at once: the page asks for dozens of lists at
@@ -146,7 +142,8 @@ async function slot(task) {
 // shouldn't lose a whole sport.
 export async function getJson(url, trim, retries = 1) {
   try {
-    const res = await slot(() => fetch(proxied(url, trim), { signal: AbortSignal.timeout(30_000) }));
+    const token = session ? await session.ensureToken().catch(() => session.token) : '';
+    const res = await slot(() => fetch(proxied(url, trim, token), { signal: AbortSignal.timeout(30_000) }));
     if (!res.ok) throw new Error(`${res.status} ${url}`);
     return await res.json();
   } catch (error) {
@@ -258,7 +255,7 @@ async function fetchLeague(key, now) {
   const { family, path } = LEAGUES[key];
   if (family === 'soccer') return fetchSoccer(key, now);
   if (family === 'football') return parseEspnScoreboard(await getJson(`${ESPN}/${path}/scoreboard`), key);
-  return fetchEspnDays(key, path, [-1, 0, 1, 2].map(d => new Date(now.getTime() + d * DAY_MS)));
+  return fetchEspnDays(key, path, [-1, 0, 1, 2, 3, 4, 5, 6, 7].map(d => new Date(now.getTime() + d * DAY_MS)));
 }
 
 // Leagues fetched from ESPN alone (DraftKings); MLB and the Premier League
@@ -574,7 +571,9 @@ export function parseEspnRace(data, startUtc) {
   const first = (comp.competitors || []).find(c => c.winner) ?? ranked[0];
   const name = c => c.athlete?.displayName || c.athlete?.fullName;
   const podium = ranked.slice(0, 3).map(name);
-  return first ? { status: 'final', winner: name(first), ...(podium.length === 3 ? { podium } : {}) } : { status: 'pending' };
+  // The whole order, for top six and ten, head-to-heads and the winning team.
+  const order = ranked.map(name);
+  return first ? { status: 'final', winner: name(first), ...(podium.length === 3 ? { podium } : {}), ...(order.length >= 10 ? { order } : {}) } : { status: 'pending' };
 }
 
 // A championship's winner once Polymarket has resolved the market.
@@ -645,7 +644,7 @@ export async function fetchOutcomes(legs, now = new Date()) {
         return;
       }
       if (!leg.start || Date.parse(leg.start) > now.getTime()) return;
-      if (leg.kind === 'f1' || leg.kind === 'f1podium') {
+      if (leg.kind?.startsWith('f1')) {
         // The race's day and the two after (the start kept with a pick can be
         // a little before the race itself).
         for (const days of [0, 1, 2]) {
@@ -694,14 +693,14 @@ export async function fetchOutcomes(legs, now = new Date()) {
     })
   );
   if (kambiGone.length) {
-    const kept = await fetchKeptKambi([...new Set(kambiGone.map(l => String(l.kambiId)))]).catch(() => new Map());
+    const kept = await fetchKeptKambi([...new Set(kambiGone.map(l => String(l.kambiId)))]).catch(() => null);
     for (const leg of kambiGone) {
-      const entry = kept.get(String(leg.kambiId));
+      const entry = kept?.get(String(leg.kambiId));
       const live = entry?.live && parseKambiLiveData({ liveData: entry.live });
-      if (!live) continue;
-      const result = decidedFromLive(live, leg.sport) ?? decidedTeamGame(live, leg.sport, leg.start, now, { ended: Boolean(entry.gone) });
+      const result = live && (decidedFromLive(live, leg.sport) ?? decidedTeamGame(live, leg.sport, leg.start, now, { ended: Boolean(entry.gone) }));
       if (result) out.set(leg.id, result);
-      else if (!entry.gone) out.set(leg.id, kambiInPlay(live, leg.sport));
+      else if (kambiUnresolvable(leg, entry, now, Boolean(kept))) out.set(leg.id, { status: 'void', reason: 'noResult' });
+      else if (live && !entry.gone) out.set(leg.id, kambiInPlay(live, leg.sport));
     }
   }
   return out;
@@ -882,6 +881,21 @@ async function storeTeams(url, teams) {
     const cache = await globalThis.caches?.open(TEAMS_CACHE);
     await cache?.put(url, new Response(JSON.stringify({ at: Date.now(), teams }), { headers: { 'content-type': 'application/json' } }));
   } catch {}
+}
+
+// Every Kambi match gets settled: Kambi never publishes results, so when it
+// has dropped the match and the last score kept (by the app or the Worker's
+// watch) can't decide it, the pick is void (the stake comes back), as the
+// lottery does with a match that has no official result. That's once the
+// kept copy is marked gone, or, with nothing kept at all, once the match is
+// surely over (its sport's longest usual length, plus two hours).
+const KAMBI_LONGEST_H = { tabletennis: 2, badminton: 3, volleyball: 4, tennis: 6, wta: 5, snooker: 10, npb: 6, kbo: 6, cpbl: 6, euroleague: 4, bleague: 4 };
+export function kambiUnresolvable(leg, entry, now = new Date(), watchReachable = true) {
+  if (entry?.gone) return true;
+  const past = now.getTime() - Date.parse(leg.start);
+  const longest = (KAMBI_LONGEST_H[leg.sport] ?? 6) * 3_600_000 + 2 * 3_600_000;
+  // The Worker's copy unreachable: wait longer before calling it void.
+  return !entry?.live && past > (watchReachable ? longest : longest + 12 * 3_600_000);
 }
 
 // A Kambi match in play as an outcome still pending: sets won so far (or the

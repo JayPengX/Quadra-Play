@@ -150,19 +150,23 @@ export function decidedFromLive(live, sport) {
 // on after Kambi drops them (a few hours after the end). Sportsbook tells it
 // which matches to watch, and reads its copy when Kambi's is gone.
 export const KAMBI_WATCH_URL = 'https://orbit-workers-proxy.pengzjay.workers.dev/kambi';
+// The Quadra session token, when signed in (counted per session, not per IP).
+let tokenOf = () => '';
+export const useKambiToken = fn => (tokenOf = fn);
+const signed = url => (tokenOf() ? `${url}${url.includes('?') ? '&' : '?'}qt=${encodeURIComponent(tokenOf())}` : url);
 const watched = new Set();
 export async function watchKambiMatches(legs) {
   const events = legs.filter(l => l.kambiId && l.start && !watched.has(String(l.kambiId))).map(l => ({ id: String(l.kambiId), start: l.start }));
   if (!events.length) return;
   for (const e of events) watched.add(e.id);
-  await fetch(KAMBI_WATCH_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ events: events.slice(0, 30) }), signal: AbortSignal.timeout(15_000) }).catch(() => {
+  await fetch(signed(KAMBI_WATCH_URL), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ events: events.slice(0, 30) }), signal: AbortSignal.timeout(15_000) }).catch(() => {
     for (const e of events) watched.delete(e.id);
   });
 }
 // The Worker's copies: id -> { live, gone, seen }.
 export async function fetchKeptKambi(ids) {
   if (!ids.length) return new Map();
-  const res = await fetch(`${KAMBI_WATCH_URL}?ids=${ids.slice(0, 30).map(encodeURIComponent).join(',')}`, { signal: AbortSignal.timeout(15_000) });
+  const res = await fetch(signed(`${KAMBI_WATCH_URL}?ids=${ids.slice(0, 30).map(encodeURIComponent).join(',')}`), { signal: AbortSignal.timeout(15_000) });
   if (!res.ok) return new Map();
   const data = await res.json().catch(() => ({}));
   return new Map(Object.entries(data.results || {}));

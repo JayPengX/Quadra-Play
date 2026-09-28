@@ -30,32 +30,31 @@
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') check(); });
   })();
 </script>
-<title>四方運彩</title>
-<meta name="description" content="用數學看台灣運彩：公平機率、估計賠率、每一注平均拿回多少。教學用途。" />
+<title>Quadra Play</title>
+<meta name="description" content="運彩與彩券：所有運動、所有玩法，還有台灣彩券的電腦彩券與刮刮樂。" />
 <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
-<!-- The home screen always says 四方運彩, whatever language the page shows. -->
-<meta name="apple-mobile-web-app-title" content="四方運彩" />
-<meta name="application-name" content="四方運彩" />
+<meta name="apple-mobile-web-app-title" content="Play" />
+<meta name="application-name" content="Quadra Play" />
 <link rel="manifest" href="./manifest.webmanifest" />
 <meta property="og:type" content="website" />
-<meta property="og:site_name" content="四方運彩 Quadra Sportsbook" />
-<meta property="og:title" content="四方運彩 Quadra Sportsbook｜用數學看台灣運彩" />
-<meta property="og:description" content="用數學看台灣運彩：公平機率、估計賠率、每一注平均拿回多少。教學用途。" />
-<meta property="og:url" content="https://jaypengx.github.io/Quadra-Sportsbook/" />
-<meta property="og:image" content="https://jaypengx.github.io/Quadra-Sportsbook/og-image.jpg" />
+<meta property="og:site_name" content="Quadra Play" />
+<meta property="og:title" content="Quadra Play" />
+<meta property="og:description" content="運彩與彩券：所有運動、所有玩法，還有台灣彩券的電腦彩券與刮刮樂。" />
+<meta property="og:url" content="https://jaypengx.github.io/Quadra-Play/" />
+<meta property="og:image" content="https://jaypengx.github.io/Quadra-Play/og-image.jpg" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
-<meta property="og:image:alt" content="四方運彩 Quadra Sportsbook" />
-<meta property="og:image" content="https://jaypengx.github.io/Quadra-Sportsbook/og-image-square.jpg" />
+<meta property="og:image:alt" content="Quadra Play" />
+<meta property="og:image" content="https://jaypengx.github.io/Quadra-Play/og-image-square.jpg" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="1200" />
-<meta property="og:image:alt" content="四方運彩 Quadra Sportsbook" />
+<meta property="og:image:alt" content="Quadra Play" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="四方運彩 Quadra Sportsbook｜用數學看台灣運彩" />
-<meta name="twitter:description" content="用數學看台灣運彩：公平機率、估計賠率、每一注平均拿回多少。教學用途。" />
-<meta name="twitter:image" content="https://jaypengx.github.io/Quadra-Sportsbook/og-image.jpg" />
-<meta name="twitter:image:alt" content="四方運彩 Quadra Sportsbook" />
+<meta name="twitter:title" content="Quadra Play" />
+<meta name="twitter:description" content="運彩與彩券：所有運動、所有玩法，還有台灣彩券的電腦彩券與刮刮樂。" />
+<meta name="twitter:image" content="https://jaypengx.github.io/Quadra-Play/og-image.jpg" />
+<meta name="twitter:image:alt" content="Quadra Play" />
 <link rel="preconnect" href="https://sports-proxy.pengzjay.workers.dev" crossorigin />
 <link rel="preconnect" href="https://a.espncdn.com" />
 <link rel="stylesheet" href="./styles.css" />
@@ -65,8 +64,8 @@
 <div id="loading" class="loading" role="status" aria-live="polite">
   <div class="loading-box">
     <img class="loading-logo" src="./favicon.svg" alt="" width="76" height="76" />
-    <p class="loading-brand">四方 QUADRA</p>
-    <p id="loading-title" class="loading-title">四方運彩</p>
+    <p class="loading-brand">QUADRA</p>
+    <p id="loading-title" class="loading-title">Quadra Play</p>
     <div id="loading-spinner" class="spinner" aria-hidden="true"></div>
     <div id="loading-error" class="loading-error" hidden>
       <p id="loading-error-text"></p>
@@ -100,23 +99,28 @@
     <div class="brand">
       <img class="brand-logo" src="./favicon.svg" alt="" width="36" height="36" />
       <div class="brand-text">
-        <h1 id="title">四方運彩</h1>
+        <h1 id="title">Quadra Play</h1>
         <p id="status" class="status" aria-live="polite"></p>
       </div>
     </div>
     <nav id="tabs" class="tabs q-tabbar" role="tablist">
+    <button id="tab-home" class="tab q-tab" role="tab" type="button" data-tab="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg><span class="tab-label"></span><span class="tab-badge" hidden></span></button>
     <button id="tab-games" class="tab q-tab" role="tab" type="button" data-tab="games"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg><span class="tab-label"></span><span class="tab-badge" hidden></span></button>
+    <button id="tab-lottery" class="tab q-tab" role="tab" type="button" data-tab="lottery"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="4"/><circle cx="16" cy="16" r="4"/><circle cx="17" cy="7" r="2.5"/><circle cx="7" cy="17" r="2.5"/></svg><span class="tab-label"></span><span class="tab-badge" hidden></span></button>
     <button id="tab-slip" class="tab q-tab" role="tab" type="button" data-tab="slip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 0 0 4v0a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v0a2 2 0 0 0 0-4v-3a2 2 0 0 0 0-4z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg><span class="tab-label"></span><span class="tab-badge" hidden></span></button>
     <button id="tab-history" class="tab q-tab" role="tab" type="button" data-tab="history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></svg><span class="tab-label"></span><span class="tab-badge" hidden></span></button>
-    <button id="tab-sim" class="tab q-tab" role="tab" type="button" data-tab="sim"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18"/><path d="M5 16l4-5 4 3 6-8"/><circle cx="19" cy="6" r="1.5"/></svg><span class="tab-label"></span><span class="tab-badge" hidden></span></button>
-    <button id="tab-math" class="tab q-tab" role="tab" type="button" data-tab="math"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/><path d="M9 8h7M9 12h5"/></svg><span class="tab-label"></span><span class="tab-badge" hidden></span></button>
     </nav>
+    <div id="account-slot" class="account-slot"></div>
     <button id="refresh" class="icon-button" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
   </div>
 </header>
 
 <main class="page">
   <div id="mobile-bar" class="mobile-bar"></div>
+
+  <div id="panel-home" class="tab-panel" role="tabpanel" aria-labelledby="tab-home">
+    <div id="home-body"></div>
+  </div>
 
   <div id="panel-games" class="tab-panel" role="tabpanel" aria-labelledby="tab-games">
     <div class="search-box">
@@ -156,7 +160,12 @@
       <p class="lede" data-t="futuresIntro"></p>
       <div id="futures-list" class="games-grid"></div>
     </section>
-    <p id="games-footnote" class="footnote" role="note"></p>
+    <p id="games-footnote" class="footnote" role="note" hidden></p>
+    <p id="notice" hidden></p>
+  </div>
+
+  <div id="panel-lottery" class="tab-panel" role="tabpanel" aria-labelledby="tab-lottery" hidden>
+    <div id="lottery-body"></div>
   </div>
 
   <div id="panel-slip" class="tab-panel" role="tabpanel" aria-labelledby="tab-slip">
@@ -172,10 +181,6 @@
       <div id="account-body"></div>
     </section>
     <div id="history-tabs" class="segmented history-tabs" role="group" hidden></div>
-    <section id="arcade" aria-labelledby="arcade-title" hidden>
-      <h2 id="arcade-title" class="section-heading"></h2>
-      <div id="arcade-body"></div>
-    </section>
     <section id="stats" aria-labelledby="stats-title" hidden>
       <h2 id="stats-title" class="section-heading"></h2>
       <div id="stats-body"></div>
@@ -183,102 +188,6 @@
     <section id="saved" aria-labelledby="saved-title" hidden>
       <h2 id="saved-title" class="section-heading"></h2>
       <div id="saved-body"></div>
-    </section>
-  </div>
-
-  <div id="panel-sim" class="tab-panel" role="tabpanel" aria-labelledby="tab-sim">
-    <section id="sim" aria-labelledby="sim-title">
-      <div class="sim-top">
-        <div>
-          <h2 id="sim-title" class="section-heading"></h2>
-          <p class="lede" data-t="simIntro"></p>
-        </div>
-        <div class="period-picker">
-          <label class="period-head" for="sim-months"><span data-t="periodLabel"></span><strong id="period-value"></strong></label>
-          <input id="sim-months" type="range" min="1" max="60" step="1" value="12" />
-          <div id="sim-periods" class="period-presets" role="group"></div>
-        </div>
-        <input id="sim-weeks" type="hidden" value="52" />
-      </div>
-      <div class="card hero-card">
-        <div id="sim-headline" class="sim-headline" aria-live="polite"></div>
-        <div id="sim-stats" class="kpis"></div>
-      </div>
-      <div class="card">
-        <div id="sim-legend" class="legend"></div>
-        <div id="sim-chart" class="chart"></div>
-      </div>
-      <div class="card">
-        <h3 class="card-title" data-t="lapseTitle"></h3>
-        <div id="sim-lapse"></div>
-      </div>
-      <div id="sim-players" class="players"></div>
-      <div class="card">
-        <h3 class="card-title" data-t="traitsTitle"></h3>
-        <div id="sim-group-tabs" class="segmented group-tabs" role="tablist"></div>
-        <p id="sim-group-note" class="note"></p>
-        <ol id="sim-groups" class="bars-list"></ol>
-      </div>
-      <div class="two-col">
-        <div class="card">
-          <h3 class="card-title" data-t="youTitle"></h3>
-          <p class="lede" data-t="youIntro"></p>
-          <div class="you-pickers">
-            <select id="you-trait" aria-label="trait"></select>
-            <select id="you-fan" aria-label="fan"></select>
-          </div>
-          <div id="you-result"></div>
-        </div>
-        <div class="card">
-          <h3 class="card-title" data-t="lookupTitle"></h3>
-          <p class="lede" data-t="lookupIntro"></p>
-          <form id="lookup-form" class="lookup-form">
-            <input id="lookup-number" type="text" min="1" aria-label="#" />
-            <button class="primary-button" type="submit" data-t="lookupGo"></button>
-            <button id="lookup-random" class="ghost-button" type="button" data-t="lookupRandom"></button>
-          </form>
-          <div id="lookup-result"></div>
-        </div>
-      </div>
-      <h3 class="section-heading small" data-t="storiesTitle"></h3>
-      <ul id="sim-stories" class="stories"></ul>
-      <div class="two-col">
-        <div class="card">
-          <h3 class="card-title" data-t="surplusTitle"></h3>
-          <div id="sim-surplus"></div>
-        </div>
-        <div class="card">
-          <h3 class="card-title" data-t="leadersTitle"></h3>
-          <div id="sim-leaders"></div>
-        </div>
-      </div>
-      <div class="two-col">
-        <div class="card truth-card">
-          <h3 class="card-title" data-t="truthsTitle"></h3>
-          <ul id="sim-truths" class="facts truths"></ul>
-          <div id="sim-buys" class="buys"></div>
-        </div>
-        <div class="card">
-          <h3 class="card-title" data-t="factsTitle"></h3>
-          <ul id="sim-facts" class="facts"></ul>
-        </div>
-      </div>
-      <div class="card">
-        <h3 class="card-title" data-t="flowTitle"></h3>
-        <div id="sim-flow"></div>
-      </div>
-      <details class="card fold table-view">
-        <summary><span data-t="simTable"></span></summary>
-        <div id="sim-table"></div>
-      </details>
-    </section>
-  </div>
-
-  <div id="panel-math" class="tab-panel" role="tabpanel" aria-labelledby="tab-math">
-    <section id="math" aria-labelledby="math-title">
-      <h2 id="math-title" class="section-heading"></h2>
-      <p id="notice" class="notice-card" role="note"></p>
-      <div id="math-body" class="guide"></div>
     </section>
   </div>
 

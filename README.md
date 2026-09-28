@@ -1,64 +1,93 @@
-# 四方運彩 Quadra Sportsbook (Odds Study)
+# Quadra Play
 
-**Live site: https://jaypengx.github.io/Quadra-Sportsbook/**
+**Live site: https://jaypengx.github.io/Quadra-Play/** (this repository is
+still named Quadra-Sportsbook until it's renamed to **Quadra-Play**; the app
+already links to its new address).
 
-## Quadra 四方
+Quadra Play is the place to play in **Quadra**: sports bets on every sport
+and match the sources carry, and Taiwan Lottery's draw games and scratch
+cards, all with the one Quadra balance.
 
-This app is part of **Quadra 四方**, four apps sharing one account:
+| App | Part it plays |
+| --- | --- |
+| **Quadra Securities** | Where money lives and grows |
+| **Quadra Play** | A place to play: sports bets and the lottery |
+| **Quadra Fixtures** | The sports data centre, and the way into Play |
+| **Quadra Rewards** | The centre of Quadra: earning, goals and every app's guide |
+| Orbit Class | A related add-on: the class schedule |
 
-| App | Was | Part it plays |
-| --- | --- | --- |
-| **四方證券 Quadra Securities** | Stock Study 股市研究室 | The base: a play-money brokerage where the money lives and grows |
-| **四方運彩 Quadra Sportsbook** | Odds Study 賠率研究室 | A side play: sports lottery odds and betting |
-| **四方賽程 Quadra Fixtures** | Match Find | A schedule tool: what's worth watching |
-| **四方單字 Quadra Words** | Orbit Vocab 英單力 | A big mini game with real benefit: English words that pay |
+- **Quadra Pass required**, one app at a time, one money pool: see the
+  shared kit (`public/lib/quadra.mjs`, from Shared-Proxy's `kit/`). The
+  account is kept with the pass; the odds proxy answers signed-in apps only.
+  Syncs of the account run one after another, so a slower save never lands
+  after a newer one.
+- **Tabs:** 首頁 Home, 賽事 Games, 彩券 Lottery, 投注單 Slip, 紀錄 History.
+  The simulator tab, the guide tab and the mini games are gone: the guide
+  is in Quadra Rewards' help centre, the mini games moved to Rewards, and
+  the simulator's crowd now only serves analysis (紀錄's "you against the
+  crowd").
 
-- **The Quadra Pass 四方通行碼**: one 10-character code for all four apps and
-  every device (Shared-Proxy's `/eco` route). Passes are the only kind of
-  code; an old app-only code is upgraded to one the next time its app opens.
-- **One money pool**: Securities' NT$ cash and Sportsbook's balance are the
-  same money. Sportsbook's bets and winnings, Words' study rewards and
-  transfers between passes all land in it, with records on every side.
-- **The economy** (balanced 2026-09-27, `ECONOMY` in `quadra.mjs`):
+### 首頁 Home (For you)
 
-  | Source | Pays | Why |
-  |---|---|---|
-  | Securities salary | NT$100,000 to start, NT$5,000 on the 1st of each month | the dependable base; where money lives and grows |
-  | Sportsbook allowance | NT$10,000 once, NT$500 each Monday | a small side budget for betting |
-  | Words | NT$3 a right answer, NT$25 a word newly mastered, NT$600 a day at most | the best pay for effort (about NT$20 a minute), because the effort is real |
-  | Mini games | about NT$15 a minute, NT$300 a day in each app | a little for skill, never the thing to farm |
-  | Investing | about 6-8% a year on a diversified portfolio (~NT$600 a month on NT$100,000) | slow, real growth |
-  | Betting | the lottery keeps about 22% of stakes | where money shrinks |
+`public/home.js`. Every pick on the board ranked by Quadra's shared
+recommender (`rank` in `quadra.mjs`): what the person bets on, opens and
+follows (Fixtures included) weighs most, with decaying weight; each pick's
+quality comes from the board (its average back per NT$100, the house's
+recommendation tag, closeness to even money, how soon it starts); at most
+one pick per game, no league filling the list, and a dismissed pick sinks.
+Then your teams' next games, what starts soonest, the lottery's jackpots,
+and the open slips.
 
-  Salary and allowance come to about NT$7,200 a month; 20 minutes of daily
-  study adds NT$9,000-12,000; everything maxed every day, about NT$36,000
-  (it was up to ~NT$100,000 a month before, mostly from mini games, which
-  made saving and investing pointless). Paid only when each app is opened.
-  Sportsbook has a weekly betting limit you can set. Sportsbook's
-  data-entry game was dropped (pure grind, nothing to learn); Securities
-  gained 換匯計算, a bank-rate exchange quiz.
+### 賽事 Games: every match, more sports
 
-  **What each app pays back** (measured on the board of 2026-09-27):
-  Sportsbook returns about NT$85 of every NT$100 on a single bet (totals,
-  handicaps, winners 85-86; correct scores and margins 66-73; the top-
-  inning table 52, as the lottery's own), and parlays multiply the cut
-  (2 legs ~73, 3 ~62, 6 ~38), with 20.4% withheld from any win over
-  NT$5,000. Securities earns what the markets do (a diversified portfolio
-  about 6-8% a year) less real costs, and 0.8% on NT$ cash. Both are left
-  as they are: realistic, and a clear lesson. What needed a guard is that
-  the pool is shared: Sportsbook could bet away Securities' savings in an
-  evening. Its weekly betting limit now starts at NT$2,000 (a little more
-  than a week of pay and allowance), until you set your own (0: none).
+- **No time window:** every game the sources list that hasn't started is
+  shown (daily sports about a week ahead, soccer every matchday in three
+  weeks, football the current week), not only tomorrow's or the next
+  matchweek.
+- **More leagues** (ESPN's DraftKings lines, the other markets from our
+  model): 2. Bundesliga, LaLiga 2, Serie B, Ligue 2, League One, Belgium,
+  Austria, Switzerland, Denmark, Norway, Sweden, Greece, Saudi Pro League,
+  A-League, Chinese Super League, Colombia, Chile, USL, NWSL, the
+  Conference League, Libertadores, Sudamericana, the Nations League, World
+  Cup qualifying, the EFL Cup and the Copa del Rey, and NCAA men's and
+  women's basketball, on top of everything before.
+- **F1:** the race winner and podium, and now the **top six**, **points
+  finish (top ten)**, **teammates head to head** and the **winning team**,
+  from the win chances (Harville finishing orders, 40,000 draws with a
+  fixed seed, `f1Markets` in `board.mjs`), settled from ESPN's full
+  finishing order.
+- **Every match settles by itself.** Kambi never publishes results; a
+  match is settled from its live score once decided, and when Kambi drops
+  it with no deciding score kept (short table-tennis matches such as the
+  Czech Liga Pro used to end between the Worker's checks) the pick is void
+  (stake back) within hours, instead of waiting three days. The Worker's
+  watch now checks every 2 minutes.
 
-- **One pass, signed in everywhere**: the same Quadra Pass panel in all four
-  apps; links between the apps carry the pass (in the address's #hash), so
-  the app they open is already signed in, even in the iPhone pop-up browser.
-  An old one-app code turns into a pass by itself.
-- **Installed only** on phones and tablets (added to the home screen), and
-  every app checks for a new deploy on opening, on coming back and every
-  five minutes, clearing old cached files before it reloads.
-- `quadra.mjs` and `quadra.css` are the same file in all four apps; the
-  icons and link cards come from Shared-Proxy's `brand/generate.mjs`.
+### 彩券 Lottery
+
+`public/lib/lottery.mjs`, `public/lib/scratch.mjs`, `public/lottery-ui.js`.
+
+- **11 computer-drawn games**, Taiwan Lottery's rules: 威力彩, 大樂透,
+  今彩539, 賓果賓果, 3星彩 (正彩/組彩/對彩), 4星彩 (正彩/組彩), 38/39/49樂合彩
+  (二合 to 五合, every combination a bet), 雙贏彩 and 大福彩. Nine settle
+  against the real draws (Taiwan Lottery's public results API, read
+  directly: it sends CORS headers); 樂合彩 use their parent game's draw
+  (威力彩's first zone, 今彩539, 大樂透). 雙贏彩 and 大福彩 are no longer
+  sold, so their numbers come from the real BINGO BINGO draw at 20:30,
+  hashed with the game's name: nobody can know them before that draw.
+  Pool prizes (威力彩's first two tiers, 大樂透's first four) pay what that
+  draw paid per winner, shared with the real winners; a tier nobody won
+  pays its whole pool. Prizes over NT$5,000 are taxed 20.4%. Sales for an
+  evening draw close half an hour before it; BINGO draws every 5 minutes
+  07:05-23:55.
+- **6 scratch cards** (NT$100-2,000): 幸運7, 三個一樣, 對中發財, 賓果連線,
+  金幣翻倍 and 億萬富翁, each paying back about 58-65% with a top prize of
+  10,000 times its price. The prize is fixed when the card is bought (crypto
+  random, by the card's table); scratching (on a canvas, with a finger)
+  reveals the face, laid out to show exactly that prize.
+- Tickets live on the account beside the slips (ledger entries
+  `lotto-<id>` and `prize-<id>`), merge across devices like slips, and pay
+  into the one pool.
 
 An educational app about the math of the Taiwan Sports Lottery (台灣運彩): what each bet gives back on average, where the money goes, and why nearly every bet loses over time.
 
@@ -96,12 +125,7 @@ The page stays simple: odds, colours and the amounts that matter. What the numbe
   - F1: the race winner and **前三名** (podium): top-three chances from the win chances (Harville), priced to return what the winner board does.
 - **Cards:** each shows its series (日職 · NPB, 網球 WTA · Seoul: the league and, for tours and cups, the event). Players' sports (tennis, badminton, table tennis, snooker) have no 主/客: players are listed in the draw's order as "A vs B".
 - **場中 (live):** games in progress (MLB and the Premier League), refreshed every 30 seconds while on screen, with the same market tabs, 第N分 for MLB, and the live model (`public/lib/live.mjs`) checked on one real snapshot of the lottery's 場中 page. The house rules apply live too, so lopsided games show their lopsided side locked.
-- **小遊戲 (mini games)**, their own view in 紀錄 next to the slips and the stats (`public/lib/arcade.mjs`); an open game hides the list and folds away with 收起: play money for the practice account earned by effort, with no luck and no math, three to choose from (the data-entry game was dropped when the economy was balanced: pure grind, nothing to learn):
-  - 整理彩券 (the team quiz): every ticket is a new question: which of four easily confused leagues (MLB, NPB, KBO or CPBL?), which sport (baseball, basketball, American football, hockey or soccer), or which of any four leagues across sports. The clue is the logo alone, the nickname alone (no city to give it away: "Rangers"), or now and then both; the boxes change and reshuffle every ticket (keys 1–4 pick them in order). A nickname is only shown when it fits one box alone. 20 questions a round, right or wrong; 6 seconds each or it counts as wrong; a wrong answer moves on without giving the answer away; every question is prepared before the round (logos loaded, any that fail swapped); NT$2 each. Teams: 16 leagues, ESPN's team lists (with nicknames) loaded when the game opens and cached by the proxy, and our own tables for NPB, KBO, CPBL, B.League and EuroLeague;
-  - 全壘打大賽 (home run derby), drawn on a canvas: 18 pitches at a difficulty that follows the batter (`ADAPT`: up after a hit, more after a home run, down after a miss, shown as a 難度 meter): faster pitches, then change-ups, then breaking balls; a home run (NT$1) needs a swing within about 30 ms and shows its distance, a hit NT$0.5;
-  - 罰球 (free throws): 18 shots at a difficulty that follows the shooter; stop the sweeping arrow in the green (the better you shoot, the faster the arrow and the narrower the green; it moves fastest through the green); the ball arcs to the hoop, swishes (NT$1), rims in (NT$0.5) or bounces off.
-  **Risk by kind of game** (`STREAK`), none of it extreme since it's work: the team quiz is the steady earn (NT$2 every 4 right, NT$1 a wrong or late answer); the derby and free throws are high risk, high pay, and paid mostly for streaks: one success pays little, the 2nd in a row adds NT$3 and each from the 3rd on NT$6, a miss costs NT$1 and ends the streak (about three quarters of a typical round's money is streak bonus; a bad round pays about nothing, a good one about twice typical). A round never pays under 0. The HUD shows progress, the difficulty (skill games), the round's money, the streak and each bonus or penalty as it happens.
-  **Balanced length and pay:** every round takes about a minute, and every game pays about NT$15 a minute of typical play (`ECONOMY.gamesPerMinute`; the points below are scaled by `PAY_SCALE`), streaks and penalties included (`PACE`: a round's usual length and an ordinary player's results; a test keeps all three within 15%), so none is the one to farm; practice pays more. All of them pay at most NT$300 a Taiwan day. After every round the page shows how many minutes of a job at Taiwan's minimum wage (NT$196 an hour) the pay equals (a short round's pay stretched to an hour read oddly high) and how much betting loses it again on average (the lottery keeps about 22%), as a reminder of how slowly money is earned. While a round is on, nothing around the game is redrawn: the balance and today's total update in place and the full account card waits for the round's end (a redraw used to replay the money popup, restart the quiz's timer bar, move the page and swallow taps). Championship boards find their clubs' logos in ESPN's team lists (loosely matched, a few aliases; the UEFA competitions search their entrants and every European league), F1 constructors get a team-coloured badge, national teams a flag. Hover colours apply only where there's a mouse (a tapped button on a phone kept its hover colour). The page also carries Quadra Fixtures' iOS Safari fix: empty passive touch/pointer listeners on the whole document, so a gesture on the games never leaves the next tap needing two. Money goes into the account as it's earned, not at the end: each round has one ledger entry (`payRound`), set to the round's running total every time it changes (a bonus shows in the balance at once, a penalty takes it back, never under 0 for the round), within the daily cap. Winnings are ledger entries like the grants: they sync and merge the same way, and the account's betting result leaves them out.
+
 - **Boards:** F1 (drivers with team-coloured badges, and whether the odds are before or after qualifying) and every championship: World Series, AL, NL, NBA, Premier League, and from Polymarket's search NFL, NHL, WNBA, college football, Champions League, Europa League, La Liga, Serie A, Bundesliga, Ligue 1, MLS, and the F1 drivers' and constructors' titles.
 
 ### House rules, the house cut and recommendations
@@ -171,37 +195,12 @@ The page stays simple: odds, colours and the amounts that matter. What the numbe
 - **Saves are always compressed:** the account is gzip-compressed (JSON → gzip → base64, marked `gz1:`, see `public/lib/codec.mjs`) both in `localStorage` and in the synced copy, about 8–10 times smaller. Older plain-JSON saves still open, and are rewritten compressed.
 - **Sync:** 建立同步碼 creates an 8-character passcode (letters and digits, no 0/1/O/I); typing it on another device links that device to the same account. The two copies merge: the balance is a ledger of entries with fixed ids (start, each week's grant, each slip's stake and payout), so nothing counts twice, and a slip settled on either device is settled on both. Changes are sent a second after they happen, and picked up when the page opens or the tab comes back. The account lives in `localStorage` on each device and in Firestore (through Shared-Proxy's `/odds-sync`), stored under the passcode's hash.
 
-### 模擬 Simulator
+### The simulated crowd (analysis only)
 
-The crowd lives in `public/lib/sim.mjs`.
-
-- **Everyone is a mix of traits**, nothing else. At most one of each of four how-they-bet groups, and any number of reactions:
-  - how they pick: 押熱門 backs favourites (20%, 60%+ chances only), 爆冷獵人 upset hunter (12%, 35% or less), 精算派 value hunter (6%, only the recommended picks), 玩法控 side-market fan (12%, scores, margins, sets, half-time/full-time …); the rest pick in proportion to each pick's chance and its market's popularity (the winner most, handicaps and totals next, side markets a little, a game's weight shared among its lines);
-  - picks per ticket: 單場派 singles (20%), 串關狂 parlay lover (15%, 3–6); the rest 1–2. A ticket's stake shrinks with its picks (÷ (1 + 0.35 × (picks − 1))): long parlays are small tickets;
-  - stake: 大戶 high roller (6%, 8% of the balance a ticket), 小資 small (22%, 1%); the rest 3%; 5% of tickets are three times that;
-  - pace: 天天買 every day (15%, about 4 a week), 偶爾玩 now and then (20%, one every 3 weeks); the rest about one a week;
-  - reactions: 越輸越大 tilts, 追輸族 chaser (doubles after a losing week up to the ticket limit, 4 weeks off when it breaks), 見好就收 cashes out, 手感派 streaky, 乘勝追擊 presses on, 報復型 revenge, 玻璃心 heartbroken, 不服輸 so close, 大獎夢 jackpot dreamer, 滾雪球 lets it ride, 守本派 guards the start, 停損 stop-loss, 小確幸 content, 看心情 moody, 三分鐘熱度 easily bored, 孤注一擲 Hail Mary (under the start, 2 more picks a ticket), 死忠 loyal (off-season off), 見異思遷 hopper (off-season always on); 8–20% each.
-- **Why these shares:** by law the lottery pays out at most 78% of sales in prizes, and it pays about that, so it keeps about 22% before tax. Every extra pick pays the cut again, so that can only hold if most money goes on singles and short parlays. The mix is set to match: the crowd as a whole gives the house 21–23% before tax (a test checks 17–27%), about 1.8 picks per ticket.
-- **The crowd:** 5 pick styles × 47 stacks of series, about 100,000 people; each person's other traits drawn from their own random stream. Everyone bets on a stack of series (the labels on each person): most on one series only (only the Premier League, only CPBL), some on every series of one sport (all baseball), some on a mix across sports (MLB + NBA), a few on everything. How many follow each is its popularity with Taiwan's lottery players (`pop` in `SIM_SPORTS`: MLB and the NBA the most, then CPBL, the Premier League, NPB …).
-- **Everything by your rules:** NT$10,000 to start, NT$5,000 a week, never money they don't have; the lottery's ticket limits, tax and payout cap; locked picks never, parlay-only picks only in parlays; the very markets and odds on this page (every market, not just the winners). A sport with nothing on today (the NBA before its season, say) gets a typical week of made-up games run through the very code that builds the real board (`public/lib/board.mjs`), so it gets the same markets, the house's cut for that league and its locks, and returns what a real board of that sport does (within about a point).
-- **One shared world:** each week every game has one real result for everyone. A game's markets agree: the winner and every handicap line share one draw (the away side's slice first), every total line another (under first), so over 8.5 winning means over 7.5 won.
-- **Every sport in one registry:** `SIM_SPORTS` lists each sport's kind, its sport (for people who bet on all of one sport), its popularity, whether its seasons show in the time-lapse and its games per week from the 2026/27 schedules (NPB ~36 a week, KBO ~30, CPBL ~15 from late March to October; tennis tours all year but December; badminton and table tennis event weeks; volleyball clubs and the Nations League). Adding a sport: a `LEAGUES` entry in `public/lib/teams.mjs` and a `SIM_SPORTS` entry; a test fails if either is missing.
-- **What it shows:**
-  - how many in 10 are still ahead, the crowd's range over time, the time-lapse, and what the crowd's loss would buy;
-  - the luckiest 10%, the middle person and the unluckiest 10%, with their traits;
-  - **哪種人虧最多？** one card, three tabs: 下注方式 (the how-they-bet traits against the usual way), 個性 (reactions against people with none), 賭什麼 (each series: everyone who bets on it, whatever else they bet on), ranked by average result;
-  - **你是哪種人？** pick a trait and a series: how many of them are ahead, their average result, back, tickets and stake;
-  - **Look up anyone** (1 to about 100,000): their season replayed on the device, every ticket, with the same profile card as your own history, "贏過 N%", and for a winner their share of all winnings;
-  - stories from the record holders: the biggest ticket, the biggest winner and loser, **the comeback** (furthest behind, ended ahead), the roller coaster, streaks, the longest shot, **the most near misses**, the worst week, the most tickets and the most tax;
-  - **who holds the winnings**, and **leaderboards**: the top 10 on 15 records (up most, biggest ticket, longest shot, comeback, best week, longest parlay won, win streak, most tickets, most tax, near misses, down most, roller coaster, worst week, drought, went broke);
-  - the brutal truths and facts (singles against parlay lovers, chasers against people without the trait, the ticket mix, near misses …), and where the money went (losers' losses = winners' winnings + the lottery's take + tax, exactly).
-- **Fairness audit** (`public/lib/audit.mjs`): no sport, or series' followers, may do better or worse only because of how it's modelled. Each sport's pool is scored by what the crowd's usual pick returns per NT$100; one more than 6 points from the rest is flagged, and so are a series' followers more than 5 points from the whole crowd (series followed by too few people to tell are skipped) (F1 is exempt: the lottery really takes more on it). The tests run it on every sport's typical week, against a real board, on a deliberately inflated pool (which it must catch) and on a simulated crowd; the page runs it on the live board and each simulation and warns in the console. It exists because a basketball stand-in once paid NT$86 per NT$100 against 76-83 on real boards and put basketball fans on top of the leaderboards.
-- **Periods:** 1 month to 5 years; one run records every period along the way, and longer periods carry everyone on from where they stopped (tests check it matches a straight run).
-- **How it runs:** in a Web Worker, streaming weeks into histograms instead of keeping 100,000 paths; about 8 seconds for a year on a laptop. Tests prove it equals replaying everyone in full.
-
-### 說明 Guide
-
-Folding cards explain what's covered (every sport and league with where its odds come from, and every championship, built from the page's own lists);  reading the numbers; the odds math; the traits; what people bet on (series stacks); every kind of bet; the lottery's rules (locks, parlay only, the cut by risk, tickets and tax, the practice account); recommendations; how the simulator works; data and margins.
+`public/lib/sim.mjs` still simulates about 100,000 bettors on this very board
+(traits, stakes, the lottery's rules), but only for analysis: 紀錄's "you
+against the crowd" compares your record with theirs over the same time.
+The simulator tab itself was removed.
 
 ## The math
 
@@ -280,7 +279,9 @@ The practice account's sync uses Shared-Proxy's other Worker, `orbit-workers-pro
 | --- | --- |
 | `public/lib/odds.mjs` | The math: devig, estimated odds, F1 phases, bet slip rules and analysis |
 | `public/lib/board.mjs` | Every priced option of a game, for the page and the crowd alike, and the crowd's pool |
-| `public/lib/arcade.mjs` | The mini games' rules, pay and daily cap |
+| `public/lib/lottery.mjs` | The lottery's draw games: rules, draw times, real results, prizes |
+| `public/lib/scratch.mjs` | Scratch cards: prize tables and faces |
+| `public/home.js`, `public/lottery-ui.js` | The home and lottery tabs |
 | `public/lib/audit.mjs` | The fairness audit of sports and series |
 | `public/lib/rules.mjs` | House rules (locks, parlay only) and the house cut by risk |
 | `public/lib/recommend.mjs` | Recommendations on single picks |
@@ -292,7 +293,7 @@ The practice account's sync uses Shared-Proxy's other Worker, `orbit-workers-pro
 | `public/lib/teams.mjs` | Leagues, Chinese team and driver names, ESPN logo ids, TheSportsDB badges, the F1 grid's team colours |
 | `public/lib/i18n.mjs` | Traditional Chinese and English text (follows the browser's language) |
 | `public/lib/account.mjs` | The practice account: ledger, weekly grant, placing and settling slips, merging two copies |
-| `public/lib/sync.mjs` | The account's sync through Shared-Proxy's `/odds-sync` |
+| `public/lib/quadra.mjs` | The shared Quadra kit (sign-in, session, pool, recommender) |
 | `public/lib/live.mjs` | Live odds: the in-game score model, the lines closest to 50/50, prices at the live cut |
 | `public/lib/history.mjs` | Stats over saved slips: money, luck against the cut, picks against their chances, breakdowns, streaks, records |
 | `public/lib/codec.mjs` | gzip + base64 for every save |

@@ -211,7 +211,7 @@ test('futures parser reads teams from questions and drops placeholders', async (
   assert.equal(epl.season, '2026/27');
 });
 
-test('Premier League shows the next matchweek; MLB only to the end of tomorrow', async () => {
+test('every game not yet started is listed, however far ahead', async () => {
   const { lotteryGames, nextMatchweek } = await import('../public/lib/sources.mjs');
   const epl = (startUtc, away, home) => ({ sport: 'epl', startUtc, away: { en: away }, home: { en: home } });
   const round = [
@@ -227,13 +227,12 @@ test('Premier League shows the next matchweek; MLB only to the end of tomorrow',
   assert.equal(nextMatchweek([round[0], epl('2026-10-10T14:00:00Z', 'Everton', 'Fulham')]).length, 1);
   const mlb = (startUtc, id) => ({ sport: 'mlb', startUtc, id, away: { en: 'A' }, home: { en: 'B' } });
   const now = new Date('2026-09-25T07:00:00Z'); // 15:00 on 09-25 in Taiwan
-  const shown = lotteryGames([mlb('2026-09-26T02:00:00Z', 'tomorrow'), mlb('2026-09-26T23:00:00Z', 'day after'), ...round, ...next], now);
-  assert.deepEqual(shown.filter(g => g.sport === 'mlb').map(g => g.id), ['tomorrow']);
-  assert.equal(shown.filter(g => g.sport === 'epl').length, 4);
-  // A round two weeks out (after an international break) isn't listed yet.
+  const shown = lotteryGames([mlb('2026-09-26T02:00:00Z', 'tomorrow'), mlb('2026-09-26T23:00:00Z', 'day after'), mlb('2026-09-25T01:00:00Z', 'started'), ...round, ...next], now);
+  assert.deepEqual(shown.filter(g => g.sport === 'mlb').map(g => g.id), ['tomorrow', 'day after']);
+  assert.equal(shown.filter(g => g.sport === 'epl').length, 6);
+  // A round two weeks out is listed too.
   const later = round.map(g => ({ ...g, startUtc: g.startUtc.replace('2026-09-2', '2026-10-1') }));
-  assert.equal(lotteryGames(later, now).length, 0);
-  assert.equal(lotteryGames(later, new Date('2026-10-14T07:00:00Z')).length, 4);
+  assert.equal(lotteryGames(later, now).length, 4);
 });
 
 test('the NBA shows only from opening night to the end of June', async () => {

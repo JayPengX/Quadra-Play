@@ -29,9 +29,9 @@ export const HOUSE_RULES = {
 };
 
 // Markets whose outcomes are many and long by design.
-const EXOTIC = new Set(['score', 'margin', 'inning', 'nextrun', 'htft', 'goalbands', 'sets', 'f1podium']);
+const EXOTIC = new Set(['score', 'margin', 'inning', 'nextrun', 'htft', 'goalbands', 'sets', 'f1podium', 'f1top']);
 // Priced one by one by the lottery: only a runaway favourite is locked.
-const OUTRIGHT = new Set(['f1', 'future']);
+const OUTRIGHT = new Set(['f1', 'future', 'f1team']);
 
 // { lock: 'low' | 'high' | null, minLegs } for an option at `odds`.
 export function houseRule(kind, odds) {

@@ -42,7 +42,7 @@ import {
   replayPlayer
 } from './lib/sim.mjs';
 import { ticketProfile, accountTickets } from './lib/profile.mjs';
-import { loadOdds, loadExtraLeagues, loadExtraFutures, taipeiDayKey, fetchOutcomes, loadLive, loadLeagueTeams, parseInning, loadFutureTeams, futureTeamLeagues, FUTURES, EXTRA_FUTURES } from './lib/sources.mjs';
+import { useSourcesSession, loadOdds, loadExtraLeagues, loadExtraFutures, taipeiDayKey, fetchOutcomes, loadLive, loadLeagueTeams, parseInning, loadFutureTeams, futureTeamLeagues, FUTURES, EXTRA_FUTURES } from './lib/sources.mjs';
 import { inningsLeft, liveBaseball, liveSoccer, fitGoals, liveMarkets, liveOdds, pregameRuns, nextRunChances, nextRunOdds, LIVE_MIN_LIQUIDITY } from './lib/live.mjs';
 import {
   START_BALANCE,
@@ -64,37 +64,30 @@ import {
   compactAccount,
   isAccount
 } from './lib/account.mjs';
-import { readSync, writeSync, cleanPasscode, isPassCode, readPass, writePass, createPass, dropInbox } from './lib/sync.mjs';
+import { renderHome } from './home.js';
+import { mountLottery } from './lottery-ui.js';
 import {
-  PASS_PATTERN,
   ODDS_LIMIT_KEY,
   ECONOMY,
-  formatPass,
-  storedPass,
-  storePass,
-  cachedWallet,
-  cacheWallet,
   othersBalance,
-  poolBalance,
-  poolParts,
-  poolPartName,
   APPS,
   appUrl,
   setting,
   settingPatch,
-  ecoMerge,
-  ecoTransfer,
   installGate,
   watchUpdates,
-  passPanel
+  quadraSession,
+  accountButton,
+  recordAffinity,
+  affinityPatch,
+  activityPatch
 } from './lib/quadra.mjs';
 import { pack, unpack } from './lib/codec.mjs';
 import { historyStats, outlookOf, chanceOf, funFacts, crowdPercentile, moneySources } from './lib/history.mjs';
 import { detectLocale, makeT } from './lib/i18n.mjs';
 import { f1Driver, f1Constructor, findTeamLogo, countryFlag, leagueLogo, teamLogo, teamZh, LEAGUES, familyOf, isSoccer, isSets, isNeutral, normalizeTeamName } from './lib/teams.mjs';
 import { houseRule, minLegsProblem } from './lib/rules.mjs';
-import { gameOptions, crowdPool, f1Podium } from './lib/board.mjs';
-import { ARCADE, STREAK, scorer, bestRound, earnedToday, roomToday, payRound, roundId, wageMinutes, stakeToLose, DERBY, pitchPlan, ballAt, swingResult, ticketCode, groupCode, SORT, SORT_LEAGUES, sortQuestion, sortPayout, FREE_THROW, shotPlan, markerAt, shotResult, ADAPT, adapt } from './lib/arcade.mjs';
+import { gameOptions, crowdPool, f1Podium, f1Markets } from './lib/board.mjs';
 import { auditPools, auditCrowd } from './lib/audit.mjs';
 import { recommend } from './lib/recommend.mjs';
 
@@ -115,10 +108,6 @@ const SYNC_KEY = 'oddsStudy.syncCode';
 const SAVED_SHOWN = 10;
 
 const state = {
-  // 小遊戲: the open game, its view (kept across re-renders) and its animation frame.
-  arcadeGame: null,
-  arcadeView: null,
-  arcadeFrame: 0,
   locale: detectLocale(),
   t: null,
   data: null,
@@ -141,7 +130,7 @@ const state = {
   // True until the first simulation is ready: the loading screen covers the page.
   booting: true,
   sport: 'all',
-  tab: 'games',
+  tab: 'home',
   // Game cards showing all their markets.
   open: new Set(),
   // Each open game's market tab (大小分, 讓分, 單隊大小, 得分最高單局).
@@ -149,7 +138,7 @@ const state = {
   // The simulated account (play money) and its sync.
   account: null,
   accountReady: false,
-  sync: { code: '', busy: false, error: '', at: null },
+  sync: { busy: false, error: '', at: null },
   // The Quadra Pass's wallet (the shared money pool), when the code is a pass.
   wallet: null,
   // Slips saved or settled since the page opened, highlighted.
@@ -377,6 +366,21 @@ function buildBets(data) {
       const w = winners[i];
       bets.push({ ...w, id: `f1pod|${w.driverEn}`, kind: 'f1podium', market: `f1podium|${w.driverEn}`, label: `F1 ${t('f1PodiumShort')} ${w.shortLabel}`, fairChance: p.fair, estOdds: p.odds, errKey: 'extra', lock: p.lock, minLegs: p.minLegs });
     });
+    // Top six, top ten, teammates head to head and the winning team.
+    const more = f1Markets(winners.map(b => ({ fair: b.fairChance, odds: b.estOdds, team: b.driver.team })));
+    for (const [key, list, short] of [['f1top6', more.top6, 'f1Top6Short'], ['f1top10', more.top10, 'f1Top10Short']])
+      list.forEach((p, i) => {
+        const w = winners[i];
+        bets.push({ ...w, id: `${key}|${w.driverEn}`, kind: key, market: `${key}|${w.driverEn}`, label: `F1 ${t(short)} ${w.shortLabel}`, fairChance: p.fair, estOdds: p.odds, errKey: 'extra', lock: p.lock, minLegs: p.minLegs });
+      });
+    for (const p of more.h2h) {
+      const w = winners[p.driver];
+      const r = winners[p.rival];
+      bets.push({ ...w, id: `f1h2h|${w.driverEn}|${r.driverEn}`, kind: 'f1h2h', market: `f1h2h|${[w.driverEn, r.driverEn].sort().join('|')}`, rival: r.driverEn, rivalLabel: r.shortLabel, label: `F1 ${w.shortLabel} ${t('f1H2HBeats')} ${r.shortLabel}`, shortLabel: `${w.shortLabel} > ${r.shortLabel}`, fairChance: p.fair, estOdds: p.odds, errKey: 'extra', lock: p.lock, minLegs: p.minLegs });
+    }
+    for (const p of more.teams) {
+      bets.push({ id: `f1team|${p.team}`, gameId: 'f1', kind: 'f1team', sport: 'f1', market: 'f1team', matchup: data.f1.title, start: data.f1.startUtc, team: p.team, label: `F1 ${t('f1TeamShort')} ${p.team}`, shortLabel: p.team, fairChance: p.fair, estOdds: p.odds, errKey: 'extra', lock: p.lock, minLegs: p.minLegs });
+    }
   }
   // Single-source games: the typical DraftKings-Polymarket gap of that sport.
   for (const sport of new Set(bets.map(b => b.sport))) {
@@ -454,7 +458,7 @@ function dayKey(iso) {
 // The sport filter: everything, a kind of sport (g:<group>), or one league.
 const SPORT_GROUPS = {
   baseball: { icon: '⚾', leagues: ['mlb', 'npb', 'kbo', 'cpbl'] },
-  basketball: { icon: '🏀', leagues: ['nba', 'wnba', 'euroleague', 'bleague'] },
+  basketball: { icon: '🏀', leagues: ['nba', 'wnba', 'ncaam', 'ncaaw', 'euroleague', 'bleague'] },
   soccer: { icon: '⚽', leagues: Object.keys(LEAGUES).filter(key => LEAGUES[key].family === 'soccer') },
   football: { icon: '🏈', leagues: ['nfl', 'ncaaf'] },
   hockey: { icon: '🏒', leagues: ['nhl'] },
@@ -672,31 +676,13 @@ function renderStatic() {
     ['futures-title', 'futuresTitle'],
     ['parlay-title', 'parlayTitle'],
     ['account-title', 'accountTitle'],
-    ['arcade-title', 'arcadeTitle'],
     ['saved-title', 'savedTitle'],
     ['stats-title', 'statsTitle'],
-    ['sim-title', 'simTitle'],
-    ['f1-title', 'f1Title'],
-    ['math-title', 'mathTitle']
+    ['f1-title', 'f1Title']
   ])
     $(id).textContent = t(key);
   for (const node of document.querySelectorAll('[data-t]')) node.textContent = t(node.dataset.t);
   for (const tab of TABS) $(`tab-${tab}`).querySelector('.tab-label').textContent = t(`tab_${tab}`);
-  renderPeriods();
-  // The guide: reading the numbers, the odds math, then every habit, kind of fan, kind of bet, how
-  // the simulators work, the rules and the data, each group folded.
-  const groups = [[t('guideReadTitle'), t('guideRead')], [t('guideSportsTitle'), supportedGames()], [t('guideMathTitle'), t('mathSteps')], ...t('guide')];
-  $('math-body').replaceChildren(
-    ...groups.map(([title, items], i) =>
-      el('details', { class: 'card fold guide-group' }, [
-        el('summary', {}, [
-          el('span', { class: 'guide-icon', 'aria-hidden': 'true', text: GUIDE_ICONS[i] ?? '📘' }),
-          el('span', {}, [el('span', { text: title }), el('span', { class: 'guide-count', text: ` · ${items.length}` })])
-        ]),
-        el('div', {}, items.map(([h, p]) => el('div', { class: 'math-step' }, [el('h3', { text: h }), el('p', { text: p })])))
-      ])
-    )
-  );
 }
 
 // One icon per guide group, in order: reading the numbers, the odds math,
@@ -737,7 +723,8 @@ function renderStatus(kind) {
 // ---- Ranking ------------------------------------------------------------------
 
 function betIcon(bet) {
-  if (bet.kind === 'f1' || bet.kind === 'f1podium') return driverBadge(bet, 'logo-sm');
+  if (bet.kind === 'f1team') return constructorBadge(bet.team, 'logo-sm');
+  if (bet.kind?.startsWith('f1') && bet.driver) return driverBadge(bet, 'logo-sm');
   if (bet.kind === 'future') return logoImg(bet.sport, bet.teamEn, bet.shortLabel, 'logo-sm');
   // Totals' side is over/under: they show the league, team totals the team.
   const side = bet.kind === 'teamtotal' ? bet.team : ['away', 'home'].includes(bet.side) ? bet.side : null;
@@ -838,16 +825,12 @@ function pinButton(game) {
     'aria-pressed': String(pinned),
     text: t(pinned ? 'pinRemove' : 'pinAdd'),
     onclick: async () => {
-      if (!onPass()) {
-        alert(t('pinNeedPass'));
-        return;
-      }
       const pin = { t: Date.now(), on: !pinned, sport: game.sport, start: game.startUtc, home: game.home.en, away: game.away.en, homeZh: game.home.zh, awayZh: game.away.zh, series: gameSeries(game) };
       state.wallet = { ...state.wallet, pins: { ...(state.wallet?.pins || {}), [game.id]: pin } };
       renderGames();
       try {
-        state.wallet = await writePass(state.sync.code, null, { pins: { [game.id]: pin } });
-        cacheWallet(state.sync.code, state.wallet);
+        await q.write({ wallet: { pins: { [game.id]: pin } } });
+        state.wallet = q.wallet;
       } catch (error) {
         console.error(error);
       }
@@ -1729,7 +1712,7 @@ function renderParlay() {
 // A kind of bet's name (its board section's).
 function kindKey(kind) {
   const sec = SECTIONS.find(x => x.kind === kind);
-  return { f1: 'f1Title', f1podium: 'f1PodiumShort', future: 'futuresTitle' }[kind] ?? sec?.short ?? sec?.title ?? null;
+  return { f1: 'f1Title', f1podium: 'f1PodiumShort', f1top6: 'f1Top6Short', f1top10: 'f1Top10Short', f1h2h: 'f1H2HShort', f1team: 'f1TeamShort', future: 'futuresTitle' }[kind] ?? sec?.short ?? sec?.title ?? null;
 }
 
 // The market a pick is from, as a small tag: 不讓分, 大小分, 讓分 …
@@ -1795,50 +1778,43 @@ function payLine(label, value, cls = '') {
   return el('div', { class: `pay-line ${cls}` }, [el('span', { text: label }), el('strong', { text: value })]);
 }
 
-// ---- Simulated account and saved slips ------------------------------------------
+// ---- The account: kept with the Quadra Pass ------------------------------------
+//
+// Signing in is required (quadra.mjs's sign-in screen). The account is this
+// app's data on the pass (a copy on the device under the pass, so it opens
+// at once); its ledger's entries go to the pass's wallet, the one Quadra
+// money pool, and the rest of the pool (Securities' cash, Rewards' earnings,
+// Quadra's pay, transfers) is money to bet with here too.
 
-// This device's copy, gzip-compressed (see codec.mjs). Older plain-JSON saves still read.
+const q = quadraSession('odds', { lang: state.locale });
+let lotteryUi = null;
+useSourcesSession(q);
+const accountKey = () => `${ACCOUNT_KEY}:${q.pass}`;
+
 async function loadAccount() {
   try {
-    const stored = await unpack(localStorage.getItem(ACCOUNT_KEY));
+    const stored = await unpack(localStorage.getItem(accountKey()));
     if (isAccount(stored)) return compactAccount(stored);
   } catch {}
-  return newAccount();
+  return null;
 }
+// A pass that got its opening money from Quadra itself opens an empty ledger.
+const freshAccount = () => newAccount(new Date(), { start: !(state.wallet?.entries || []).some(e => e.id === 'eco:start') });
 
-function loadSyncCode() {
-  try {
-    // A Quadra Pass entered in another Quadra app on this browser counts here too.
-    return localStorage.getItem(SYNC_KEY) || storedPass() || '';
-  } catch {
-    return '';
-  }
-}
-
-const onPass = () => isPassCode(state.sync.code);
-
-// Money to bet with: this account's own ledger, plus (with a Quadra Pass)
-// what the rest of the shared pool holds: Securities' cash, rewards, transfers.
 function poolExtra() {
-  return onPass() ? othersBalance(state.wallet, 'odds') : 0;
+  return othersBalance(state.wallet, 'odds');
 }
 function funds(account = state.account) {
   return balance(account) + poolExtra();
 }
 // The weekly betting limit: your own (0 for none), or ECONOMY.oddsDefaultLimit
-// until you set one.
+// until you set one. Kept in the wallet, so every device and app sees it.
 function weeklyLimit() {
-  let own = null;
-  if (onPass()) own = setting(state.wallet, ODDS_LIMIT_KEY, null);
-  else {
-    try {
-      own = localStorage.getItem('oddsStudy.weeklyLimit');
-    } catch {}
-  }
+  const own = setting(state.wallet, ODDS_LIMIT_KEY, null);
   return own == null || own === '' ? ECONOMY.oddsDefaultLimit : Number(own) || 0;
 }
 
-// The weekly grant arrives by itself when the app is opened in a new week.
+// The weekly grant (until Quadra pays the week itself) arrives by itself.
 function applyGrant() {
   if (!state.accountReady || !canClaim(state.account)) return;
   commitAccount(claimGrant(state.account));
@@ -1850,48 +1826,33 @@ function applyGrant() {
 let saving = Promise.resolve();
 function saveAccountLocal() {
   const account = state.account;
-  const code = state.sync.code;
+  const key = accountKey();
   saving = saving.then(async () => {
     try {
-      localStorage.setItem(ACCOUNT_KEY, await pack(account));
-      if (code) localStorage.setItem(SYNC_KEY, code);
-      else localStorage.removeItem(SYNC_KEY);
-      // A pass is shared with the other Quadra apps on this browser.
-      if (isPassCode(code)) storePass(code);
+      localStorage.setItem(key, await pack(account));
     } catch {}
   });
   return saving;
 }
 
-// Every change goes to this device at once and to the synced copy shortly after.
-function commitAccount(next, { quiet = false } = {}) {
-  // Nothing is written before the saved account has opened: it would be lost.
+// Every change goes to this device at once and to the pass shortly after.
+function commitAccount(next) {
   if (next === state.account || !state.accountReady) return;
   state.account = next;
   saveAccountLocal();
-  if (quiet) {
-    // Mid-round money: only the balance and today's mini-game total change,
-    // in place; the full redraw waits for the round's end.
-    const shown = document.querySelector('.account-balance');
-    if (shown) shown.textContent = fmtMoney(funds(next), { sign: false });
-    renderArcade();
-  } else {
-    renderAccount();
-    renderSaved();
-  }
+  renderAccount();
+  renderSaved();
   pushSoon();
 }
 
 let pushTimer = null;
-// Leaving the page with a sync still waiting: send it now.
 addEventListener('pagehide', () => {
-  if (!pushTimer || !state.sync.code) return;
+  if (!pushTimer) return;
   clearTimeout(pushTimer);
   pushTimer = null;
   syncNow();
 });
 function pushSoon() {
-  if (!state.sync.code) return;
   clearTimeout(pushTimer);
   pushTimer = setTimeout(() => {
     pushTimer = null;
@@ -1899,165 +1860,83 @@ function pushSoon() {
   }, 1200);
 }
 
-// Reads the synced copy, merges it with this device's and writes the result
-// back if this device had anything new: no device ever overwrites another's
-// slips or top-ups.
-async function syncNow() {
-  const code = state.sync.code;
-  if (!code || state.sync.busy || !state.accountReady) return;
-  if (isPassCode(code)) return syncPass();
-  state.sync = { ...state.sync, busy: true, error: '' };
-  renderAccount();
-  try {
-    const remote = await readSync(code);
-    // Moved into a Quadra Pass (and deleted) from another device.
-    if (!remote) {
-      state.sync = { ...state.sync, busy: false, error: state.t('legacyGone') };
-      renderAccount();
-      return;
+// Reads the pass's copy, merges it with this device's and writes back what's
+// new: no device ever overwrites another's slips or grants. Syncs run one
+// after another (a write already on its way must never land after a newer
+// one and take a slip or ticket back out).
+let syncChain = Promise.resolve();
+let syncQueued = false;
+function syncNow() {
+  if (!state.accountReady || syncQueued) return syncChain;
+  syncQueued = true;
+  syncChain = syncChain.then(async () => {
+    syncQueued = false;
+    if (!q.active) return;
+    state.sync = { ...state.sync, busy: true, error: '' };
+    try {
+      await mergeRemote(await q.read({ data: true, inbox: true }));
+      state.sync = { ...state.sync, busy: false, at: new Date().toISOString() };
+    } catch (error) {
+      state.sync = { ...state.sync, busy: false, error: error.code === 'ECO_SESSION_MOVED' ? '' : state.t(error.code === 'TOO_BIG' ? 'syncTooBig' : 'syncFailed') };
     }
-    if (remote && !isAccount(remote)) throw new Error('bad account');
-    const merged = mergeAccounts(state.account, remote);
-    if (!remote || JSON.stringify(merged) !== JSON.stringify(remote)) await writeSync(code, merged);
-    if (JSON.stringify(merged) !== JSON.stringify(state.account)) {
-      state.account = merged;
-      saveAccountLocal();
-      renderSaved();
-    }
-    state.sync = { ...state.sync, busy: false, at: new Date().toISOString() };
-  } catch (error) {
-    console.error(error);
-    state.sync = { ...state.sync, busy: false, error: state.t(error.code === 'TOO_BIG' ? 'syncTooBig' : 'syncFailed') };
-  }
-  renderAccount();
-}
-
-// With a Quadra Pass: this account's data and the shared wallet together.
-// Merges the synced copy (and any account a merge brought in, waiting in the
-// inbox) into this device's, writes back what's new, and shares the ledger's
-// entries and the money in open bets with the pool.
-async function syncPass() {
-  const code = state.sync.code;
-  state.sync = { ...state.sync, busy: true, error: '' };
-  renderAccount();
-  try {
-    const remote = await readPass(code);
-    if (!remote) {
-      state.sync = { ...state.sync, busy: false, error: state.t('syncNotFound') };
-      renderAccount();
-      return;
-    }
-    if (remote.account && !isAccount(remote.account)) throw new Error('bad account');
-    let merged = mergeAccounts(state.account, remote.account);
-    for (const item of remote.inbox) if (isAccount(item.account)) merged = mergeDistinct(merged, compactAccount(item.account));
-    const have = new Set((remote.wallet?.entries || []).map(e => e.id));
-    const entries = poolEntries(merged).filter(e => !have.has(e.id));
-    const open = merged.slips.filter(s => s.status === 'open').reduce((sum, s) => sum + s.cost, 0);
-    // Open slips, for Quadra Fixtures to show (openSlips).
-    const { kinds, slips, n } = openSlips(merged);
-    const had = remote.wallet?.snap?.odds;
-    const same = had?.open === open && had?.n === n && JSON.stringify(had?.slips || []) === JSON.stringify(slips) && JSON.stringify(had?.kinds || {}) === JSON.stringify(kinds);
-    const snap = same ? undefined : { odds: { open, n, kinds, slips, t: Date.now() } };
-    const changed = !remote.account || JSON.stringify(merged) !== JSON.stringify(remote.account);
-    let wallet = remote.wallet;
-    if (changed || entries.length || snap) wallet = await writePass(code, changed ? merged : null, { entries, snap });
-    for (const item of remote.inbox) await dropInbox(code, item.id).catch(() => {});
-    state.wallet = wallet;
-    cacheWallet(code, wallet);
-    if (JSON.stringify(merged) !== JSON.stringify(state.account)) {
-      state.account = merged;
-      saveAccountLocal();
-      renderSaved();
-    }
-    state.sync = { ...state.sync, busy: false, at: new Date().toISOString() };
-  } catch (error) {
-    console.error(error);
-    state.sync = { ...state.sync, busy: false, error: state.t(error.code === 'TOO_BIG' ? 'syncTooBig' : 'syncFailed') };
-  }
-  renderAccount();
-  renderParlay();
-}
-
-// New accounts only get Quadra Passes (they work in every Quadra app).
-async function createSyncCode() {
-  state.sync = { ...state.sync, busy: true, error: '' };
-  renderAccount();
-  try {
-    const { code, wallet } = await createPass(state.account, { entries: poolEntries(state.account) });
-    state.sync = { code, busy: false, error: '', at: new Date().toISOString(), fresh: true };
-    state.wallet = wallet;
-    cacheWallet(code, wallet);
-    saveAccountLocal();
-  } catch (error) {
-    console.error(error);
-    state.sync = { ...state.sync, busy: false, error: state.t('syncFailed') };
-  }
-  renderAccount();
-}
-
-// Joining an account from another device: that account and this device's
-// merged (the NT$10,000 start counts once).
-async function linkSyncCode(raw) {
-  const code = cleanPasscode(raw);
-  if (!PASS_PATTERN.test(code)) {
-    state.sync = { ...state.sync, error: state.t('passBad') };
     renderAccount();
-    return;
+    renderParlay();
+  });
+  return syncChain;
+}
+const mergeFirst = remote => (syncChain = syncChain.then(() => mergeRemote(remote)).catch(console.error));
+
+async function mergeRemote(remote) {
+  if (!remote) return;
+  const theirs = remote.payload ? await unpack(remote.payload).catch(() => null) : null;
+  if (theirs && !isAccount(theirs)) throw new Error('bad account');
+  let merged = mergeAccounts(state.account || (theirs ? null : freshAccount()), theirs);
+  if (!merged) merged = theirs || freshAccount();
+  for (const item of remote.inbox || []) {
+    const other = await unpack(item.payload).catch(() => null);
+    if (isAccount(other)) merged = mergeDistinct(merged, compactAccount(other));
   }
-  state.sync = { ...state.sync, busy: true, error: '' };
-  renderAccount();
-  // The pass's account (if Sportsbook was used with it) and this device's merged.
-  try {
-    const remote = await readPass(code);
-    if (!remote) {
-      state.sync = { ...state.sync, busy: false, error: state.t('syncNotFound') };
-      renderAccount();
-      return;
-    }
-    state.sync = { code, busy: false, error: '', at: null };
-    state.wallet = remote.wallet;
-    if (isAccount(remote.account)) state.account = mergeAccounts(remote.account, state.account);
+  const wallet = remote.wallet || state.wallet;
+  const have = new Set((wallet?.entries || []).map(e => e.id));
+  const entries = poolEntries(merged).filter(e => !have.has(e.id));
+  const open = merged.slips.filter(x => x.status === 'open').reduce((sum, x) => sum + x.cost, 0);
+  // Open slips, for Quadra Fixtures to show (openSlips).
+  const { kinds, slips, n } = openSlips(merged);
+  const had = wallet?.snap?.odds;
+  const same = had?.open === open && had?.n === n && JSON.stringify(had?.slips || []) === JSON.stringify(slips) && JSON.stringify(had?.kinds || {}) === JSON.stringify(kinds);
+  const snap = same ? undefined : { odds: { open, n, kinds, slips, t: Date.now() } };
+  const changed = !theirs || JSON.stringify(merged) !== JSON.stringify(theirs);
+  if (JSON.stringify(merged) !== JSON.stringify(state.account)) {
+    state.account = merged;
     saveAccountLocal();
     renderSaved();
-    await syncNow();
-  } catch (error) {
-    console.error(error);
-    state.sync = { ...state.sync, busy: false, error: state.t('syncFailed') };
-    renderAccount();
   }
+  if (changed || entries.length || snap) {
+    const payload = changed ? await pack(merged) : undefined;
+    if (payload && payload.length > 1_000_000) throw Object.assign(new Error('too big'), { code: 'TOO_BIG' });
+    const res = await q.write({ payload, wallet: { entries, snap, settings: affinityPatch('odds').settings } });
+    state.wallet = res.wallet || state.wallet;
+  } else state.wallet = wallet;
+  for (const item of remote.inbox || []) await q.dropInbox(item.id).catch(() => {});
 }
 
-function unlinkSync() {
-  if (onPass()) storePass('');
-  state.sync = { code: '', busy: false, error: '', at: null };
-  state.wallet = null;
-  saveAccountLocal();
-  renderAccount();
-  renderParlay();
+// What the person bets on and opens, for recommendations here and in every
+// Quadra app, and Rewards' missions.
+function track(action, keys = [], weight = 1) {
+  if (keys.length) recordAffinity('odds', keys, weight);
+  if (action && q.active) q.write({ wallet: activityPatch(q.wallet, 'odds', action) }).catch(() => {});
 }
-
-// An old one-app code → a Quadra Pass: the Worker moves the account to a new
-// pass and deletes the old code.
-async function moveToPass() {
-  const t = state.t;
-  const code = state.sync.code;
-  const sources = code && !isPassCode(code) ? [{ app: 'odds', passcode: code }] : [];
-  if (!sources.length) return;
-  // Everything this device has goes up first.
-  if (code && !isPassCode(code)) await syncNow();
-  state.sync = { ...state.sync, busy: true, error: '' };
-  renderAccount();
-  try {
-    const res = await ecoMerge(sources, isPassCode(code) ? code : undefined);
-    state.sync = { code: res.passcode, busy: false, error: '', at: null, fresh: true, note: t('legacyUpgraded', { code: formatPass(res.passcode) }) };
-    state.wallet = res.wallet;
-    saveAccountLocal();
-    await syncNow();
-  } catch (error) {
-    console.error(error);
-    state.sync = { ...state.sync, busy: false, error: t('linkFailed', { msg: error.message }) };
-  }
-  renderAccount();
+// The keys a pick is about: its league, sport, teams (or driver) and market.
+function betKeys(bet) {
+  const game = state.data?.games.find(g => g.id === bet.gameId);
+  const teams = game ? [game.away, game.home] : [bet.away, bet.home].filter(Boolean);
+  return [
+    bet.sport ? `league:${bet.sport}` : null,
+    bet.sport ? `sport:${familyOf(bet.sport) || bet.sport}` : null,
+    ...teams.map(team => `team:${bet.sport}:${normalizeTeamName(team?.en ?? team)}`),
+    bet.driverEn ? `driver:${normalizeTeamName(bet.driverEn)}` : null,
+    bet.kind ? `market:${bet.kind}` : null
+  ].filter(Boolean);
 }
 
 // The logo of the team a pick is on (saved with the pick, so history shows
@@ -2138,7 +2017,8 @@ function placeButton(legs, sizes, cost, errors) {
         // Synced at once, not in a moment: going straight back to Quadra
         // Fixtures should find the new slip there.
         clearTimeout(pushTimer);
-        if (state.sync.code) syncNow();
+        syncNow();
+        track('bet', [...new Set(slip.legs.flatMap(leg => betKeys(leg)))], 3);
         renderGames();
         renderLive();
         renderF1();
@@ -2201,59 +2081,31 @@ function finalOf(outcome) {
 }
 
 function renderAccount() {
-  if (!state.accountReady) return;
-  // A mini-game round in progress: only the balance changes, in place (a
-  // full redraw moves the page under the player's finger); the rest waits
-  // for the round's end.
-  if (state.roundLive && $('account-body').firstChild) {
-    const shown = document.querySelector('.account-balance');
-    if (shown) shown.textContent = fmtMoney(funds(), { sign: false });
-    renderArcade();
-    return;
-  }
+  if (!state.accountReady || !state.account) return;
   const t = state.t;
   const account = state.account;
   const now = new Date();
   const own = balance(account);
   const money = funds();
-  // Money that didn't come from betting: the weekly grants and mini games.
-  const grants = account.ledger.filter(e => e.kind === 'grant' || e.kind === 'game').reduce((s, e) => s + e.amount, 0);
-  const open = account.slips.filter(s => s.status === 'open');
-  const atStake = open.reduce((s, x) => s + x.cost, 0);
-  // Won or lost on settled slips, and money still on open ones.
-  const net = own + atStake - START_BALANCE - grants;
-  const grantLine = el('p', { class: 'muted', text: `${state.grantNote ? `${t('grantAdded', { v: fmtMoney(WEEKLY_GRANT, { sign: false }) })} ` : ''}${t('grantAuto', { v: fmtMoney(WEEKLY_GRANT, { sign: false }), when: fmtTime(nextGrantAt(now).toISOString()) })}` });
-  const pass = onPass();
+  // Money that didn't come from betting: the start and the weekly grants.
+  const grants = account.ledger.filter(e => e.kind === 'grant' || e.kind === 'game' || e.kind === 'start').reduce((sum, e) => sum + e.amount, 0);
+  const open = account.slips.filter(x => x.status === 'open');
+  const atStake = open.reduce((sum, x) => sum + x.cost, 0);
+  const net = own + atStake - grants;
   $('account-body').replaceChildren(
     el('div', { class: 'card account-card' }, [
       el('div', { class: 'account-top' }, [
-        el('div', {}, [el('p', { class: 'muted', text: t(pass ? 'poolTotal' : 'accountBalance') }), el('p', { class: 'account-balance stat-value', text: fmtMoney(money, { sign: false }) })]),
+        el('div', {}, [el('p', { class: 'muted', text: t('poolTotal') }), el('p', { class: 'account-balance stat-value', text: fmtMoney(money, { sign: false }) })]),
         el('div', { class: 'account-side' }, [
           el('p', {}, [el('span', { class: 'muted', text: `${t('accountAtStake')} ` }), el('strong', { text: fmtMoney(atStake, { sign: false }) })]),
           el('p', {}, [el('span', { class: 'muted', text: `${t('accountNet')} ` }), el('strong', { class: net < -0.5 ? 'back-low' : net > 0.5 ? 'back-high' : '', text: fmtMoney(net) })])
         ])
       ]),
-      grantLine,
-      el('p', { class: 'muted small', text: t('accountNote', { start: fmtMoney(START_BALANCE, { sign: false }), v: fmtMoney(WEEKLY_GRANT, { sign: false }) }) }),
-      pass ? poolBox() : null,
+      canClaim(account, now) || state.grantNote ? el('p', { class: 'muted', text: state.grantNote ? t('grantAdded', { v: fmtMoney(WEEKLY_GRANT, { sign: false }) }) : '' }) : null,
       limitBox(),
-      passBox(),
-      pass ? transferBox() : null
+      transferBox()
     ])
   );
-  renderArcade();
-}
-
-// The Quadra Pass: the same panel as in the other Quadra apps (quadra.mjs).
-function passBox() {
-  const t = state.t;
-  if (!state.passPanel || state.passPanel.lang !== state.locale) {
-    state.passPanel = passPanel({ app: 'odds', lang: state.locale, create: createSyncCode, enter: linkSyncCode, sync: syncNow, signOut: unlinkSync });
-    state.passPanel.lang = state.locale;
-  }
-  const sync = state.sync;
-  state.passPanel.update({ pass: onPass() ? sync.code : '', busy: Boolean(sync.busy), error: sync.error || '', note: sync.note || (sync.fresh ? t('syncKeep') : ''), syncedAt: sync.at ? Date.parse(sync.at) : 0 });
-  return state.passPanel.el;
 }
 
 // The open slips, compact, for Quadra Fixtures (the wallet's snap.odds.slips):
@@ -2298,32 +2150,6 @@ function openSlips(account) {
   return { kinds: Object.fromEntries(Object.entries(kinds).filter(([k]) => used.has(k))), slips: out, n: slips.length };
 }
 
-// The shared pool at a glance: its total and each app's part (each one's own
-// records are in its history, so none are repeated here).
-function poolBox() {
-  const t = state.t;
-  const w = state.wallet;
-  if (!w) return null;
-  const parts = poolParts(w);
-  const plus = parts.filter(p => p.amount > 0).reduce((sum, p) => sum + p.amount, 0);
-  const color = app => APPS[app]?.color || 'var(--q-muted)';
-  const openBets = w.snap?.odds?.open || 0;
-  const part = p => {
-    const inner = [
-      el('span', { class: 'qpool-dot', style: `background:${color(p.app)}` }),
-      el('span', { class: 'qpool-name', text: poolPartName(p.app, state.locale) }, [p.app === 'odds' && openBets > 0 ? el('small', { text: t('poolRiding', { v: fmtMoney(openBets, { sign: false }) }) }) : null]),
-      el('strong', { class: `qpool-amt${p.amount < 0 ? ' neg' : ''}`, text: fmtMoney(p.amount) })
-    ];
-    return el('li', {}, [APPS[p.app] && p.app !== 'odds' ? el('a', { class: 'qpool-part', href: appUrl(p.app) }, inner) : el('div', { class: 'qpool-part' }, inner)]);
-  };
-  return el('div', { class: 'sync pool' }, [
-    el('div', { class: 'qpool-top' }, [el('span', { text: t('poolTitle') }), el('strong', { text: fmtMoney(poolBalance(w), { sign: false }) })]),
-    plus > 0 ? el('div', { class: 'qpool-bar', 'aria-hidden': 'true' }, parts.filter(p => p.amount > 0).map(p => el('i', { style: `flex:${p.amount / plus};background:${color(p.app)}` }))) : null,
-    el('ul', { class: 'qpool-parts' }, parts.map(part)),
-    el('p', { class: 'qpool-note', text: t('poolNote') })
-  ]);
-}
-
 // The weekly betting limit: kept in the wallet with a pass (so every device
 // and app sees it), on this device otherwise.
 function limitBox() {
@@ -2340,13 +2166,8 @@ function limitBox() {
       onsubmit: async event => {
         event.preventDefault();
         const value = Math.max(0, Math.round(Number(input.value) || 0));
-        try {
-          localStorage.setItem('oddsStudy.weeklyLimit', String(value));
-        } catch {}
-        if (onPass()) {
-          state.wallet = { ...state.wallet, settings: { ...(state.wallet?.settings || {}), ...settingPatch(ODDS_LIMIT_KEY, value).settings } };
-          writePass(state.sync.code, null, settingPatch(ODDS_LIMIT_KEY, value)).then(w => ((state.wallet = w), renderAccount()), console.error);
-        }
+        state.wallet = { ...state.wallet, settings: { ...(state.wallet?.settings || {}), ...settingPatch(ODDS_LIMIT_KEY, value).settings } };
+        q.write({ wallet: settingPatch(ODDS_LIMIT_KEY, value) }).then(() => renderAccount(), console.error);
         renderAccount();
         renderParlay();
       }
@@ -2369,9 +2190,8 @@ function transferBox() {
         const v = Math.round(Number(amount.value));
         if (!(v > 0)) return;
         try {
-          const res = await ecoTransfer(state.sync.code, to.value, v, note.value.trim() || undefined);
-          state.wallet = res.wallet;
-          cacheWallet(state.sync.code, res.wallet);
+          await q.transfer(to.value, v, note.value.trim() || undefined);
+          state.wallet = q.wallet;
           state.sync = { ...state.sync, note: t('transferDone', { v: fmtMoney(v, { sign: false }) }), error: '' };
         } catch (error) {
           state.sync = { ...state.sync, error: t('transferFailed', { msg: error.message }) };
@@ -2608,11 +2428,10 @@ function applyHistoryView() {
   const t = state.t;
   if (!state.accountReady) return;
   const any = state.account.slips.length > 0;
-  // No slips yet: the games instead of an empty list.
-  const view = !any && state.historyView === 'slips' ? 'games' : state.historyView;
+  const view = state.historyView === 'stats' ? 'stats' : 'slips';
   $('history-tabs').hidden = false;
   $('history-tabs').replaceChildren(
-    ...['slips', 'stats', 'games'].map(key =>
+    ...['slips', 'stats'].map(key =>
       el('button', {
         type: 'button',
         'aria-pressed': String(key === view),
@@ -2627,7 +2446,6 @@ function applyHistoryView() {
   );
   $('saved').hidden = view !== 'slips' || !any;
   $('stats').hidden = view !== 'stats';
-  $('arcade').hidden = view !== 'games';
 }
 
 function renderSaved() {
@@ -2782,9 +2600,6 @@ function moneyCard(m) {
     facts.push([t('moneyHouse'), money(Math.max(0, m.houseKept)), t('moneyHouseNote', { v: fmtPctShort(Math.max(0, m.houseKept) / m.settled.staked) })]);
     if (m.tax > 0) facts.push([t('moneyTax'), money(m.tax), t('moneyTaxNote')]);
   }
-  if (m.games.sum > 0) facts.push([t('moneyWork'), money(m.games.sum), t('moneyWorkNote', { m: fmtWorkMinutes(wageMinutes(m.games.sum)), wage: money(ARCADE.minWage) })]);
-  // Betting's losses in rounds of work (at the usual pay a round).
-  if (m.bettingNet < 0) facts.push([t('moneyLossWork'), t('moneyRounds', { n: fmtInt(Math.ceil(-m.bettingNet / (ARCADE.perMinute * (ARCADE.roundSeconds / 60)))) }), t('moneyLossWorkNote', { v: money(-m.bettingNet), m: fmtWorkMinutes(wageMinutes(-m.bettingNet)) })]);
   if (m.open.n) facts.push([t('moneyOpen'), money(m.open.sum), t('moneyOpenNote', { n: fmtInt(m.open.n) })]);
   return el('div', { class: 'card money-card' }, [
     el('h3', { class: 'card-title', text: t('moneyTitle') }),
@@ -2796,23 +2611,6 @@ function moneyCard(m) {
     m.stakes.sum ? bar(outParts, totalIn) : null,
     m.stakes.sum ? legend(outParts) : null,
     facts.length ? el('dl', { class: 'money-facts' }, facts.flatMap(([k, v, note]) => [el('dt', { text: k }), el('dd', {}, [typeof v === 'string' ? el('strong', { text: v }) : v, el('small', { class: 'muted', text: note })])])) : null
-  ]);
-}
-
-// Mini games: rounds, money, the average and best round of each; and each
-// week's money by source.
-function gamesCard(m) {
-  const t = state.t;
-  const money = v => fmtMoney(v, { sign: false });
-  const rows = ARCADE.games.filter(g => m.games.byGame[g]).map(g => {
-    const x = m.games.byGame[g];
-    return [`${ARCADE_ICON[g]} ${t(`arcade_${g}`)}`, fmtInt(x.rounds), money(x.sum), money(x.sum / x.rounds), money(x.best)];
-  });
-  if (!rows.length) return null;
-  return el('div', { class: 'card' }, [
-    el('h3', { class: 'card-title', text: t('gamesStatsTitle') }),
-    table([t('colGame'), t('colRounds'), t('colEarned'), t('colAvgRound'), t('colBestRound')], rows),
-    el('p', { class: 'note', text: t('gamesStatsNote', { m: fmtInt((m.games.rounds * ARCADE.roundSeconds) / 60), rate: money(m.games.sum / Math.max(1, (m.games.rounds * ARCADE.roundSeconds) / 3600)), wage: money(ARCADE.minWage) }) })
   ]);
 }
 
@@ -3025,7 +2823,7 @@ function renderStats() {
   // Shown once there's anything to count: a slip, a grant or a mini game.
   $('stats').hidden = s.placed === 0 && !m.grants.n && !m.games.rounds;
   if (!s.placed) {
-    $('stats-body').replaceChildren(...[moneyCard(m), gamesCard(m), weeksMoneyCard(m)].filter(Boolean));
+    $('stats-body').replaceChildren(...[moneyCard(m), weeksMoneyCard(m)].filter(Boolean));
     return;
   }
   const kpis = el('div', { class: 'kpis' }, [
@@ -3039,7 +2837,7 @@ function renderStats() {
   ]);
   const cards = [el('div', { class: 'card' }, [kpis, el('p', { class: 'note', text: t('kpiNote') })]), moneyCard(m)];
   if (s.timeline.length > 1) cards.push(balanceChart(s.timeline));
-  cards.push(gamesCard(m), weeksMoneyCard(m));
+  cards.push(weeksMoneyCard(m));
   cards.push(youCard(), crowdCard(s), funCard());
   if (s.settled) cards.push(el('div', { class: 'two-col' }, [luckCard(s), recordsCard(s)]), picksCard(s), breakdownCard(s), weeksCard(s));
   else cards.push(el('p', { class: 'muted', text: t('statsWait') }));
@@ -3171,628 +2969,13 @@ function crowdStats(sportBets, weeks, { quiet = false } = {}) {
   return promise;
 }
 
-function renderSim() {
-  const t = state.t;
-  const chart = $('sim-chart');
-  const sportBets = simSportBets();
-  const weeks = Number($('sim-weeks').value);
-  const key = crowdKey(sportBets, weeks);
-  const cached = crowdCache.get(key);
-  // Run and drawn only when the tab shows (opening it does both): the
-  // simulation takes seconds and the page is big, so nothing happens hidden.
-  if (state.tab !== 'sim') return Promise.resolve();
-  // Already showing exactly this (same run, width and language): nothing to do.
-  const drawn = `${key}|${window.innerWidth}|${state.locale}`;
-  if (cached) {
-    if (state.simDrawn !== drawn) drawSim(cached, weeks);
-    state.simDrawn = drawn;
-    return Promise.resolve();
-  }
-  return crowdStats(sportBets, weeks).then(
-    stats => {
-      if (Number($('sim-weeks').value) === weeks && state.tab === 'sim') {
-        drawSim(stats, weeks);
-        state.simDrawn = drawn;
-      }
-    },
-    () => {}
-  );
-}
-
-function drawSim(stats, weeks) {
-  const t = state.t;
-  const period = periodName(weeks);
-  const { bands, totals } = stats;
-  const characters = CHARACTERS.map(c => ({ ...c, player: stats.characters[c.key] }));
-
-  renderSimHeadline(totals, period);
-  const back = totals.staked > 0 ? ((totals.staked + totals.net) / totals.staked) * 100 : 100;
-  $('sim-stats').replaceChildren(
-    statTile(t('simMedian'), fmtMoney(bands.at(-1).q50), bands.at(-1).q50 < 0 ? 'back-low' : '', '🧍'),
-    statTile(t('simBackPer100'), fmtMoney(back, { sign: false }), back < 100 ? 'back-low' : '', '💸'),
-    statTile(t('simEverAhead'), fmtShare(totals.everAheadShare), '', '📈'),
-    statTile(t('simAhead'), fmtShare(totals.aheadShare), totals.aheadShare < 0.5 ? 'back-low' : '', '🏁')
-  );
-  $('sim-legend').replaceChildren(
-    el('span', {}, [el('span', { class: 'legend-key band-outer' }), document.createTextNode(t('simBand80'))]),
-    el('span', {}, [el('span', { class: 'legend-key band-inner' }), document.createTextNode(t('simBand50'))]),
-    el('span', {}, [el('span', { class: 'legend-key thick', style: 'background:var(--text-secondary)' }), document.createTextNode(t('simMedianLine'))]),
-    ...characters.map(c => el('span', {}, [el('span', { class: 'legend-key thick', style: `background:${c.color}` }), document.createTextNode(t(c.name))]))
-  );
-  drawSimChart($('sim-chart'), bands, characters, weeks);
-  renderLapse(bands, weeks);
-  renderBuys(totals, period);
-  renderPlayers(characters);
-  renderGroups(stats);
-  renderFacts(stats, totals, characters, period);
-  renderFlow(stats, period);
-  renderStories(stats, period);
-  renderSurplus(stats, period);
-  renderLeaders(stats);
-  state.simStats = stats;
-  const unfair = auditCrowd(stats);
-  if (unfair.length) console.warn('Series whose followers are out of line with the crowd:', unfair);
-  renderYou();
-  if (state.lookup) renderLookup(state.lookup);
-  renderSimTable(bands, characters, weeks);
-}
-
-function renderSimHeadline(totals, period) {
-  const t = state.t;
-  const share = totals.aheadShare;
-  const { staked, net } = totals;
-  const tickets = totals.tickets / SIM_PLAYERS;
-  const inTen = Math.round(share * 10);
-  const back = staked > 0 ? ((staked + net) / staked) * 100 : 100;
-  // Ten little people, the ones still ahead in green.
-  const person = won => {
-    const svg = svgEl('svg', { class: `person ${won ? 'won' : ''}`, viewBox: '0 0 24 30', 'aria-hidden': 'true' });
-    svg.append(svgEl('circle', { cx: 12, cy: 7, r: 5.5 }), svgEl('path', { d: 'M2 30v-6a10 10 0 0 1 20 0v6z' }));
-    return svg;
-  };
-  $('sim-headline').replaceChildren(
-    el('p', { class: 'headline-label', text: t('simHeadlineLabel', { period, n: fmtCount(SIM_PLAYERS_SHOWN) }) }),
-    el('p', { class: 'headline-big' }, [
-      document.createTextNode(t('simHeadlinePre')),
-      el('strong', { text: inTen === 0 ? t('simHeadlineNone') : t('simHeadlineShare', { n: inTen }) }),
-      document.createTextNode(t('simHeadlinePost'))
-    ]),
-    el('div', { class: 'people', role: 'img', 'aria-label': t('simHeadlineShare', { n: inTen }) }, Array.from({ length: 10 }, (_, i) => person(i < inTen))),
-    el('p', {
-      class: 'headline-sub',
-      text: t('simHeadlineSub', { tickets: fmtCount(tickets), staked: fmtMoney(staked / SIM_PLAYERS, { sign: false }), back: fmtMoney(back, { sign: false }) })
-    })
-  );
-}
-
-// A person's tale in one line.
-function taleOf(p) {
-  const t = state.t;
-  if (p.final > 0) return t('taleAheadTraits');
-  if (!p.everAhead) return t('taleNever');
-  return t('taleGaveBack', { peak: fmtMoney(p.peak, { sign: false }), at: fmtCount(p.peakWeek + 1) });
-}
-
-// The series a simulated person bets on, as a stack of small labels (league
-// logo and name); a long stack shows its first few and how many more.
-const fanByKey = key => (typeof key === 'string' ? FANS.find(f => f.key === key) : key) ?? null;
-function seriesTags(fanKey, max = 3) {
-  const t = state.t;
-  const fan = fanByKey(fanKey);
-  if (!fan) return [];
-  const series = fanSeries(fan);
-  if (!series.length) return [el('span', { class: 'series-tag', text: `🌐 ${t('fanEverything')}` })];
-  return [
-    ...series.slice(0, max).map(sp => el('span', { class: 'series-tag' }, [leagueImg(sp, 'logo-xxs'), document.createTextNode(t(`sport_${sp}`))])),
-    series.length > max ? el('span', { class: 'series-tag more', text: `+${series.length - max}` }) : null
-  ];
-}
-// The same as plain text: "MLB · NBA", "英超 +12", "全部".
-function followText(fanKey, max = 2) {
-  const t = state.t;
-  const fan = fanByKey(fanKey);
-  if (!fan) return '';
-  const series = fanSeries(fan);
-  if (!series.length) return t('fanEverything');
-  return series.slice(0, max).map(sp => t(`sport_${sp}`)).join('·') + (series.length > max ? ` +${series.length - max}` : '');
-}
-
-// Who a simulated person is: the series they bet on and their traits.
-function personTags(p) {
-  return [el('span', { class: 'series-stack' }, seriesTags(p.fan)), ...traitTags(p)];
-}
-
-function renderPlayers(characters) {
-  const t = state.t;
-  $('sim-players').replaceChildren(
-    ...characters.map(({ name, rank, color, icon, player: p }) =>
-      el('article', { class: 'player', style: `--player:${color}` }, [
-        el('div', { class: 'player-head' }, [
-          el('span', { class: 'avatar', 'aria-hidden': 'true', text: icon }),
-          el('div', {}, [el('p', { class: 'player-name', text: t(name) }), el('p', { class: 'player-rank', text: t(rank) })])
-        ]),
-        el('p', { class: `player-final ${p.final < 0 ? 'back-low' : 'back-high'}`, text: fmtMoney(p.final) }),
-        el('p', { class: 'player-tale', text: taleOf(p) }),
-        el('div', { class: 'player-tags' }, personTags(p))
-      ])
-    )
-  );
-}
-
-// One row per group: avatar, name, bar to break-even, average back per NT$100.
-function barItem({ icon, name, desc, back, margin, meta, scaleMax }) {
-  return el('li', { class: 'bar-item', title: desc }, [
-    icon,
-    el('span', { class: 'bar-name', text: name }),
-    el('span', { class: `rank-value ${backClass(back)}`, text: fmtMoney(back, { sign: false }) }),
-    el('div', { class: 'bar-track', 'aria-hidden': 'true' }, [
-      el('div', { class: 'bar', style: `width:${(back / scaleMax) * 100}%` }),
-      el('div', { class: 'bar-even', style: `left:${(100 / scaleMax) * 100}%` })
-    ]),
-    el('span', { class: 'habit-meta', text: meta })
-  ]);
-}
-
-// Every trait's icon; people with no trait of a kind for comparison.
+// Kept from the simulator: its traits' icons, the bubble-tea yardstick, a sparkline.
 const TRAIT_ICON = {
   favorite: '📣', underdog: '🎯', value: '🧮', exotic: '🎲', single: '1️⃣', parlay: '🎰', whale: '🐋', small: '🪙', daily: '📅', rare: '🌙',
   tilt: '🔥', chaser: '🔁', cashOut: '💰', streaky: '🍀', pressOn: '🚀', revenge: '😤', heartbroken: '💔', soClose: '😣', jackpot: '🌠',
   rider: '⛄', guardian: '🛡️', stopLoss: '🛑', content: '😊', moody: '🎭', bored: '🥱', hailMary: '🙏', loyal: '❤️', hopper: '🦘', plainStyle: '😐', plainReact: '😐'
 };
-
-// The crowd three ways, one tab each: how people bet (the traits of pick,
-// picks per ticket, stake and pace), their reactions, and what they bet on.
-// Ranked by the average result: traits change how much people stake, so
-// money back per NT$100 alone would hide the big losers.
-const GROUP_TABS = ['style', 'react', 'fan'];
-function renderGroups(stats) {
-  const t = state.t;
-  const tab = GROUP_TABS.includes(state.groupTab) ? state.groupTab : 'style';
-  let rows;
-  if (tab === 'fan') {
-    // Everyone who bets on a series, whatever else they bet on.
-    rows = (stats.seriesSummaries ?? []).map(f => ({ icon: leagueImg(f.series, 'logo-sm'), name: t(`sport_${f.series}`), desc: t('seriesDesc', { n: fmtCount(f.players * (SIM_PLAYERS_SHOWN / stats.players)), only: fmtCount(f.only.players * (SIM_PLAYERS_SHOWN / stats.players)) }), x: f, meta: t('fanMeta', { ahead: fmtShare(f.aheadShare), tickets: fmtCount(f.avgTickets), final: fmtMoney(f.avgFinal) }) }));
-  } else {
-    const groupOf = key => TRAITS.find(x => x.key === key)?.group ?? null;
-    rows = stats.traitSummaries
-      .filter(x => (tab === 'style' ? x.trait.key === 'plainStyle' || groupOf(x.trait.key) : x.trait.key === 'plainReact' || (!groupOf(x.trait.key) && x.trait.key !== 'plainStyle')))
-      .map(x => ({ icon: badge(TRAIT_ICON[x.trait.key], 'var(--accent)', 'emoji'), name: t(`trait_${x.trait.key}`), desc: t(`traitDesc_${x.trait.key}`), x, meta: t('traitMeta', { share: fmtShare(x.share), ahead: fmtShare(x.aheadShare), final: fmtMoney(x.avgFinal) }) + (x.quitShare >= 0.05 ? ` · ${t('traitQuit', { v: fmtShare(x.quitShare) })}` : '') }));
-  }
-  rows.sort((a, b) => b.x.avgFinal - a.x.avgFinal);
-  const scaleMax = Math.max(100, ...rows.map(r => r.x.back)) * 1.04;
-  $('sim-group-tabs').replaceChildren(
-    ...GROUP_TABS.map(key =>
-      el('button', {
-        type: 'button',
-        role: 'tab',
-        'aria-selected': String(key === tab),
-        'aria-pressed': String(key === tab),
-        text: t(`groupTab_${key}`),
-        onclick: () => {
-          state.groupTab = key;
-          renderGroups(stats);
-        }
-      })
-    )
-  );
-  $('sim-group-note').textContent = t(`groupNote_${tab}`);
-  $('sim-groups').replaceChildren(...rows.map(r => barItem({ icon: r.icon, name: r.name, desc: r.desc, back: r.x.back, margin: r.x.backMargin, scaleMax, meta: r.meta })));
-}
-
-// A person's trait tags.
-function traitTags(p) {
-  return traitKeys(p.traits ?? 0).map(key => el('span', { class: 'habit-tag trait-tag', title: state.t(`traitDesc_${key}`), text: `${TRAIT_ICON[key]} ${state.t(`trait_${key}`)}` }));
-}
-
-// A fact: one plain sentence with its numbers highlighted inside it
-// ({name} placeholders filled from `nums`), then the explanation.
-function factItem(sentence, nums = {}, why = null) {
-  const line = el('p', { class: 'fact-line' });
-  for (const [i, part] of sentence.split(/\{(\w+)\}/).entries()) {
-    if (i % 2 === 0) line.append(part);
-    else line.append(el('strong', { class: 'fact-num', text: nums[part] ?? `{${part}}` }));
-  }
-  return el('li', { class: 'fact' }, [line, why ? el('p', { class: 'fact-why', text: why }) : null]);
-}
-
-// Where the crowd's money went: every NT$ a winner took home came out of what
-// losers lost; the lottery kept its take and the government the tax. Weeks
-// the lottery paid out more than it took in are counted too.
-function renderFlow(stats, period) {
-  const t = state.t;
-  const f = stats.flow;
-  if (!f) return;
-  const money = v => fmtMoney(v, { sign: false });
-  const n = v => fmtCount(v);
-  const bar = [
-    { key: 'winners', v: f.winnersWon, color: 'var(--good)' },
-    { key: 'house', v: Math.max(0, f.take), color: 'var(--bad)' },
-    { key: 'tax', v: f.tax, color: 'var(--gold)' }
-  ];
-  const total = bar.reduce((s, x) => s + x.v, 0) || 1;
-  $('sim-flow').replaceChildren(
-    el('p', { class: 'flow-equation' }, [
-      el('span', { text: t('flowLosers') }),
-      el('strong', { class: 'back-low', text: money(f.losersLost) }),
-      el('span', { text: '=' }),
-      el('span', { text: t('flowWinners') }),
-      el('strong', { class: 'back-high', text: money(f.winnersWon) }),
-      el('span', { text: '+' }),
-      el('span', { text: t('flowHouse') }),
-      el('strong', { text: money(f.take) }),
-      el('span', { text: '+' }),
-      el('span', { text: t('flowTax') }),
-      el('strong', { text: money(f.tax) })
-    ]),
-    el('div', { class: 'flow-bar', role: 'img', 'aria-label': t('flowTitle') }, bar.map(x => el('span', { style: `width:${((x.v / total) * 100).toFixed(2)}%;background:${x.color}`, title: t(`flowPart_${x.key}`) }))),
-    el('p', { class: 'legend' }, bar.map(x => el('span', {}, [el('span', { class: 'legend-key dot', style: `background:${x.color}` }), document.createTextNode(`${t(`flowPart_${x.key}`)} ${fmtShare(x.v / total)}`)]))),
-    el('ul', { class: 'facts' }, [
-      el('li', { text: t('flowWinnersDetail', { n: n(f.winners * (SIM_PLAYERS_SHOWN / stats.players)), period, paid: money(f.winnersPaid), lost: money(f.winnersLost), net: money(f.winnersWon) }) }),
-      el('li', { text: f.houseLossWeeks ? t('flowHouseLost', { k: f.houseLossWeeks, weeks: f.weeks, worst: money(f.houseWorstWeek.loss) }) : t('flowHouseNever', { weeks: f.weeks }) }),
-      el('li', { text: t('flowStaked', { staked: money(f.staked), paid: money(f.paid), back: fmtInt(Math.round((f.paid / f.staked) * 100)) }) })
-    ])
-  );
-}
-
-function renderFacts(stats, totals, characters, period) {
-  const t = state.t;
-  const money = v => fmtMoney(v, { sign: false });
-  const facts = [];
-  const by = key => stats.traitSummaries.find(x => x.trait.key === key);
-  // Everyone plays by the practice account's rules.
-  const grants = SIM_WEEKLY_GRANT * Math.max(0, stats.weeks - 1);
-  facts.push(factItem(t('factBankroll', { period }), { cash: money(SIM_START_BALANCE + grants + totals.net / stats.players), grants: money(grants), short: fmtShare(stats.crowd.shortShare) }, t('factBankrollWhy', { start: money(SIM_START_BALANCE), grant: money(SIM_WEEKLY_GRANT), spend: money(totals.staked / stats.players / Math.max(1, stats.weeks)) })));
-  facts.push(factItem(t('factParlay'), { a: money(by('single').back), b: money(by('parlay').back) }, t('factParlayWhy')));
-  if (totals.everAheadShare > totals.aheadShare) facts.push(factItem(t('factEverAhead'), { a: fmtShare(totals.everAheadShare), b: fmtShare(totals.aheadShare) }, t('factEverAheadWhy')));
-  const chaser = by('chaser');
-  const none = by('plainReact');
-  if (chaser && none) facts.push(factItem(t('factChaser'), { a: fmtMoney(chaser.avgFinal), b: fmtMoney(none.avgFinal) }, t('factChaserWhy', { staked: money(chaser.avgStaked), plain: money(none.avgStaked) })));
-  if (stats.crowd.avgLegs) facts.push(factItem(t('factMix'), { legs: stats.crowd.avgLegs.toFixed(1), singles: fmtShare(stats.crowd.singleShare) }, t('factMixWhy')));
-  if (stats.crowd.nearMisses) facts.push(factItem(t('factNearMiss'), { v: fmtCount(stats.crowd.nearMisses * (SIM_PLAYERS_SHOWN / stats.players)) }, t('factNearMissWhy')));
-  const lucky = characters[0].player;
-  if (lucky.biggestWin > 0) facts.push(factItem(t('factLucky'), { v: fmtCount(lucky.longestLosing) }, t('factLuckyWhy', { win: money(lucky.biggestWin) })));
-  const avgLoss = -totals.net / SIM_PLAYERS;
-  if (avgLoss > 0) {
-    const hours = (avgLoss / ARCADE.minWage).toLocaleString(numberLocale(), { maximumFractionDigits: avgLoss < 10 * ARCADE.minWage ? 1 : 0 });
-    facts.push(factItem(t('factWage', { period }), { loss: money(avgLoss), v: hours }, t('factWageWhy', { wage: ARCADE.minWage })));
-  }
-  if (avgLoss > 0) facts.push(factItem(t('factBoba', { period }), { loss: money(avgLoss), v: fmtCount(avgLoss / BOBA_PRICE) }, t('factBobaWhy', { price: BOBA_PRICE })));
-  const hitRate = totals.tickets > 0 ? stats.crowd.wonTickets / totals.tickets : 0;
-  facts.push(factItem(t('factHitRate'), { v: fmtShare(hitRate) }, t('factHitRateWhy', { tickets: fmtCount(totals.tickets), won: fmtCount(stats.crowd.wonTickets) })));
-  if (stats.crowd.taxTotal > 0) facts.push(factItem(t('factTax'), { v: money(stats.crowd.taxTotal) }, t('factTaxWhy', { share: fmtChance(stats.crowd.taxedShare) })));
-  if (totals.net < 0) facts.push(factItem(t('factPerDay'), { v: money(-totals.net / (stats.weeks * 7)) }, t('factPerDayWhy', { total: fmtCount(SIM_PLAYERS_SHOWN) })));
-  if (totals.net < 0) {
-    facts.push(factItem(t('factHouse'), { v: money((-totals.net / totals.staked) * 100) }, t('factHouseWhy', { total: fmtCount(SIM_PLAYERS_SHOWN), staked: money(totals.staked), net: money(-totals.net) })));
-  } else facts.push(factItem(t('factHouseWon')));
-  $('sim-facts').replaceChildren(...facts);
-}
-
-// ---- People like you, and any player by number ------------------------------
-
 const BOBA_PRICE = 65;
-
-// ---- Simulator extras: a time-lapse, what the losses buy --------------------
-
-// Week by week: 100 dots of 1,000 people each, coloured by how each one
-// stands (big win to heavy loss), with the date, the lottery's running take,
-// what happened that week (seasons starting and ending, milestones) and a
-// small chart of the share ahead with a playhead. Plays itself the first
-// time it scrolls into view.
-const LAPSE_LEVELS = [
-  { key: 'gold', min: 5000 },
-  { key: 'win', min: 0 },
-  { key: 'lose1', min: -1000 },
-  { key: 'lose2', min: -5000 },
-  { key: 'lose3', min: -Infinity }
-];
-
-// A dot's result from the week's percentiles (dot 0 is the best 1%).
-function lapseValue(b, rank) {
-  const q = 1 - (rank + 0.5) / 100;
-  const points = [[0.01, b.q01 ?? b.q10], [0.05, b.q05 ?? b.q10], [0.1, b.q10], [0.25, b.q25], [0.5, b.q50], [0.75, b.q75], [0.9, b.q90], [0.95, b.q95 ?? b.q90], [0.99, b.q99 ?? b.q90]];
-  if (q <= points[0][0]) return points[0][1];
-  for (let i = 1; i < points.length; i++) {
-    const [q1, v1] = points[i];
-    if (q <= q1) {
-      const [q0, v0] = points[i - 1];
-      return v0 + ((v1 - v0) * (q - q0)) / (q1 - q0);
-    }
-  }
-  return points.at(-1)[1];
-}
-
-// What happens along the way: seasons starting, turning to playoffs and ending
-// (from each league's calendar), and the crowd's milestones.
-function lapseEvents(bands, weeks, startWeek) {
-  const t = state.t;
-  const events = [];
-  const games = (sport, w) => gamesInWeek(sport, startWeek + w - 1);
-  const quiet = (sport, from, to) => {
-    for (let w = from; w <= to; w++) if (games(sport, w) > 0) return false;
-    return true;
-  };
-  for (let w = 1; w <= weeks; w++) {
-    for (const sport of SPORTS.filter(sp => SIM_SPORTS[sp].headline)) {
-      const now = games(sport, w);
-      const before = games(sport, w - 1);
-      const name = t(`sport_${sport}`);
-      // F1 has a championship (賽季), not a league season (球季).
-      const f1 = SIM_SPORTS[sport].family === 'racing' ? 'F1' : '';
-      if (now > 0 && quiet(sport, w - 5, w - 1)) events.push({ w, sport, text: t(`lapseSeasonStart${f1}`, { sport: name }) });
-      else if (before > 0 && now > 0 && before >= 3 * now) events.push({ w, sport, text: t('lapsePlayoffs', { sport: name }) });
-      if (now > 0 && w < weeks && quiet(sport, w + 1, w + 5)) events.push({ w, sport, text: t(`lapseSeasonEnd${f1}`, { sport: name }) });
-    }
-  }
-  const money = v => fmtMoney(v, { sign: false });
-  const first = (test, make) => {
-    const i = bands.findIndex(test);
-    if (i >= 0) events.push({ w: i + 1, ...make(bands[i], i) });
-  };
-  let peak = 0;
-  bands.forEach((b, i) => b.ahead > bands[peak].ahead && (peak = i));
-  events.push({ w: peak + 1, icon: '⛰️', text: t('lapsePeakEv', { v: fmtShare(bands[peak].ahead / SIM_PLAYERS) }) });
-  for (const share of [0.2, 0.1, 0.05]) first((b, i) => i > peak && b.ahead / SIM_PLAYERS < share, () => ({ icon: '📉', text: t('lapseBelow', { v: fmtShare(share) }) }));
-  for (const loss of [1000, 5000, 10_000]) first(b => b.q50 <= -loss, () => ({ icon: '🧍', text: t('lapseMedian', { v: money(loss) }) }));
-  for (const take of [1e8, 1e9]) first(b => (b.mean ?? 0) * -SIM_PLAYERS_SHOWN >= take, () => ({ icon: '🏦', text: t('lapseHouse', { v: money(take) }) }));
-  for (let y = 1; y * 52 <= weeks; y++) events.push({ w: y * 52, icon: '🎂', text: t('lapseYear', { n: y }) });
-  return events.sort((a, b) => a.w - b.w);
-}
-
-function renderLapse(bands, weeks) {
-  const t = state.t;
-  const box = $('sim-lapse');
-  if (!box) return;
-  clearTimeout(box._timer);
-  box._observer?.disconnect();
-  const startWeek = weekOfYear(new Date());
-  const events = lapseEvents(bands, weeks, startWeek);
-  const random = seededRandom(3);
-  const order = Array.from({ length: 100 }, (_, i) => i);
-  for (let i = order.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    [order[i], order[j]] = [order[j], order[i]];
-  }
-  // Where each dot sits in the crowd: its rank, 0 = the best 1,000 people.
-  const rank = new Array(100);
-  order.forEach((dot, r) => (rank[dot] = r));
-  const dots = Array.from({ length: 100 }, () => el('span', { class: 'lapse-dot' }));
-  const date = el('p', { class: 'lapse-date' });
-  const ahead = el('strong');
-  const median = el('strong');
-  const house = el('strong', { class: 'back-low' });
-  const feed = el('ol', { class: 'lapse-feed', 'aria-live': 'polite' });
-  const slider = el('input', { type: 'range', min: '1', max: String(weeks), value: '1', 'aria-label': t('lapseTitle') });
-  const play = el('button', { class: 'primary-button lapse-play', type: 'button' });
-
-  // The share ahead over the whole period, with event ticks and a playhead.
-  const W = 300;
-  const H = 56;
-  const top = Math.max(...bands.map(b => b.ahead)) || 1;
-  const x = w => ((w - 1) / Math.max(1, weeks - 1)) * W;
-  const y = a => H - 4 - (a / top) * (H - 12);
-  let line = '';
-  bands.forEach((b, i) => (line += `${i ? 'L' : 'M'}${x(i + 1).toFixed(1)},${y(b.ahead).toFixed(1)}`));
-  const chart = svgEl('svg', { class: 'lapse-chart', viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'none', role: 'img', 'aria-label': t('lapseAhead') });
-  chart.append(svgEl('path', { class: 'lapse-area', d: `${line}L${W},${H}L0,${H}Z` }), svgEl('path', { class: 'lapse-line', d: line }));
-  for (const e of events) chart.append(svgEl('line', { class: 'lapse-tick', x1: x(e.w), x2: x(e.w), y1: 0, y2: 5 }));
-  const head = svgEl('line', { class: 'lapse-head', y1: 0, y2: H });
-  chart.append(head);
-  chart.addEventListener('click', event => {
-    const r = chart.getBoundingClientRect();
-    stop();
-    set(Math.max(1, Math.min(weeks, Math.round(1 + ((event.clientX - r.left) / r.width) * (weeks - 1)))));
-  });
-
-  const eventIcon = e => (e.sport ? leagueImg(e.sport, 'logo-xs') : el('span', { class: 'lapse-ev-icon', 'aria-hidden': 'true', text: e.icon }));
-  let shownEvents = -1;
-  const set = w => {
-    const b = bands[w - 1];
-    const lit = Math.round((b.ahead / SIM_PLAYERS) * 100);
-    dots.forEach((dot, i) => {
-      const r = rank[i];
-      let v = lapseValue(b, r);
-      // The exact share ahead decides green or not; the percentiles, how much.
-      if (r < lit) v = Math.max(v, 1);
-      else v = Math.min(v, 0);
-      const level = LAPSE_LEVELS.find(l => v > l.min);
-      dot.className = `lapse-dot ${level.key}`;
-      dot.title = fmtMoney(v);
-    });
-    const day = new Date(Date.now() + w * 7 * 86_400_000);
-    date.textContent = t('lapseDate', { date: day.toLocaleDateString(numberLocale(), { year: 'numeric', month: 'numeric', day: 'numeric' }), w });
-    ahead.textContent = fmtShare(b.ahead / SIM_PLAYERS);
-    median.textContent = fmtMoney(b.q50);
-    median.className = b.q50 < 0 ? 'back-low' : 'back-high';
-    // Short, like 1.7億 or 168M: it grows to hundreds of millions.
-    house.textContent = `NT$${Math.max(0, -(b.mean ?? 0) * SIM_PLAYERS_SHOWN).toLocaleString(numberLocale(), { notation: 'compact', maximumFractionDigits: 1 })}`;
-    head.setAttribute('x1', x(w));
-    head.setAttribute('x2', x(w));
-    slider.value = String(w);
-    // The latest three things that have happened, newest first.
-    const past = events.filter(e => e.w <= w);
-    let fresh = false;
-    if (past.length !== shownEvents) {
-      fresh = past.length > shownEvents && shownEvents >= 0;
-      shownEvents = past.length;
-      const recent = past.slice(-3).reverse();
-      feed.replaceChildren(
-        ...(recent.length ? recent : [{ w: 0, icon: '🎫', text: t('lapseKickoff') }]).map((e, i) =>
-          el('li', { class: `${i === 0 && fresh ? 'new' : ''} ${i ? 'old' : ''}` }, [eventIcon(e), el('span', { text: e.text }), el('small', { text: e.w ? t('lapseWeek', { w: e.w }) : '' })])
-        )
-      );
-    }
-    return fresh ? past.at(-1) : null;
-  };
-  const stop = () => {
-    clearTimeout(box._timer);
-    box._timer = null;
-    play.textContent = `▶ ${t('lapsePlay')}`;
-  };
-  const start = () => {
-    let w = Number(slider.value) >= weeks ? 1 : Number(slider.value);
-    set(w);
-    play.textContent = `⏸ ${t('lapsePause')}`;
-    // About 20 seconds for a year (short periods no faster than 0.6 s a
-    // week), holding 2.5 s on each new event so it can be read. Past a year
-    // the seasons repeat, so only the crowd's milestones hold, and for 1.2 s.
-    const step = Math.max(80, Math.min(600, Math.round(20_000 / weeks)));
-    const long = weeks > 52;
-    const hold = e => (!e ? step : !long ? 2500 : e.sport ? step : 1200);
-    const tick = () => {
-      if (!box.contains(play)) return;
-      const fresh = set(++w);
-      if (w >= weeks) stop();
-      else box._timer = setTimeout(tick, hold(fresh));
-    };
-    box._timer = setTimeout(tick, step);
-  };
-  play.addEventListener('click', () => (box._timer ? stop() : start()));
-  slider.addEventListener('input', () => (stop(), set(Number(slider.value))));
-
-  box.replaceChildren(
-    el('div', { class: 'lapse' }, [
-      el('div', {}, [
-        el('div', { class: 'lapse-grid', role: 'img', 'aria-label': t('lapseLegend') }, dots),
-        el('div', { class: 'lapse-legend' }, LAPSE_LEVELS.map(l => el('span', {}, [el('i', { class: `lapse-dot ${l.key}` }), document.createTextNode(t(`lapse_${l.key}`))])))
-      ]),
-      el('div', { class: 'lapse-side' }, [
-        date,
-        el('div', { class: 'lapse-stats' }, [
-          el('p', {}, [el('span', { text: t('lapseAhead') }), ahead]),
-          el('p', {}, [el('span', { text: t('youMedian') }), median]),
-          el('p', {}, [el('span', { text: t('lapseHouseNow') }), house])
-        ]),
-        feed,
-        chart,
-        el('div', { class: 'lapse-controls' }, [play, slider]),
-        el('p', { class: 'note', text: t('lapseLegend') })
-      ])
-    ])
-  );
-  stop();
-  set(1);
-  // Play once when it first comes into view.
-  if ('IntersectionObserver' in window) {
-    box._observer = new IntersectionObserver(entries => {
-      if (entries.some(e => e.isIntersecting)) {
-        box._observer.disconnect();
-        if (!box._timer) start();
-      }
-    }, { threshold: 0.5 });
-    box._observer.observe(box);
-  } else set(weeks);
-}
-
-// What the crowd's total loss would have bought instead.
-const BUYS = [
-  { key: 'boba', price: BOBA_PRICE, icon: '🧋' },
-  { key: 'noodles', price: 200, icon: '🍜' },
-  { key: 'iphone', price: 30_000, icon: '📱' },
-  { key: 'scooter', price: 80_000, icon: '🛵' }
-];
-function renderBuys(totals, period) {
-  const t = state.t;
-  const loss = -totals.net * (SIM_PLAYERS_SHOWN / SIM_PLAYERS);
-  const box = $('sim-buys');
-  if (loss <= 0) return box.replaceChildren();
-  box.replaceChildren(
-    el('p', { class: 'fact-line', text: t('buysTitle', { period, n: fmtCount(SIM_PLAYERS_SHOWN), v: fmtMoney(loss, { sign: false }) }) }),
-    el('div', { class: 'buys-grid' },
-      BUYS.map(b =>
-        el('div', { class: 'buy' }, [
-          el('span', { class: 'buy-icon', 'aria-hidden': 'true', text: b.icon }),
-          el('strong', { text: fmtCount(loss / b.price) }),
-          el('small', { text: t(`buy_${b.key}`, { price: fmtCount(b.price) }) })
-        ])
-      )
-    )
-  );
-}
-
-// How the people with one trait who bet on one series did.
-function renderYou() {
-  const t = state.t;
-  const stats = state.simStats;
-  if (!stats?.groupStats) return;
-  const traitSelect = $('you-trait');
-  const fanSelect = $('you-fan');
-  if (!traitSelect.options.length || traitSelect.dataset.locale !== state.locale) {
-    traitSelect.replaceChildren(...TRAIT_ROWS.map(x => el('option', { value: x.key, text: `${TRAIT_ICON[x.key]} ${t(`trait_${x.key}`)}` })));
-    fanSelect.replaceChildren(...(stats.seriesSummaries ?? []).map(f => el('option', { value: f.series, text: t(`sport_${f.series}`) })));
-    traitSelect.value = state.youTrait ?? 'parlay';
-    fanSelect.value = state.youFan ?? 'mlb';
-    traitSelect.dataset.locale = state.locale;
-  }
-  const g = stats.groupStats.find(x => x.trait === traitSelect.value && x.series === fanSelect.value);
-  if (!g || !g.players) return $('you-result').replaceChildren(el('p', { class: 'muted', text: t('youNone') }));
-  const money = v => fmtMoney(v, { sign: false });
-  const period = periodName(stats.weeks);
-  $('you-result').replaceChildren(
-    el('p', { class: 'you-headline' }, [
-      document.createTextNode(t('youAheadPre', { n: fmtCount(g.players * (SIM_PLAYERS_SHOWN / stats.players)), period })),
-      el('strong', { class: g.aheadShare >= 0.5 ? 'back-high' : 'back-low', text: fmtShare(g.aheadShare) }),
-      document.createTextNode(t('youAheadPost'))
-    ]),
-    el('div', { class: 'kpis' }, [
-      statTile(t('youAvg'), fmtMoney(g.avgFinal), g.avgFinal < 0 ? 'back-low' : 'back-high', '🧍'),
-      statTile(t('simBackPer100'), money(g.back), g.back < 100 ? 'back-low' : '', '💸'),
-      statTile(t('youTickets'), fmtCount(g.avgTickets), '', '🎫'),
-      statTile(t('youStaked'), money(g.avgStaked), '', '💰')
-    ]),
-    el('p', { class: 'fact-why', text: t(`traitDesc_${traitSelect.value}`) }),
-    g.avgFinal < 0 ? el('p', { class: 'fact-why', text: t('youBoba', { cups: fmtCount(-g.avgFinal / BOBA_PRICE) }) }) : null
-  );
-}
-
-function rangePos(v, lo, hi) {
-  return hi > lo ? Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100)) : 50;
-}
-
-$('you-trait').addEventListener('change', event => ((state.youTrait = event.target.value), renderYou()));
-$('you-fan').addEventListener('change', event => ((state.youFan = event.target.value), renderYou()));
-
-// Replays one person of the crowd, by number, on this device (one person is
-// quick): their season, a small chart of it, their story and their betting
-// in the same numbers as yours (profile.mjs).
-function renderLookup(serial) {
-  const t = state.t;
-  const stats = state.simStats;
-  if (!stats) return;
-  const total = stats.players;
-  const n = Math.max(1, Math.min(total, Math.round(serial)));
-  state.lookup = n;
-  $('lookup-number').value = String(n);
-  $('lookup-number').max = String(total);
-  const sportBets = simSportBets();
-  const sportPools = Object.fromEntries(Object.entries(sportBets).map(([sport, bets]) => [sport, crowdPools(bets)]));
-  const p = replayPlayer({ sportPools, startWeek: weekOfYear(new Date()), weeks: stats.weeks, perGroup: PER_GROUP, seed: SIM_SEED, index: n - 1 });
-  if (!p) return;
-  // 百分位 (PR): the share of the crowd this person finished ahead of.
-  const qs = stats.finalQuantiles;
-  const pr = qs ? Math.max(1, Math.min(99, Math.floor((qs.filter(v => v < p.final).length / qs.length) * 100))) : null;
-  const profile = ticketProfile(p.log, { weeks: stats.weeks });
-  $('lookup-result').replaceChildren(
-    el('div', { class: 'lookup-card' }, [
-      el('div', { class: 'story-head' }, [
-        el('span', { class: 'story-icon', 'aria-hidden': 'true', text: p.final > 0 ? '😎' : p.everAhead ? '😬' : '😶' }),
-        el('div', {}, [
-          el('p', { class: 'story-serial' }, [
-            document.createTextNode(`#${fmtCount(n)}`),
-            pr ? el('span', { class: 'serial-pr', text: t('playerPR', { n: pr }) }) : null,
-            p.final > 0 && stats.surplus?.total > 0 ? el('span', { class: 'serial-pr share', text: t('playerSurplus', { v: fmtChance(p.final / stats.surplus.total) }) }) : null
-          ]),
-          el('div', { class: 'player-tags' }, personTags(p))
-        ])
-      ]),
-      el('p', { class: `story-big ${p.final < 0 ? 'back-low' : 'back-high'}`, text: fmtMoney(p.final) }),
-      sparkline(p.path),
-      el('p', { class: 'story-text', text: taleOf(p) }),
-      profile ? profileCard(profile) : el('p', { class: 'muted', text: t('lookupNoTickets') })
-    ])
-  );
-}
-
-// A small line chart of one player's running result, zero marked.
 function sparkline(path) {
   const w = 300;
   const h = 64;
@@ -3806,335 +2989,6 @@ function sparkline(path) {
   const svg = svgEl('svg', { class: 'sparkline', viewBox: `0 0 ${w} ${h}`, preserveAspectRatio: 'none', 'aria-hidden': 'true' });
   svg.append(svgEl('line', { class: 'zero-line', x1: 0, x2: w, y1: y(0), y2: y(0) }), svgEl('path', { class: path.at(-1) < 0 ? 'spark-bad' : 'spark-good', d }));
   return svg;
-}
-
-numberField($('lookup-number'), { digits: 6, onEnter: () => $('lookup-form').requestSubmit() });
-$('lookup-form').addEventListener('submit', event => {
-  event.preventDefault();
-  const n = Number($('lookup-number').value);
-  if (n >= 1) renderLookup(n);
-});
-$('lookup-random').addEventListener('click', () => {
-  const total = state.simStats?.players ?? SIM_PLAYERS;
-  renderLookup(1 + Math.floor(Math.random() * total));
-});
-
-// Everyone's winnings (results above zero) and who holds them: a bar from the
-// single biggest winner to the rest of the winners, and how few hold half.
-function renderSurplus(stats, period) {
-  const t = state.t;
-  const s = stats.surplus;
-  if (!s || s.total <= 0) {
-    $('sim-surplus').replaceChildren(el('p', { class: 'note', text: t('surplusNone', { period }) }));
-    return;
-  }
-  const scale = SIM_PLAYERS_SHOWN / stats.players;
-  const tenth = Math.round(stats.players / 1000);
-  const pct = Math.round(stats.players / 100);
-  const parts = [
-    { label: t('surplusRank1'), v: s.top1, color: 'var(--gold)' },
-    { label: t('surplusRanks', { a: 2, b: 10 }), v: s.top10 - s.top1, color: 'var(--good)' },
-    { label: t('surplusRanks', { a: 11, b: fmtCount(tenth) }), v: s.topTenth - s.top10, color: 'color-mix(in srgb, var(--good) 65%, transparent)' },
-    { label: t('surplusRanks', { a: fmtCount(tenth + 1), b: fmtCount(pct) }), v: s.topPct - s.topTenth, color: 'color-mix(in srgb, var(--good) 40%, transparent)' },
-    { label: t('surplusRest', { n: fmtCount(Math.max(0, s.winners - pct) * scale) }), v: 1 - s.topPct, color: 'color-mix(in srgb, var(--text-muted) 35%, transparent)' }
-  ].filter(x => x.v > 0.0005);
-  const best = stats.leaders?.best?.[0];
-  $('sim-surplus').replaceChildren(
-    el('p', { class: 'surplus-total' }, [el('small', { text: t('surplusTotal', { period, n: fmtCount(s.winners * scale) }) }), el('strong', { class: 'back-high', text: fmtMoney(s.total * scale, { sign: false }) })]),
-    el('div', { class: 'flow-bar surplus-bar', role: 'img', 'aria-label': t('surplusTitle') }, parts.map(x => el('span', { style: `width:${(x.v * 100).toFixed(2)}%;background:${x.color}`, title: `${x.label} ${fmtChance(x.v)}` }))),
-    el('p', { class: 'legend' }, parts.map(x => el('span', {}, [el('span', { class: 'legend-key dot', style: `background:${x.color}` }), document.createTextNode(`${x.label} ${fmtChance(x.v)}`)]))),
-    el('ul', { class: 'facts' }, [
-      best ? el('li', { text: t('surplusOne', { serial: fmtCount(best.serial), won: fmtMoney(best.value, { sign: false }), share: fmtChance(s.top1) }) }) : null,
-      el('li', { text: t('surplusHalf', { n: fmtCount(s.half * scale), winners: fmtCount(s.winners * scale) }) }),
-      el('li', { text: t('surplusWhy') })
-    ].filter(Boolean))
-  );
-}
-
-// Top 10s: one board at a time, picked from a row of chips; tap a number to
-// open that player below.
-const LEADER_ICON = { best: '🏆', biggestWin: '🎯', longshot: '🦄', comeback: '🦸', bestWeek: '🚀', biggestParlay: '🧩', hotStreak: '🔥', mostTickets: '🧾', taxman: '🏛️', nearMisses: '😣', worst: '💸', fall: '🎢', worstWeek: '🌪️', drought: '🧊', broke: '🪫' };
-function leaderValue(key, x) {
-  const t = state.t;
-  if (key === 'longshot') return `@ ${fmtOdds(x.value)}`;
-  if (key === 'hotStreak') return t('inARowWon', { n: fmtCount(x.value) });
-  if (key === 'drought') return t('inARow', { n: fmtCount(x.value) });
-  if (key === 'mostTickets') return t('ticketsN', { n: fmtCount(x.value) });
-  if (key === 'biggestParlay') return t('legsWon', { n: fmtCount(x.value) });
-  if (key === 'nearMisses' || key === 'broke') return t('timesN', { n: fmtCount(x.value) });
-  if (key === 'comeback') return `+${fmtMoney(x.value, { sign: false })}`;
-  if (key === 'fall') return `${fmtMoney(x.value)} → ${fmtMoney(x.final)}`;
-  if (key === 'taxman') return fmtMoney(x.value, { sign: false });
-  return fmtMoney(x.value);
-}
-
-function renderLeaders(stats) {
-  const t = state.t;
-  const boards = Object.entries(stats.leaders ?? {}).filter(([, list]) => list.length);
-  if (!boards.length) return $('sim-leaders').replaceChildren();
-  const key = boards.some(([k]) => k === state.leaderKey) ? state.leaderKey : boards[0][0];
-  const list = stats.leaders[key];
-  const total = stats.surplus?.total ?? 0;
-  const medals = ['🥇', '🥈', '🥉'];
-  const bad = ['worst', 'fall', 'worstWeek', 'drought', 'taxman', 'nearMisses', 'broke'].includes(key);
-  $('sim-leaders').replaceChildren(
-    el('div', { class: 'segmented leader-tabs', role: 'tablist', 'aria-label': t('leadersTitle') },
-      boards.map(([k]) =>
-        el('button', {
-          type: 'button',
-          role: 'tab',
-          'aria-selected': String(k === key),
-          'aria-pressed': String(k === key),
-          text: `${LEADER_ICON[k]} ${t(`lb_${k}`)}`,
-          onclick: () => {
-            state.leaderKey = k;
-            renderLeaders(stats);
-          }
-        })
-      )
-    ),
-    el('ol', { class: 'leaders' },
-      list.map((x, i) =>
-        el('li', { class: 'leader' }, [
-          el('span', { class: 'leader-rank', text: medals[i] ?? String(i + 1) }),
-          el('span', { class: 'leader-who' }, [
-            el('button', {
-              class: 'link-button leader-serial',
-              type: 'button',
-              title: t('lookupTitle'),
-              text: `#${fmtCount(x.serial)}`,
-              onclick: () => {
-                renderLookup(x.serial);
-                $('lookup-result').scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }
-            }),
-            el('small', { text: [x.fan && followText(x.fan), traitKeys(x.traits ?? 0).map(k => TRAIT_ICON[k]).join('')].filter(Boolean).join(' · ') })
-          ]),
-          el('span', { class: 'leader-value' }, [
-            el('strong', { class: key === 'best' || key === 'biggestWin' ? 'back-high' : bad ? 'back-low' : '', text: leaderValue(key, x) }),
-            key === 'best' && total > 0 ? el('small', { text: t('leaderShare', { v: fmtChance(x.value / total) }) }) : null
-          ])
-        ])
-      )
-    ),
-    el('p', { class: 'note', text: t(`lbNote_${key}`) })
-  );
-}
-
-// Record holders among the 100,000, by their number in the crowd: the key
-// figure, who they are, then their story. Then the crowd-wide truths.
-function renderStories(stats, period) {
-  const t = state.t;
-  const { notable, crowd } = stats;
-  const money = v => fmtMoney(v, { sign: false });
-  const stories = [];
-  // `tone`: how the big figure reads (good, bad or neutral); money by its sign.
-  const add = (icon, titleKey, p, big, textKey, vars, tone = null) =>
-    p && stories.push({ icon, title: t(titleKey), serial: `#${fmtCount(p.serial)}`, index: p.serial - 1, big, tone: tone ?? (big.startsWith('−') ? 'back-low' : 'back-high'), tags: [p.fan && followText(p.fan, 3), ...traitKeys(p.traits ?? 0).map(key => `${TRAIT_ICON[key]} ${t(`trait_${key}`)}`)].filter(Boolean), text: t(textKey, { period, ...vars }) });
-  const w = notable.biggestWin;
-  if (w) add('🎯', 'storyBigWinTitle', w, fmtMoney(w.biggestWin), 'storyBigWin', { week: w.biggestWinWeek + 1, stake: money(w.biggestWinStake), legs: w.biggestWinLegs, odds: fmtOdds(w.biggestWinOdds), final: fmtMoney(w.final) });
-  const best = notable.best;
-  // The biggest ticket often makes the biggest winner too, who without it
-  // would have been losing: say so when it's true.
-  const bestIsBigWin = best?.serial === w?.serial && best.final - best.biggestWin < 0;
-  if (best) add('🏆', 'storyBestTitle', best, fmtMoney(best.final), bestIsBigWin ? 'storyBestSame' : 'storyBest', { tickets: fmtCount(best.tickets), staked: money(best.staked) });
-  const fall = notable.fall;
-  if (fall) add('🎢', 'storyFallTitle', fall, `${fmtMoney(fall.peak)} → ${fmtMoney(fall.final)}`, 'storyFall', { week: fall.peakWeek + 1, peak: fmtMoney(fall.peak), final: fmtMoney(fall.final) }, 'back-low');
-  const dry = notable.drought;
-  if (dry) add('🧊', 'storyDroughtTitle', dry, t('inARow', { n: fmtCount(dry.longestLosing) }), dry.wonTickets ? 'storyDrought' : 'storyDroughtNone', { streak: fmtCount(dry.longestLosing), tickets: fmtCount(dry.tickets), won: fmtCount(dry.wonTickets) }, 'back-low');
-  const worst = notable.worst;
-  if (worst) add('💸', 'storyWorstTitle', worst, fmtMoney(worst.final), 'storyWorst', { staked: money(worst.staked), max: money(worst.maxStake), hours: fmtCount(-worst.final / ARCADE.minWage) });
-  const hot = notable.hotStreak;
-  if (hot?.longestWinning > 1) add('🔥', 'storyHotTitle', hot, t('inARowWon', { n: fmtCount(hot.longestWinning) }), 'storyHot', { tickets: fmtCount(hot.tickets), won: fmtCount(hot.wonTickets), final: fmtMoney(hot.final) });
-  const long = notable.longshot;
-  if (long?.longshotOdds > 1) add('🦄', 'storyLongshotTitle', long, `@ ${fmtOdds(long.longshotOdds)}`, 'storyLongshot', { week: long.longshotWeek + 1, stake: money(long.longshotStake), win: fmtMoney(long.longshotWin) });
-  const bad = notable.worstWeek;
-  if (bad?.worstWeek < 0) add('🌪️', 'storyBadWeekTitle', bad, fmtMoney(bad.worstWeek), 'storyBadWeek', { week: bad.worstWeekAt + 1, final: fmtMoney(bad.final) });
-  const busy = notable.mostTickets;
-  if (busy) add('🧾', 'storyBusyTitle', busy, t('ticketsN', { n: fmtCount(busy.tickets) }), 'storyBusy', { perWeek: (busy.tickets / stats.weeks).toFixed(1), staked: money(busy.staked), final: fmtMoney(busy.final) }, 'neutral');
-  const back = notable.comeback;
-  if (back) add('🦸', 'storyComebackTitle', back, `${fmtMoney(back.trough)} → ${fmtMoney(back.final)}`, 'storyComeback', { week: back.troughWeek + 1, low: fmtMoney(back.trough), final: fmtMoney(back.final) }, 'back-high');
-  const close = notable.nearMisses;
-  if (close?.nearMisses > 0) add('😣', 'storyNearMissTitle', close, t('timesN', { n: fmtCount(close.nearMisses) }), 'storyNearMiss', { n: fmtCount(close.nearMisses), tickets: fmtCount(close.tickets), final: fmtMoney(close.final) }, 'back-low');
-  const tax = notable.taxman;
-  if (tax?.taxPaid > 0) add('🏛️', 'storyTaxTitle', tax, money(tax.taxPaid), 'storyTax', { final: fmtMoney(tax.final) }, 'back-low');
-  $('sim-stories').replaceChildren(
-    ...stories.map(s =>
-      el('li', { class: 'story' }, [
-        el('div', { class: 'story-head' }, [
-          el('span', { class: 'story-icon', 'aria-hidden': 'true', text: s.icon }),
-          el('div', {}, [
-            el('p', { class: 'story-title', text: s.title }),
-            // Tapping the number opens this player's season below.
-            el('button', {
-              class: 'story-serial link-button',
-              type: 'button',
-              title: t('lookupTitle'),
-              text: s.serial,
-              onclick: () => {
-                renderLookup(s.index + 1);
-                $('lookup-result').scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }
-            })
-          ])
-        ]),
-        el('p', { class: `story-big ${s.tone}`, text: s.big }),
-        el('div', { class: 'player-tags' }, s.tags.map(tag => el('span', { class: 'habit-tag', text: tag }))),
-        el('p', { class: 'story-text', text: s.text })
-      ])
-    )
-  );
-  const truths = [];
-  if (crowd.winnings > 0) {
-    truths.push(factItem(t('truthRatio'), { v: `NT$${(crowd.losses / crowd.winnings).toLocaleString(numberLocale(), { maximumFractionDigits: 1 })}` }, t('truthRatioWhy', { n: fmtCount(SIM_PLAYERS_SHOWN), win: money(crowd.winnings), loss: money(crowd.losses) })));
-  }
-  truths.push(crowd.top1 > 0 ? factItem(t('truthTop', { period }), { v: fmtMoney(crowd.top1) }, t('truthTopWhy', { top01: fmtMoney(crowd.top01) })) : factItem(t('truthTopLosing', { period }), { v: fmtMoney(crowd.top1) }));
-  if (crowd.neverWonShare > 0) truths.push(factItem(t('truthNeverWon', { period }), { v: fmtChance(crowd.neverWonShare) }, t('truthNeverWonWhy', { n: fmtCount(crowd.neverWonShare * SIM_PLAYERS) })));
-  if (crowd.firstWonShare > 0) truths.push(factItem(t('truthFirstWin'), { v: fmtShare(crowd.firstWonLostShare) }, t('truthFirstWinWhy', { share: fmtShare(crowd.firstWonShare) })));
-  truths.push(factItem(t('truthSameOdds'), {}, t('truthSameOddsWhy')));
-  $('sim-truths').replaceChildren(...truths);
-}
-
-function drawSimChart(container, bands, characters, weeks) {
-  const t = state.t;
-  const width = Math.max(300, container.clientWidth || 600);
-  const wide = width >= 560;
-  const height = width < 520 ? 260 : 320;
-  const m = { top: 12, right: wide ? 164 : 12, bottom: 26, left: 62 };
-  const w = width - m.left - m.right;
-  const h = height - m.top - m.bottom;
-  let lo = 0;
-  let hi = 0;
-  for (const b of bands) (lo = Math.min(lo, b.q10), hi = Math.max(hi, b.q90));
-  for (const c of characters) for (const v of c.player.path) (lo = Math.min(lo, v), hi = Math.max(hi, v));
-  const step = niceStep(hi - lo || 1, 5);
-  lo = Math.floor(lo / step) * step;
-  hi = Math.ceil(hi / step) * step;
-  const x = i => m.left + ((i + 1) / weeks) * w;
-  const y = v => m.top + ((hi - v) / (hi - lo)) * h;
-
-  const svg = svgEl('svg', { viewBox: `0 0 ${width} ${height}`, role: 'img', 'aria-label': t('chartLabel', { n: fmtCount(SIM_PLAYERS_SHOWN) }) });
-  for (let v = lo; v <= hi + step / 2; v += step) {
-    svg.append(svgEl('line', { class: Math.abs(v) < step / 2 ? 'zero-line' : 'grid-line', x1: m.left, x2: m.left + w, y1: y(v), y2: y(v) }));
-    const label = svgEl('text', { class: 'tick', x: m.left - 6, y: y(v) + 4, 'text-anchor': 'end' });
-    label.textContent = fmtAxis(v);
-    svg.append(label);
-  }
-  for (const frac of [0, 0.25, 0.5, 0.75, 1]) {
-    const k = Math.round(frac * weeks);
-    const label = svgEl('text', { class: 'tick', x: m.left + frac * w, y: height - 6, 'text-anchor': frac === 0 ? 'start' : frac === 1 ? 'end' : 'middle' });
-    label.textContent = k === 0 ? t('simStart') : t('simWeekShort', { n: fmtCount(k) });
-    svg.append(label);
-  }
-  const pathOf = values => {
-    let d = `M${m.left},${y(0)}`;
-    for (let i = 0; i < weeks; i++) d += `L${x(i).toFixed(1)},${y(values[i]).toFixed(1)}`;
-    return d;
-  };
-  const areaOf = (low, high) => {
-    let d = `M${m.left},${y(0)}`;
-    for (let i = 0; i < weeks; i++) d += `L${x(i).toFixed(1)},${y(bands[i][high]).toFixed(1)}`;
-    for (let i = weeks - 1; i >= 0; i--) d += `L${x(i).toFixed(1)},${y(bands[i][low]).toFixed(1)}`;
-    return `${d}Z`;
-  };
-  svg.append(svgEl('path', { class: 'band-outer', d: areaOf('q10', 'q90') }));
-  svg.append(svgEl('path', { class: 'band-inner', d: areaOf('q25', 'q75') }));
-  const median = bands.map(b => b.q50);
-  svg.append(svgEl('path', { class: 'median', d: pathOf(median) }));
-  for (const c of [...characters].reverse()) svg.append(svgEl('path', { class: 'run-hero', style: `stroke:${c.color}`, d: pathOf(c.player.path) }));
-
-  if (wide) {
-    // Right-edge labels, nudged apart so they never overlap.
-    const labels = [
-      ...characters.map(c => ({ text: `${t(c.name)} ${fmtMoney(c.player.final)}`, value: c.player.final, color: c.color })),
-      { text: `${t('simMedianLine')} ${fmtMoney(median.at(-1))}`, value: median.at(-1), color: 'var(--text-secondary)' }
-    ]
-      .map(l => ({ ...l, y: y(l.value) }))
-      .sort((a, b) => a.y - b.y);
-    for (let i = 1; i < labels.length; i++) labels[i].y = Math.max(labels[i].y, labels[i - 1].y + 15);
-    const overflow = labels.at(-1).y - (m.top + h);
-    if (overflow > 0) for (const l of labels) l.y -= overflow;
-    for (const l of labels) {
-      const text = svgEl('text', { class: 'end-label', x: m.left + w + 8, y: l.y + 4, style: `fill:${l.color}` });
-      text.textContent = l.text;
-      svg.append(text);
-    }
-  }
-
-  const crosshair = svgEl('line', { class: 'crosshair', y1: m.top, y2: m.top + h, visibility: 'hidden' });
-  const hit = svgEl('rect', { class: 'hit', x: m.left, y: m.top, width: w, height: h, tabindex: '0', 'aria-label': t('chartLabel', { n: fmtCount(SIM_PLAYERS_SHOWN) }) });
-  svg.append(crosshair, hit);
-  const tooltip = el('div', { class: 'tooltip', hidden: '' });
-  container.replaceChildren(svg, tooltip);
-
-  let current = weeks - 1;
-  const show = i => {
-    current = Math.max(0, Math.min(weeks - 1, i));
-    const px = x(current);
-    crosshair.setAttribute('x1', px);
-    crosshair.setAttribute('x2', px);
-    crosshair.setAttribute('visibility', 'visible');
-    const row = (key, value, color) =>
-      el('div', { class: 'tooltip-row' }, [
-        el('span', {}, [color ? el('span', { class: 'legend-key thick', style: `background:${color}` }) : null, document.createTextNode(key)]),
-        el('strong', { text: value })
-      ]);
-    const b = bands[current];
-    tooltip.replaceChildren(
-      el('p', { class: 'tooltip-title', text: t('simWeekN', { n: fmtCount(current + 1) }) }),
-      ...characters.map(c => row(t(c.name), fmtMoney(c.player.path[current]), c.color)),
-      row(t('simMedianLine'), fmtMoney(b.q50), 'var(--text-secondary)'),
-      row(t('simBand80'), `${fmtAxis(b.q10)} ~ ${fmtAxis(b.q90)}`),
-      row(t('simAheadNow'), fmtShare(b.ahead / SIM_PLAYERS))
-    );
-    tooltip.hidden = false;
-    const scale = container.clientWidth / width;
-    const left = px * scale;
-    const tipWidth = tooltip.offsetWidth;
-    tooltip.style.left = `${Math.max(0, left + 12 + tipWidth > container.clientWidth ? left - tipWidth - 12 : left + 12)}px`;
-    tooltip.style.top = `${m.top * scale}px`;
-  };
-  const hide = () => {
-    crosshair.setAttribute('visibility', 'hidden');
-    tooltip.hidden = true;
-  };
-  hit.addEventListener('pointermove', event => {
-    const rect = svg.getBoundingClientRect();
-    const sx = ((event.clientX - rect.left) / rect.width) * width;
-    show(Math.round(((sx - m.left) / w) * weeks) - 1);
-  });
-  hit.addEventListener('pointerleave', hide);
-  hit.addEventListener('focus', () => show(current));
-  hit.addEventListener('blur', hide);
-  hit.addEventListener('keydown', event => {
-    const jump = Math.max(1, Math.round(weeks / 26));
-    if (event.key === 'ArrowRight') show(current + jump);
-    else if (event.key === 'ArrowLeft') show(current - jump);
-    else return;
-    event.preventDefault();
-  });
-}
-
-function renderSimTable(bands, characters, weeks) {
-  const t = state.t;
-  const rows = [];
-  const points = [...new Set(Array.from({ length: 10 }, (_, k) => Math.max(0, Math.round(((k + 1) / 10) * weeks) - 1)))];
-  for (const i of points) {
-    rows.push(
-      el('tr', {}, [
-        el('td', { text: fmtCount(i + 1) }),
-        el('td', { text: fmtMoney(bands[i].q50) }),
-        ...characters.map(c => el('td', { text: fmtMoney(c.player.path[i]) })),
-        el('td', { text: fmtShare(bands[i].ahead / SIM_PLAYERS) })
-      ])
-    );
-  }
-  $('sim-table').replaceChildren(
-    el('table', {}, [
-      el('thead', {}, el('tr', {}, [t('simTableWeek'), t('simMedianLine'), ...characters.map(c => t(c.name)), t('simAheadNow')].map(h => el('th', { text: h })))),
-      el('tbody', {}, rows)
-    ])
-  );
 }
 
 // ---- Number fields ---------------------------------------------------------------------
@@ -4158,852 +3012,6 @@ function numberField(input, { digits = 7, onEnter = null } = {}) {
     input.dispatchEvent(new Event('change', { bubbles: true }));
     onEnter ? onEnter(input.value) : input.blur();
   });
-}
-
-// ---- 小遊戲 (mini games) ------------------------------------------------------------
-
-// The games' tiles, today's winnings against the daily cap, and the game
-// being played. The game's own view is built once per round and kept, so the
-// page re-rendering (new odds, a sync) never interrupts a pitch.
-const ARCADE_ICON = { sort: '🗂️', derby: '⚾', freethrow: '🏀' };
-const ARCADE_MAX = Object.fromEntries(ARCADE.games.map(game => [game, bestRound(game)]));
-
-function renderArcade() {
-  if (!state.accountReady) return;
-  const t = state.t;
-  const earned = earnedToday(state.account);
-  const room = roomToday(state.account);
-  // Built once, then updated in place: redrawing it while a round is on
-  // restarted every animation (the money popup played again), moved the
-  // page, and could swallow a tap that landed mid-redraw.
-  let shell = state.arcadeShell;
-  if (!shell || shell.locale !== state.locale || !shell.card.isConnected) {
-    const capFill = el('div');
-    const capText = el('small', { class: 'muted' });
-    const tiles = Object.fromEntries(
-      ARCADE.games.map(game => [
-        game,
-        el('button', { class: 'arcade-tile', type: 'button', onclick: () => openGame(game) }, [
-          el('span', { class: 'arcade-icon', 'aria-hidden': 'true', text: ARCADE_ICON[game] }),
-          el('span', { class: 'arcade-name', text: t(`arcade_${game}`) }),
-          el('small', { class: 'muted', text: t(`arcadeKind_${game}`) }),
-          el('small', { class: 'arcade-max', text: t('arcadeUpTo', { v: fmtMoney(ARCADE_MAX[game], { sign: false }) }) })
-        ])
-      ])
-    );
-    const slot = el('div', { class: 'arcade-slot' });
-    const lede = el('p', { class: 'lede', text: t('arcadeIntro', { cap: fmtMoney(ARCADE.dailyCap, { sign: false }) }) });
-    const tileRow = el('div', { class: 'arcade-tiles' }, Object.values(tiles));
-    // While a game is open: its name and 收起 (fold it away) instead of the list.
-    const headName = el('strong');
-    const head = el('div', { class: 'arcade-head', hidden: '' }, [headName, el('button', { class: 'ghost-button', type: 'button', text: t('arcadeClose'), onclick: closeGame })]);
-    const card = el('div', { class: 'card arcade' }, [
-      lede,
-      el('div', { class: 'arcade-cap' }, [el('div', { class: 'arcade-cap-bar', 'aria-hidden': 'true' }, capFill), capText]),
-      head,
-      tileRow,
-      slot
-    ]);
-    shell = state.arcadeShell = { locale: state.locale, card, capFill, capText, tiles, slot, lede, tileRow, head, headName };
-    $('arcade-body').replaceChildren(card);
-  }
-  shell.capFill.style.width = `${Math.min(100, (earned / ARCADE.dailyCap) * 100)}%`;
-  shell.capText.textContent = room > 0 ? t('arcadeEarned', { v: fmtMoney(earned, { sign: false }), cap: fmtMoney(ARCADE.dailyCap, { sign: false }) }) : t('arcadeCapped');
-  for (const [game, tile] of Object.entries(shell.tiles)) tile.setAttribute('aria-pressed', String(state.arcadeGame === game));
-  const open = Boolean(state.arcadeGame);
-  shell.lede.hidden = open;
-  shell.tileRow.hidden = open;
-  shell.head.hidden = !open;
-  if (open) shell.headName.textContent = `${ARCADE_ICON[state.arcadeGame]} ${t(`arcade_${state.arcadeGame}`)}`;
-  // The game's own view goes in once; it's never moved while it runs.
-  if (shell.slot.firstChild !== state.arcadeView) shell.slot.replaceChildren(...(state.arcadeView ? [state.arcadeView] : []));
-}
-
-function openGame(game) {
-  stopGame();
-  state.arcadeGame = state.arcadeGame === game ? null : game;
-  state.roundLive = Boolean(state.arcadeGame);
-  state.arcadeView = state.arcadeGame ? { sort: sortView, derby: derbyView, freethrow: freeThrowView }[game]() : null;
-  renderArcade();
-  state.arcadeView?.focus({ preventScroll: true });
-}
-
-// Folds the open game away, back to the list (money earned so far stays).
-function closeGame() {
-  stopGame();
-  state.arcadeGame = null;
-  state.arcadeView = null;
-  state.roundLive = false;
-  renderArcade();
-  renderAccount();
-}
-
-// Timers and the animation of the running game, all stopped when it closes.
-let gameTimers = [];
-function later(fn, ms) {
-  gameTimers.push(setTimeout(fn, ms));
-}
-function stopGame() {
-  gameTimers.forEach(clearTimeout);
-  gameTimers = [];
-  cancelAnimationFrame(state.arcadeFrame ?? 0);
-}
-// Runs draw(now) every frame until it returns false or the game closes.
-function animate(draw) {
-  cancelAnimationFrame(state.arcadeFrame ?? 0);
-  const frame = now => {
-    if (draw(now) !== false) state.arcadeFrame = requestAnimationFrame(frame);
-  };
-  state.arcadeFrame = requestAnimationFrame(frame);
-}
-
-// The strip above a game: progress, the round's money so far, the streak,
-// and a moment's note of a streak bonus or a penalty.
-function gameHud(game) {
-  const t = state.t;
-  // This round's pay goes into the account as it changes (see payRound).
-  const round = roundId();
-  let banked = 0;
-  const bank = earned => {
-    if (earned === banked) return;
-    const next = payRound(state.account, round, game, earned);
-    banked = earned;
-    if (next.account !== state.account) commitAccount(next.account, { quiet: true });
-  };
-  const progress = el('div', { class: 'hud-bar', 'aria-hidden': 'true' }, el('div'));
-  const count = el('span', { class: 'hud-count' });
-  const money = el('strong', { class: 'hud-money' });
-  const streak = el('span', { class: 'hud-streak' });
-  const note = el('span', { class: 'hud-note', 'aria-live': 'polite' });
-  // The skill games' difficulty: five bars.
-  const meter = el('span', { class: 'hud-level', hidden: '' });
-  const node = el('div', { class: 'game-hud' }, [el('div', { class: 'hud-row' }, [count, meter, streak, note, money]), progress]);
-  const set = ({ done, of, earned, run, level = null }) => {
-    bank(earned);
-    if (level != null) {
-      meter.hidden = false;
-      const bars = 1 + Math.round(level * 4);
-      // Bars only (the name for screen readers): one line even on a phone.
-      meter.textContent = `${'▮'.repeat(bars)}${'▯'.repeat(5 - bars)}`;
-      meter.setAttribute('aria-label', `${t('hudLevel')} ${bars} / 5`);
-      meter.title = t('hudLevel');
-    }
-    count.textContent = t('hudCount', { n: done, of });
-    money.textContent = fmtMoney(earned, { sign: false });
-    streak.textContent = run >= 2 ? t('hudStreak', { n: run }) : '';
-    streak.classList.toggle('hot', run >= 5);
-    progress.firstChild.style.width = `${(done / of) * 100}%`;
-  };
-  // After good() or bad(): +bonus in gold, -penalty in red.
-  const flash = (amount, good) => {
-    if (!amount) return;
-    note.textContent = good ? t('hudBonus', { v: fmtMoney(amount, { sign: false }) }) : t('hudPenalty', { v: fmtMoney(amount, { sign: false }) });
-    note.className = `hud-note ${good ? 'bonus' : 'penalty'}`;
-    void note.offsetWidth;
-    note.classList.add('show');
-  };
-  return { node, set, flash, round };
-}
-
-// Each game's streak and penalty, as one line under its rules.
-function streakRule(game) {
-  const r = STREAK[game];
-  const v = x => fmtMoney(x, { sign: false });
-  if (r.ladder) return state.t('streakRuleLadder', { a: v(r.ladder[0]), b: v(r.ladder[1]), penalty: v(r.penalty) });
-  return r.penalty ? state.t('streakRule', { every: r.every, bonus: v(r.bonus), penalty: v(r.penalty) }) : state.t('streakRuleSafe', { every: r.every, bonus: v(r.bonus) });
-}
-
-// A finished round: its winnings into the account (up to today's room), then
-// what the work came to an hour against the minimum wage, and how much
-// betting loses as much on average.
-function finishRound(game, amount, box, summary, ms, score = null, round = roundId()) {
-  const t = state.t;
-  stopGame();
-  state.roundLive = false;
-  // The round's entry has been kept up to date as it went; this settles it.
-  const { account, paid } = payRound(state.account, round, game, amount);
-  if (account !== state.account) commitAccount(account);
-  else {
-    // Paid as it went: now the full redraw the round held back.
-    renderAccount();
-    renderSaved();
-  }
-  const minutes = Math.floor(ms / 60_000);
-  const seconds = Math.round((ms % 60_000) / 1000);
-  box.replaceChildren(
-    ...[
-      el('p', { class: 'arcade-result' }, [
-        document.createTextNode(summary),
-        el('strong', { class: paid > 0 ? 'back-high' : '', text: ` ${t('arcadePaid', { v: fmtMoney(paid) })}` })
-      ]),
-      score && (score.bonus || score.penalty) ? el('p', { class: 'arcade-score', text: t('scoreLine', { bonus: fmtMoney(score.bonus, { sign: false }), penalty: fmtMoney(score.penalty, { sign: false }) }) }) : null,
-      amount > paid ? el('p', { class: 'note', text: t('arcadeCapNote') }) : null,
-      el('p', { class: 'arcade-wage' }, [
-        document.createTextNode(t('arcadeWage', { m: minutes, s: seconds, work: fmtWorkMinutes(wageMinutes(paid)), wage: fmtMoney(ARCADE.minWage, { sign: false }) })),
-        paid > 0 ? el('strong', { text: ` ${t('arcadeLoss', { v: fmtMoney(paid, { sign: false }), stake: fmtMoney(stakeToLose(paid), { sign: false }) })}` }) : null
-      ]),
-      el('button', { class: 'primary-button', type: 'button', text: t('arcadeAgain'), onclick: () => ((state.arcadeGame = null), openGame(game)) })
-    ].filter(Boolean)
-  );
-  renderArcade();
-}
-
-// Minutes of work: one decimal under 10 ("3.7"), whole above.
-function fmtWorkMinutes(m) {
-  return m < 10 ? (Math.round(m * 10) / 10).toString() : fmtInt(m);
-}
-
-// A canvas drawn at the screen's pixel density, W x H in CSS pixels.
-function gameCanvas(W, H) {
-  const canvas = el('canvas', { class: 'game-canvas', width: String(W * (window.devicePixelRatio || 1)), height: String(H * (window.devicePixelRatio || 1)) });
-  const ctx = canvas.getContext('2d');
-  ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
-  return { canvas, ctx };
-}
-
-// Big text in the middle of a canvas, fading out over `life` ms.
-function drawCallout(ctx, W, text, sub, age, life = 1100, color = '#fff') {
-  if (!text || age < 0 || age > life) return;
-  const a = Math.max(0, 1 - age / life);
-  const rise = (age / life) * 12;
-  ctx.save();
-  ctx.globalAlpha = a;
-  ctx.textAlign = 'center';
-  ctx.fillStyle = color;
-  ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-  ctx.lineWidth = 4;
-  ctx.font = '800 30px system-ui, sans-serif';
-  ctx.strokeText(text, W / 2, 96 - rise);
-  ctx.fillText(text, W / 2, 96 - rise);
-  if (sub) {
-    ctx.font = '700 15px system-ui, sans-serif';
-    ctx.lineWidth = 3;
-    ctx.strokeText(sub, W / 2, 120 - rise);
-    ctx.fillText(sub, W / 2, 120 - rise);
-  }
-  ctx.restore();
-}
-
-// Bursts of confetti for the best results.
-function burst(x, y, n = 28) {
-  const colors = ['#ffd54f', '#ff7043', '#4fc3f7', '#81c784', '#f06292'];
-  return Array.from({ length: n }, (_, i) => {
-    const angle = (i / n) * Math.PI * 2;
-    const speed = 1.5 + Math.random() * 2.5;
-    return { x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 1.5, color: colors[i % colors.length], life: 900 };
-  });
-}
-function drawParticles(ctx, particles, dt) {
-  for (const p of particles) {
-    p.x += p.vx * dt * 0.06;
-    p.y += p.vy * dt * 0.06;
-    p.vy += 0.004 * dt;
-    p.life -= dt;
-    if (p.life <= 0) continue;
-    ctx.globalAlpha = Math.min(1, p.life / 400);
-    ctx.fillStyle = p.color;
-    ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
-  }
-  ctx.globalAlpha = 1;
-  return particles.filter(p => p.life > 0);
-}
-
-// 全壘打大賽: the pitch comes in from the mound; swing as it reaches the plate.
-function derbyView() {
-  const t = state.t;
-  const W = 360;
-  const H = 250;
-  const { canvas, ctx } = gameCanvas(W, H);
-  const hud = gameHud('derby');
-  const box = el('div', { class: 'arcade-actions' });
-  const mound = { x: W / 2, y: 78 };
-  const plate = { x: W / 2, y: 214 };
-  const results = [];
-  let phase = 'idle';
-  let plan = null;
-  let pitchStart = 0;
-  let swingAt = -1e9;
-  let flight = null;
-  let callout = null;
-  let particles = [];
-  let began = 0;
-  const score = scorer('derby');
-  // Difficulty follows the batter: up after a hit, down after a miss.
-  let level = ADAPT.start;
-  let last = performance.now();
-  const update = () => hud.set({ done: results.length, of: DERBY.pitches, earned: score.total, run: score.run, level });
-  // The ball along its path: p is ballAt's 0-1, the plate at DERBY.plate.
-  const ballPos = p => {
-    const k = p / DERBY.plate;
-    // A breaking ball drifts sideways more and more on its way in.
-    const drift = (plan?.breakX ?? 0) * 26 * Math.min(1.2, k) ** 2;
-    return { x: mound.x + (plate.x - mound.x) * k + drift, y: mound.y + (plate.y - mound.y) * k, r: 2.5 + 5.5 * Math.min(1.2, k) };
-  };
-  const drawField = () => {
-    // Stands and sky, the outfield grass in stripes, the infield dirt.
-    const sky = ctx.createLinearGradient(0, 0, 0, 60);
-    sky.addColorStop(0, '#0d2a4a');
-    sky.addColorStop(1, '#1d4f7a');
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, W, 60);
-    for (let i = 0; i < 40; i++) {
-      ctx.fillStyle = i % 3 ? 'rgba(255,255,255,0.08)' : 'rgba(255,214,79,0.14)';
-      ctx.fillRect((i * 37) % W, 30 + ((i * 13) % 22), 3, 3);
-    }
-    ctx.fillStyle = '#12351f';
-    ctx.fillRect(0, 52, W, 6);
-    for (let i = 0; i < 8; i++) {
-      ctx.fillStyle = i % 2 ? '#2f7d3a' : '#358a41';
-      ctx.fillRect(0, 58 + i * 25, W, 25);
-    }
-    ctx.fillStyle = '#b07a4a';
-    ctx.beginPath();
-    ctx.ellipse(W / 2, H + 30, 190, 120, 0, Math.PI, 2 * Math.PI);
-    ctx.fill();
-    ctx.fillStyle = '#a06b3c';
-    ctx.beginPath();
-    ctx.ellipse(mound.x, mound.y + 6, 26, 9, 0, 0, Math.PI * 2);
-    ctx.fill();
-    // The pitcher: a simple figure, arm up while throwing.
-    const throwing = phase === 'pitch' && performance.now() - pitchStart < 160;
-    ctx.fillStyle = '#e8eef5';
-    ctx.beginPath();
-    ctx.arc(mound.x, mound.y - 22, 5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillRect(mound.x - 5, mound.y - 16, 10, 16);
-    ctx.strokeStyle = '#e8eef5';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(mound.x + 4, mound.y - 13);
-    ctx.lineTo(mound.x + (throwing ? -8 : 11), mound.y + (throwing ? -24 : -4));
-    ctx.stroke();
-    // Home plate, the batter's boxes and the strike zone ring.
-    ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.moveTo(plate.x - 11, plate.y - 4);
-    ctx.lineTo(plate.x + 11, plate.y - 4);
-    ctx.lineTo(plate.x + 11, plate.y + 2);
-    ctx.lineTo(plate.x, plate.y + 9);
-    ctx.lineTo(plate.x - 11, plate.y + 2);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(plate.x - 52, plate.y - 26, 30, 44);
-    ctx.strokeRect(plate.x + 22, plate.y - 26, 30, 44);
-  };
-  const drawBat = now => {
-    // A right-handed batter's bat, swinging round in 160 ms.
-    const pivot = { x: plate.x - 30, y: plate.y - 6 };
-    const k = Math.min(1, (now - swingAt) / 160);
-    const angle = -2.3 + (k < 1 ? k : 1) * 2.9 * (now - swingAt < 600 ? 1 : 0);
-    ctx.strokeStyle = '#c58b4e';
-    ctx.lineCap = 'round';
-    ctx.lineWidth = 7;
-    ctx.beginPath();
-    ctx.moveTo(pivot.x, pivot.y);
-    ctx.lineTo(pivot.x + Math.cos(angle) * 58, pivot.y + Math.sin(angle) * 58);
-    ctx.stroke();
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = '#7a4f24';
-    ctx.beginPath();
-    ctx.moveTo(pivot.x, pivot.y);
-    ctx.lineTo(pivot.x + Math.cos(angle) * 14, pivot.y + Math.sin(angle) * 14);
-    ctx.stroke();
-  };
-  const drawBall = (x, y, r) => {
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.beginPath();
-    ctx.ellipse(x, y + r + 2, r, r * 0.35, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#d32f2f';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(x - r * 0.9, y, r * 0.8, -0.8, 0.8);
-    ctx.arc(x + r * 0.9, y, r * 0.8, Math.PI - 0.8, Math.PI + 0.8);
-    ctx.stroke();
-  };
-  const draw = now => {
-    const dt = Math.min(50, now - last);
-    last = now;
-    ctx.clearRect(0, 0, W, H);
-    drawField();
-    if (phase === 'pitch') {
-      const p = ballAt(plan, now - pitchStart);
-      // The timing ring lights up while the ball is in the hitting window.
-      const inWindow = Math.abs(p - DERBY.plate) <= DERBY.hit;
-      ctx.strokeStyle = inWindow ? 'rgba(255,213,79,0.95)' : 'rgba(255,213,79,0.35)';
-      ctx.lineWidth = inWindow ? 3 : 2;
-      ctx.beginPath();
-      ctx.arc(plate.x, plate.y - 10, 16, 0, Math.PI * 2);
-      ctx.stroke();
-      const b = ballPos(p);
-      drawBall(b.x, b.y, b.r);
-      if (p > 1.02) swing(true);
-    } else if (flight) {
-      const k = Math.min(1, (now - flight.start) / flight.ms);
-      const x = flight.from.x + (flight.to.x - flight.from.x) * k;
-      const y = flight.from.y + (flight.to.y - flight.from.y) * k - Math.sin(k * Math.PI) * flight.arc;
-      drawBall(x, y, Math.max(1.5, flight.r * (1 - 0.7 * k)));
-      if (k >= 1 && flight.result === 'hr' && !flight.popped) {
-        flight.popped = true;
-        particles.push(...burst(x, Math.max(20, y)));
-      }
-    }
-    drawBat(now);
-    particles = drawParticles(ctx, particles, dt);
-    if (phase === 'idle') drawCallout(ctx, W, t('derbyTitle'), t('derbyTap'), 0, 1);
-    if (callout) drawCallout(ctx, W, callout.text, callout.sub, now - callout.at, 1200, callout.color);
-    return phase !== 'done' || particles.length > 0 || (callout && now - callout.at < 1200);
-  };
-  const next = () => {
-    if (results.length === DERBY.pitches) {
-      phase = 'done';
-      const hr = results.filter(r => r === 'hr').length;
-      const hits = results.filter(r => r === 'hit').length;
-      later(() => finishRound('derby', score.total, box, t('derbyDone', { hr, hits }), performance.now() - began, score, hud.round), 900);
-      return;
-    }
-    phase = 'wait';
-    flight = null;
-    later(() => {
-      plan = pitchPlan(level);
-      phase = 'pitch';
-      pitchStart = performance.now();
-    }, 900 + Math.random() * 700);
-  };
-  function swing(late = false) {
-    const now = performance.now();
-    if (phase === 'idle') return start();
-    if (!late) swingAt = now;
-    if (phase !== 'pitch') return;
-    const p = ballAt(plan, now - pitchStart);
-    const result = late ? 'miss' : swingResult(p);
-    results.push(result);
-    if (result === 'miss') hud.flash(score.bad(), false);
-    else hud.flash(score.good(DERBY.pay[result]), true);
-    level = adapt(level, result);
-    phase = 'flight';
-    const b = ballPos(Math.min(p, 1.1));
-    const off = Math.abs(p - DERBY.plate);
-    if (result === 'hr') {
-      // Distance by how true the swing was.
-      const meters = Math.round(118 + (1 - off / DERBY.hr) * 32);
-      flight = { from: b, to: { x: W / 2 + (p - DERBY.plate) * 900, y: -30 }, arc: 90, ms: 1000, r: b.r, result };
-      callout = { text: t('derby_hr'), sub: t('derbyMeters', { m: meters }), at: now, color: '#ffd54f' };
-    } else if (result === 'hit') {
-      const side = p < DERBY.plate ? -1 : 1;
-      flight = { from: b, to: { x: W / 2 + side * (60 + Math.random() * 90), y: 95 + Math.random() * 40 }, arc: 50, ms: 800, r: b.r, result };
-      callout = { text: t('derby_hit'), sub: t('derbyMeters', { m: Math.round(35 + (1 - off / DERBY.hit) * 55) }), at: now, color: '#fff' };
-    } else {
-      flight = { from: b, to: { x: plate.x + 4, y: H + 20 }, arc: 0, ms: 250, r: b.r, result };
-      callout = { text: t(late ? 'derby_strike' : 'derby_miss'), sub: '', at: now, color: '#ff8a80' };
-    }
-    update();
-    later(next, 1300);
-  }
-  function start() {
-    began = performance.now();
-    box.replaceChildren(swingButton);
-    next();
-  }
-  canvas.addEventListener('pointerdown', event => (event.preventDefault(), swing()));
-  const swingButton = el('button', { class: 'primary-button game-big-button', type: 'button', text: t('derbySwing'), onclick: () => swing() });
-  box.append(el('button', { class: 'primary-button game-big-button', type: 'button', text: t('arcadeStart'), onclick: start }));
-  update();
-  animate(draw);
-  return el('div', { class: 'arcade-game', tabindex: '0', onkeydown: e => e.key === ' ' && (e.preventDefault(), swing()) }, [
-    el('p', { class: 'note', text: `${t('derbyRules', { n: DERBY.pitches, hr: fmtPay(DERBY.pay.hr), hit: fmtPay(DERBY.pay.hit) })} ${streakRule('derby')}` }),
-    hud.node,
-    canvas,
-    box
-  ]);
-}
-
-// 罰球: stop the sweeping marker in the green zone, and watch the shot.
-function freeThrowView() {
-  const t = state.t;
-  const W = 360;
-  const H = 250;
-  const { canvas, ctx } = gameCanvas(W, H);
-  const hud = gameHud('freethrow');
-  const box = el('div', { class: 'arcade-actions' });
-  const meter = { x: 22, y: 30, w: 16, h: 190 };
-  const rim = { x: 286, y: 92, r: 18 };
-  const hand = { x: 110, y: 186 };
-  const results = [];
-  let phase = 'idle';
-  let plan = null;
-  let aimStart = 0;
-  let shot = null;
-  let callout = null;
-  let particles = [];
-  let ripple = -1e9;
-  let began = 0;
-  const score = scorer('freethrow');
-  // Difficulty follows the shooter: up after a make, down after a miss.
-  let level = ADAPT.start;
-  let last = performance.now();
-  const update = () => hud.set({ done: results.length, of: FREE_THROW.shots, earned: score.total, run: score.run, level });
-  const drawCourt = now => {
-    const wall = ctx.createLinearGradient(0, 0, 0, 150);
-    wall.addColorStop(0, '#1b2331');
-    wall.addColorStop(1, '#2a3547');
-    ctx.fillStyle = wall;
-    ctx.fillRect(0, 0, W, 150);
-    for (let i = 0; i < 9; i++) {
-      ctx.fillStyle = i % 2 ? '#c8904f' : '#d19a58';
-      ctx.fillRect(0, 150 + i * 12, W, 12);
-    }
-    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(90, 250);
-    ctx.lineTo(130, 150);
-    ctx.stroke();
-    // Backboard, its square, the pole.
-    ctx.fillStyle = '#9aa7b8';
-    ctx.fillRect(326, 60, 6, 140);
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
-    ctx.fillRect(304, 38, 8, 70);
-    ctx.strokeStyle = '#e53935';
-    ctx.strokeRect(304, 70, 8, 22);
-    // The net: longer and swaying just after a make.
-    const sway = Math.max(0, 1 - (now - ripple) / 600);
-    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= 6; i++) {
-      const x0 = rim.x - rim.r + (i * rim.r * 2) / 6;
-      ctx.beginPath();
-      ctx.moveTo(x0, rim.y);
-      ctx.lineTo(rim.x - rim.r * 0.55 + (i * rim.r * 1.1) / 6 + Math.sin(now / 60 + i) * 3 * sway, rim.y + 26 + 8 * sway);
-      ctx.stroke();
-    }
-  };
-  const drawRim = () => {
-    ctx.strokeStyle = '#ff6d00';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.ellipse(rim.x, rim.y, rim.r, 4, 0, 0, Math.PI * 2);
-    ctx.stroke();
-  };
-  const drawBall = (x, y) => {
-    ctx.fillStyle = '#ef6c00';
-    ctx.beginPath();
-    ctx.arc(x, y, 9, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#3e2723';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x - 9, y);
-    ctx.lineTo(x + 9, y);
-    ctx.moveTo(x, y - 9);
-    ctx.lineTo(x, y + 9);
-    ctx.stroke();
-  };
-  const drawMeter = now => {
-    const zone = plan?.zone ?? shotPlan(level).zone;
-    ctx.fillStyle = 'rgba(0,0,0,0.45)';
-    ctx.fillRect(meter.x - 3, meter.y - 3, meter.w + 6, meter.h + 6);
-    ctx.fillStyle = '#e53935';
-    ctx.fillRect(meter.x, meter.y, meter.w, meter.h);
-    ctx.fillStyle = '#fdd835';
-    ctx.fillRect(meter.x, meter.y + meter.h * (0.5 - zone), meter.w, meter.h * zone * 2);
-    ctx.fillStyle = '#43a047';
-    ctx.fillRect(meter.x, meter.y + meter.h * (0.5 - zone / 2), meter.w, meter.h * zone);
-    ctx.fillStyle = '#1b5e20';
-    ctx.fillRect(meter.x, meter.y + meter.h * (0.5 - zone / 4), meter.w, (meter.h * zone) / 2);
-    if (phase === 'aim' || phase === 'flight') {
-      const m = phase === 'aim' ? markerAt(plan, now - aimStart) : shot.marker;
-      const y = meter.y + meter.h * m;
-      ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.moveTo(meter.x + meter.w + 2, y);
-      ctx.lineTo(meter.x + meter.w + 12, y - 6);
-      ctx.lineTo(meter.x + meter.w + 12, y + 6);
-      ctx.fill();
-      ctx.fillRect(meter.x - 2, y - 1.5, meter.w + 4, 3);
-    }
-  };
-  const drawShooter = () => {
-    ctx.fillStyle = '#e8eef5';
-    ctx.beginPath();
-    ctx.arc(hand.x - 22, hand.y - 26, 7, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#1565c0';
-    ctx.fillRect(hand.x - 30, hand.y - 18, 16, 28);
-    ctx.fillStyle = '#e8eef5';
-    ctx.fillRect(hand.x - 29, hand.y + 10, 5, 22);
-    ctx.fillRect(hand.x - 20, hand.y + 10, 5, 22);
-    ctx.strokeStyle = '#e8eef5';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(hand.x - 16, hand.y - 14);
-    ctx.lineTo(hand.x - 4, hand.y - 4);
-    ctx.stroke();
-  };
-  const draw = now => {
-    const dt = Math.min(50, now - last);
-    last = now;
-    ctx.clearRect(0, 0, W, H);
-    drawCourt(now);
-    drawShooter();
-    drawMeter(now);
-    if (shot) {
-      // The flight: up and over to the target, then through, off the rim, or short.
-      const k = Math.min(1, (now - shot.start) / 850);
-      const x = hand.x + (shot.target.x - hand.x) * k;
-      const y = hand.y + (shot.target.y - hand.y) * k - Math.sin(k * Math.PI) * 120;
-      if (k < 1) drawBall(x, y);
-      else {
-        const k2 = Math.min(1, (now - shot.start - 850) / 500);
-        if (shot.result !== 'miss') drawBall(rim.x + shot.drift * (1 - k2), rim.y + 8 + k2 * 70);
-        else drawBall(shot.target.x + shot.bounce * k2 * 60, shot.target.y - Math.sin(k2 * Math.PI) * 30 + k2 * 60);
-        if (!shot.landed) {
-          shot.landed = true;
-          if (shot.result !== 'miss') ripple = now;
-          if (shot.result === 'swish') particles.push(...burst(rim.x, rim.y));
-        }
-      }
-    } else if (phase !== 'done') drawBall(hand.x, hand.y);
-    drawRim();
-    particles = drawParticles(ctx, particles, dt);
-    if (phase === 'idle') drawCallout(ctx, W, t('ftTitle'), t('ftTap'), 0, 1);
-    if (callout) drawCallout(ctx, W, callout.text, callout.sub, now - callout.at, 1200, callout.color);
-    return phase !== 'done' || particles.length > 0 || (callout && now - callout.at < 1200);
-  };
-  const next = () => {
-    if (results.length === FREE_THROW.shots) {
-      phase = 'done';
-      const made = results.filter(r => r !== 'miss').length;
-      const swish = results.filter(r => r === 'swish').length;
-      later(() => finishRound('freethrow', score.total, box, t('ftDone', { made, swish }), performance.now() - began, score, hud.round), 900);
-      return;
-    }
-    shot = null;
-    plan = shotPlan(level);
-    phase = 'aim';
-    aimStart = performance.now();
-  };
-  function shoot() {
-    if (phase === 'idle') return start();
-    if (phase !== 'aim') return;
-    const now = performance.now();
-    const marker = markerAt(plan, now - aimStart);
-    const result = shotResult(marker, plan);
-    results.push(result);
-    level = adapt(level, result);
-    // The money shows once the ball lands.
-    later(() => (result === 'miss' ? hud.flash(score.bad(), false) : hud.flash(score.good(FREE_THROW.pay[result]), true), update()), 900);
-    phase = 'flight';
-    const err = marker - 0.5;
-    // Too high a mark: long (off the back of the rim); too low: short.
-    const target = result === 'miss' ? { x: rim.x + Math.sign(err) * (rim.r + 4), y: rim.y - 2 } : { x: rim.x + err * 40, y: rim.y - 2 };
-    shot = { start: now, marker, result, target, drift: err * 40, bounce: err > 0 ? 1 : -1.2 };
-    callout = { text: t(`ft_${result}`), sub: '', at: now + 850, color: result === 'swish' ? '#ffd54f' : result === 'make' ? '#fff' : '#ff8a80' };
-    update();
-    later(next, 1700);
-  }
-  function start() {
-    began = performance.now();
-    box.replaceChildren(shootButton);
-    next();
-  }
-  canvas.addEventListener('pointerdown', event => (event.preventDefault(), shoot()));
-  const shootButton = el('button', { class: 'primary-button game-big-button', type: 'button', text: t('ftShoot'), onclick: () => shoot() });
-  box.append(el('button', { class: 'primary-button game-big-button', type: 'button', text: t('arcadeStart'), onclick: start }));
-  update();
-  animate(draw);
-  return el('div', { class: 'arcade-game', tabindex: '0', onkeydown: e => e.key === ' ' && (e.preventDefault(), shoot()) }, [
-    el('p', { class: 'note', text: `${t('ftRules', { n: FREE_THROW.shots, swish: fmtPay(FREE_THROW.pay.swish), make: fmtPay(FREE_THROW.pay.make) })} ${streakRule('freethrow')}` }),
-    hud.node,
-    canvas,
-    box
-  ]);
-}
-
-// 整理彩券: a team quiz with a new question every ticket: which league or
-// which sport, from its logo or its nickname; the boxes change and reshuffle
-// each time (keys 1-4 pick them in order). Every league's teams load first.
-const SPORT_ICON = { baseball: '⚾', basketball: '🏀', football: '🏈', hockey: '🏒', soccer: '⚽' };
-function sortView() {
-  const t = state.t;
-  const hud = gameHud('sort');
-  const box = el('div', { class: 'arcade-actions' });
-  const ask = el('p', { class: 'sort-ask' });
-  const slot = el('div', { class: 'sort-slot', 'aria-live': 'polite' }, el('p', { class: 'muted', text: t('sortLoading') }));
-  const clock = el('div', { class: 'value-timer', 'aria-hidden': 'true' }, el('div'));
-  const binRow = el('div', { class: 'sort-bins' });
-  const view = el('div', { class: 'arcade-game', tabindex: '0' }, [el('p', { class: 'note', text: `${t('sortRules', { n: SORT.questions, s: SORT.seconds, total: fmtMoney(bestRound('sort'), { sign: false }) })} ${streakRule('sort')}` }), hud.node, clock, ask, slot, binRow, box]);
-  const score = scorer('sort');
-  let leagues = SORT_LEAGUES;
-  let q = null;
-  let right = 0;
-  let wrong = 0;
-  let began = 0;
-  let deadline = null;
-  let buttons = [];
-  const update = () => hud.set({ done: right + wrong, of: SORT.questions, earned: score.total, run: score.run });
-  // The ticket: the logo, the nickname, or both, as the question says.
-  const fullName = question => teamName({ en: question.team, zh: teamZh(question.league, question.team) });
-  const logoOf = question => el('img', { class: 'logo logo-lg', src: teamLogo(question.league, question.team), alt: '' });
-  const card = question => {
-    const full = fullName(question);
-    const logo = question.clue !== 'nick' ? logoOf(question) : null;
-    const text = question.clue === 'logo' ? null : el('strong', { text: question.clue === 'nick' ? question.nick : full });
-    return el('div', { class: `lotto-ticket sort-ticket clue-${question.clue}` }, [
-      el('span', { class: 'lotto-head', text: t('lottoHead') }),
-      el('span', { class: 'sort-team' }, [logo, text]),
-      el('small', { class: 'lotto-serial', text: groupCode(ticketCode()) })
-    ]);
-  };
-  const boxButton = (b, i) =>
-    el('button', { class: 'sort-bin', type: 'button', onclick: event => place(b.key, event.currentTarget) }, [
-      b.type === 'league' ? leagueImg(b.key, 'logo-tile') : el('span', { class: 'sort-bin-icon', 'aria-hidden': 'true', text: SPORT_ICON[b.key] }),
-      el('span', { text: t(b.type === 'league' ? `sport_${b.key}` : `group_${b.key}`) }),
-      el('small', { class: 'muted', text: String(i + 1) })
-    ]);
-  // Each ticket's clock: the bar empties over SORT.seconds; at zero it's a mistake.
-  const startClock = () => {
-    clearTimeout(deadline);
-    const bar = clock.firstChild;
-    bar.style.transition = 'none';
-    bar.style.width = '100%';
-    requestAnimationFrame(() => requestAnimationFrame(() => ((bar.style.transition = `width ${SORT.seconds}s linear`), (bar.style.width = '0%'))));
-    deadline = setTimeout(() => {
-      if (!began || right + wrong >= SORT.questions) return startClock();
-      wrong++;
-      hud.flash(score.bad(), false);
-      slot.firstChild?.classList.add('shake');
-      moveOn();
-    }, SORT.seconds * 1000);
-    gameTimers.push(deadline);
-  };
-  // Every question is ready before it's asked: a deck built at the start,
-  // each logo loaded, and any question whose logo or name fails swapped for
-  // a new one. More are made in the background as the deck runs low.
-  const preload = url =>
-    new Promise(resolve => {
-      if (!url) return resolve(false);
-      const img = new Image();
-      const timer = setTimeout(() => resolve(false), 6000);
-      img.onload = () => (clearTimeout(timer), resolve(img.naturalWidth > 0));
-      img.onerror = () => (clearTimeout(timer), resolve(false));
-      img.src = url;
-    });
-  const deck = [];
-  const used = new Set();
-  const fresh = () => {
-    for (let tries = 0; tries < 30; tries++) {
-      const question = sortQuestion({ leagues, last: deck.at(-1)?.team ?? q?.team });
-      if (!question || used.has(`${question.league}|${question.team}`)) continue;
-      // A name to show when the clue needs one.
-      if (question.clue !== 'logo' && !(question.clue === 'nick' ? question.nick : question.team)?.trim()) continue;
-      used.add(`${question.league}|${question.team}`);
-      return question;
-    }
-    return null;
-  };
-  // Makes `n` ready questions (swapping failures), reporting progress.
-  const fill = async (n, onProgress) => {
-    let ready = 0;
-    const one = async () => {
-      for (let tries = 0; tries < 6; tries++) {
-        const question = fresh();
-        if (!question) return;
-        if (await preload(teamLogo(question.league, question.team))) {
-          deck.push(question);
-          onProgress?.(++ready, n);
-          return;
-        }
-      }
-    };
-    await Promise.all(Array.from({ length: n }, one));
-  };
-  let filling = null;
-  const next = async () => {
-    if (!deck.length) await (filling ?? fill(5));
-    if (deck.length < 8 && !filling) filling = fill(15).finally(() => (filling = null));
-    q = deck.shift();
-    if (!q) return;
-    ask.textContent = t(`sortAsk_${q.kind}`);
-    slot.replaceChildren(card(q));
-    buttons = q.boxes.map(boxButton);
-    binRow.replaceChildren(...buttons);
-    update();
-    startClock();
-  };
-  // After a wrong or late answer: no answer shown (it's a quiz, not a lesson),
-  // a moment to see the mistake, then the next question.
-  const moveOn = () => {
-    q = { ...q, done: true };
-    later(advance, 650);
-  };
-  // The next question, or the end of the round once every one is answered.
-  const advance = () => {
-    if (right + wrong < SORT.questions) return next();
-    clearTimeout(deadline);
-    binRow.remove();
-    clock.remove();
-    ask.remove();
-    slot.remove();
-    finishRound('sort', score.total, box, t('sortDone', { n: right, of: SORT.questions }), performance.now() - began, score, hud.round);
-  };
-  const place = (key, button) => {
-    if (!q || q.done || right + wrong >= SORT.questions) return;
-    began ||= performance.now();
-    const current = slot.firstChild;
-    if (key === q.answer) {
-      right++;
-      clearTimeout(deadline);
-      q = { ...q, done: true };
-      hud.flash(score.good(SORT.pay), true);
-      button.classList.add('flash');
-      current?.classList.add('fly', `fly-${q.boxes.findIndex(b => b.key === key)}`);
-      update();
-      later(advance, 160);
-    } else {
-      // Wrong: it costs a little, the right box lights up, then the next question.
-      wrong++;
-      hud.flash(score.bad(), false);
-      clearTimeout(deadline);
-      button.classList.add('wrong');
-      current?.classList.add('shake');
-      moveOn();
-      update();
-    }
-  };
-  view.addEventListener('keydown', e => {
-    const i = Number(e.key) - 1;
-    if (q && i >= 0 && i < q.boxes.length) place(q.boxes[i].key, buttons[i]);
-  });
-  Promise.all(SORT_LEAGUES.map(league => loadLeagueTeams(league).catch(() => false)))
-    .then(ok => {
-      leagues = SORT_LEAGUES.filter((_, i) => ok[i]);
-      return fill(SORT.questions + 4, (done, n) => slot.replaceChildren(el('p', { class: 'muted', text: t('sortPreparing', { n: done, of: n }) })));
-    })
-    .then(() => {
-      // Ready: the round (and its clock) starts when the player says so.
-      slot.replaceChildren(el('p', { class: 'muted', text: t('sortReady') }));
-      box.replaceChildren(
-        el('button', {
-          class: 'primary-button game-big-button',
-          type: 'button',
-          text: t('arcadeStart'),
-          onclick: () => {
-            box.replaceChildren();
-            began = performance.now();
-            next();
-          }
-        })
-      );
-    });
-  update();
-  return view;
 }
 
 function renderF1() {
@@ -5034,7 +3042,26 @@ function renderF1() {
           notes: [t('f1PodiumNote')],
           rows: (b, i) => entryRow(b, i, driverBadge(b), b.driver.team)
         })
-      : null
+      : null,
+    ...[
+      ['f1top6', 'f1Top6', 'f1Top6Sub'],
+      ['f1top10', 'f1Top10', 'f1Top10Sub'],
+      ['f1h2h', 'f1H2H', 'f1H2HSub'],
+      ['f1team', 'f1Team', 'f1TeamSub']
+    ].map(([kind, title, sub]) => {
+      const list = state.bets.filter(b => b.kind === kind);
+      if (!list.length) return null;
+      return board({
+        emblem: 'f1',
+        title: `${f1.title} · ${t(title)}`,
+        sub: t(sub),
+        bets: list,
+        id: kind,
+        shown: 8,
+        notes: [t('f1PodiumNote')],
+        rows: (b, i) => (kind === 'f1team' ? entryRow(b, i, constructorBadge(b.team), '') : entryRow(b, i, driverBadge(b), kind === 'f1h2h' ? `vs ${b.rivalLabel}` : b.driver.team))
+      });
+    })
   );
 }
 
@@ -5069,8 +3096,8 @@ function renderAll() {
   renderGames();
   renderFutures();
   renderParlay();
-  renderSim();
   renderF1();
+  if (state.tab === 'home') renderHome(homeCtx());
   renderAccount();
   renderSaved();
   warmImages();
@@ -5260,8 +3287,6 @@ async function load() {
       renderAll();
       openWantedGame();
       saveSnapshot();
-      // Opened on the simulator: the page opens once its simulation is ready.
-      if (state.tab === 'sim') await renderSim();
       await within(imagesReady($('panel-' + state.tab)), BOOT_IMAGES_MS);
       clearTimeout(limit);
       open();
@@ -5303,16 +3328,16 @@ async function load() {
 
 // ---- Tabs ---------------------------------------------------------------------
 
-const TABS = ['games', 'slip', 'history', 'sim', 'math'];
+const TABS = ['home', 'games', 'lottery', 'slip', 'history'];
 
 function tabAvailable(tab) {
-  if (!state.data) return tab === 'games' || tab === 'math' || tab === 'history';
+  if (!state.data) return tab !== 'slip';
   return true;
 }
 
 function renderTabs() {
   const t = state.t;
-  if (!tabAvailable(state.tab)) state.tab = 'games';
+  if (!tabAvailable(state.tab)) state.tab = 'home';
   const legs = state.parlay.length;
   const badge = $('tab-slip').querySelector('.tab-badge');
   badge.hidden = legs === 0;
@@ -5338,39 +3363,6 @@ function periodName(weeks) {
   return [y ? part(y, 'periodYear', 'periodYears') : '', m ? part(m, 'periodMonth', 'periodMonths') : ''].filter(Boolean).join(' ');
 }
 
-// Quick picks under the period slider.
-const PERIOD_PRESETS = [1, 6, 12, 24, 36, 60];
-
-// The period: a slider by the month up to 5 years, and a few quick picks.
-// The label follows the slider as it moves; the simulation runs on release.
-function renderPeriods() {
-  const weeks = Number($('sim-weeks').value);
-  const months = PERIOD_MONTHS[MONTH_WEEKS.indexOf(weeks)];
-  $('sim-months').value = String(months);
-  $('period-value').textContent = periodName(weeks);
-  $('sim-periods').replaceChildren(
-    ...PERIOD_PRESETS.map(m =>
-      el('button', {
-        type: 'button',
-        'aria-pressed': String(m === months),
-        text: periodName(monthWeeks(m)),
-        onclick: () => setPeriod(m)
-      })
-    )
-  );
-}
-
-function setPeriod(months) {
-  $('sim-weeks').value = String(monthWeeks(months));
-  renderPeriods();
-  renderSim();
-}
-
-// The nearest period the simulation records.
-const snapMonths = m => PERIOD_MONTHS.reduce((best, x) => (Math.abs(x - m) < Math.abs(best - m) ? x : best));
-$('sim-months').addEventListener('input', event => ($('period-value').textContent = periodName(monthWeeks(snapMonths(Number(event.target.value))))));
-$('sim-months').addEventListener('change', event => setPeriod(snapMonths(Number(event.target.value))));
-
 // Everything opened on a tab folds back when you leave it (a game's 更多玩法,
 // every folding card), so coming back starts tidy, not where you left off.
 function collapseAll() {
@@ -5393,8 +3385,8 @@ function showTab(tab) {
   } catch {}
   renderTabs();
   window.scrollTo({ top: 0 });
-  // The chart sizes itself to its container, which is hidden until now.
-  if (tab === 'sim' && state.data) renderSim();
+  if (tab === 'home') renderHome(homeCtx());
+  if (tab === 'lottery') lotteryUi?.render();
   if (tab === 'history') {
     checkResults();
     renderStats();
@@ -5456,7 +3448,6 @@ window.addEventListener('resize', () => {
   resizeTimer = setTimeout(() => {
     if (window.innerWidth === lastWidth) return;
     lastWidth = window.innerWidth;
-    if (state.data) renderSim();
   }, 150);
 });
 
@@ -5466,10 +3457,10 @@ window.addEventListener('resize', () => {
   const phone = matchMedia('(max-width: 720px)');
   const place = () => {
     const into = phone.matches ? $('mobile-bar') : document.querySelector('.appbar-inner');
-    if (phone.matches) into.append($('status'), $('refresh'));
+    if (phone.matches) into.append($('status'), $('account-slot'), $('refresh'));
     else {
       document.querySelector('.brand-text').append($('status'));
-      into.append($('refresh'));
+      into.append($('account-slot'), $('refresh'));
     }
   };
   place();
@@ -5512,34 +3503,55 @@ if ('ResizeObserver' in window) {
     }
     if (found.size) fitNumbers([...found]);
   });
-  for (const id of ['panel-slip', 'panel-sim']) watch.observe($(id), { childList: true, subtree: true, characterData: true });
+  for (const id of ['panel-slip', 'panel-history']) watch.observe($(id), { childList: true, subtree: true, characterData: true });
 }
 
 // Tells the page's failsafe (in index.html) that the scripts loaded and started.
 window.__oddsStarted = true;
 // Phones and tablets: from the home screen only. Always the newest deploy.
-installGate('odds', state.locale);
-watchUpdates({ current: document.querySelector('meta[name="build-version"]')?.content, key: 'oddsStudy', cachePrefix: 'quadra-odds-', busy: () => state.roundLive });
-state.account = newAccount();
-state.sync = { ...state.sync, code: loadSyncCode() };
-if (onPass()) state.wallet = cachedWallet(state.sync.code);
+const gated = installGate('odds', state.locale);
+watchUpdates({ current: document.querySelector('meta[name="build-version"]')?.content, key: 'oddsStudy', cachePrefix: 'quadra-odds-' });
 renderStatic();
 renderTabs();
-// The saved account is compressed, so it opens a moment after the page.
-loadAccount().then(account => {
-  state.account = account;
+$('account-slot').append(accountButton(q));
+q.on('wallet', wallet => {
+  state.wallet = wallet;
+  renderAccount();
+  renderParlay();
+});
+q.on('active', live => {
+  if (!live) return;
+  syncNow();
+  if (state.data) checkResults(true);
+});
+
+// What the home tab and the lottery need from here.
+function homeCtx() {
+  return { state, q, el, fmtMoney, fmtOdds, fmtTime, pickTitle, gameSeries, matchupText, logoImg, leagueImg, toggleLeg, showTab, openGame: id => ((state.wantedGame = id), openWantedGame()), betKeys, track, funds };
+}
+lotteryUi = mountLottery({ state, q, el, fmtMoney, funds, commitAccount, track, getAccount: () => state.account, syncNow });
+
+async function boot() {
+  const first = await q.start();
+  state.wallet = q.wallet;
+  const loading = load();
+  state.account = await loadAccount();
   state.accountReady = true;
+  if (first && !first.offline) await mergeFirst(first);
+  if (!state.account) {
+    state.account = freshAccount();
+    saveAccountLocal();
+  }
   applyGrant();
   renderAccount();
   renderSaved();
-  // An old one-app code becomes a Quadra Pass by itself (one kind of code, everywhere).
-  if (state.sync.code && !onPass()) moveToPass();
-  else syncNow();
-  if (state.data) checkResults();
-});
-load().then(() => {
-  if (state.accountReady) checkResults();
-});
+  lotteryUi.render();
+  syncNow();
+  await loading;
+  checkResults();
+  if (state.tab === 'home') renderHome(homeCtx());
+}
+if (!gated) boot();
 // Open slips with games in play update every 30 seconds while 紀錄 is on screen.
 setInterval(() => {
   if (document.visibilityState === 'visible' && state.tab === 'history' && state.data) checkResults();
