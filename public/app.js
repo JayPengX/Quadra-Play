@@ -2972,7 +2972,7 @@ function renderAll() {
 // it opens with whatever has arrived.
 const BOOT_LIMIT_MS = 45_000;
 const BOOT_PART_MS = 6_000;
-const BOOT_IMAGES_MS = 4_000;
+const BOOT_IMAGES_MS = 1_200;
 const within = (promise, ms, fallback) => Promise.race([Promise.resolve(promise).catch(() => fallback), new Promise(resolve => setTimeout(() => resolve(fallback), ms))]);
 // Every picture on screen in `root` loaded (or failed): no logo pops in as
 // the page opens. Pictures further down wait for their turn (lazy), then
@@ -3025,7 +3025,7 @@ function warmImages() {
 // swaps in today's odds when they arrive (bets wait for those). Tied to
 // this deploy, so a new version never opens on an old one's data.
 const SNAPSHOT_KEY = 'oddsStudy.board';
-const SNAPSHOT_MAX_AGE_MS = 6 * 3_600_000;
+const SNAPSHOT_MAX_AGE_MS = 24 * 3_600_000;
 const buildVersion = () => document.querySelector('meta[name="build-version"]')?.content || 'dev';
 function readSnapshot() {
   try {
@@ -3135,10 +3135,16 @@ async function load() {
     };
     let gamesIn = false;
     if (booting) {
-      // Drawn behind the loading screen now, so the main games' logos load
-      // while the other leagues and the games in play arrive.
+      // The page opens as soon as the main board is drawn (it used to wait
+      // up to 6 s more for the other leagues and the games in play, and 4 s
+      // for the logos: Play opened about twice as slowly as the other
+      // apps). Those join a moment later, a short wait for the logos first
+      // so they don't pop in.
       renderAll();
-      // The first screen: every league's games and the games in play.
+      openWantedGame();
+      await within(imagesReady($('panel-' + state.tab)), BOOT_IMAGES_MS);
+      clearTimeout(limit);
+      open();
       const [games] = await Promise.all([within(extraGames, BOOT_PART_MS, null), within(refreshLive(), BOOT_PART_MS)]);
       if (games) {
         addGames(games);
@@ -3147,9 +3153,6 @@ async function load() {
       renderAll();
       openWantedGame();
       saveSnapshot();
-      await within(imagesReady($('panel-' + state.tab)), BOOT_IMAGES_MS);
-      clearTimeout(limit);
-      open();
     } else {
       renderAll();
       openWantedGame();

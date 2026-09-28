@@ -398,29 +398,39 @@ export function mountLottery(ctx) {
     if (!ticket) return;
     const c = CARDS[ticket.card];
     const f = face(ticket.card, ticket.gross ?? ticket.prize, ticket.seed);
+    const pays = facePays(ticket.card, f);
     const dialog = el('dialog', { class: 'q-sheet lotto-sheet', style: `--lotto:${c.color}` });
+    const result = el('div', { class: 'sc-result', role: 'status' }, [el('span', { text: t('scratchHint') })]);
     const done = () => {
       if (ctx.getAccount().tickets.find(x => x.id === ticketId)?.status === 'open') {
         ctx.commitAccount(revealScratch(ctx.getAccount(), ticketId));
         ctx.syncNow();
+        if (pays) navigator.vibrate?.([30, 40, 60]);
       }
-      result.textContent = facePays(ticket.card, f) ? `${t('youWon')} ${money(facePays(ticket.card, f))}` : t('noWin');
-      result.className = `scratch-result ${facePays(ticket.card, f) ? 'won' : ''}`;
+      ticketEl.classList.add('revealed');
+      result.className = `sc-result ${pays ? 'won' : 'lost'}`;
+      result.replaceChildren(...[pays ? el('span', { class: 'sc-result-icon', text: '🎉' }) : null, el('strong', { text: pays ? t('youWon') : t('noWin') }), pays ? el('strong', { class: 'sc-result-amount num', text: money(pays) }) : null].filter(Boolean));
     };
-    const result = el('p', { class: 'scratch-result', text: t('scratchHint') });
-    const cardFace = faceEl(ticket.card, f);
-    const wrap = el('div', { class: 'scratch-wrap' }, [cardFace]);
-    const canvas = el('canvas', { class: 'scratch-cover' });
+    const wrap = el('div', { class: 'sc-play' }, [faceEl(ticket.card, f)]);
+    const canvas = el('canvas', { class: 'scratch-cover', 'aria-label': t('scratchHint') });
     wrap.append(canvas);
+    // The ticket: a band in the card's colour, the play area under silver.
+    const ticketEl = el('div', { class: 'sc-ticket' }, [
+      el('div', { class: 'sc-band' }, [
+        el('div', { class: 'sc-band-text' }, [el('small', { text: `QUADRA · ${t('scratch')}` }), el('strong', { text: c[lang] })]),
+        el('div', { class: 'sc-band-prize' }, [el('small', { text: t('top', { v: '' }).trim() }), el('strong', { class: 'num', text: compactMoney(topPrize(ticket.card), lang) })])
+      ]),
+      wrap,
+      el('p', { class: 'sc-how', text: c.how[lang] })
+    ]);
     const close = () => {
       dialog.close();
       dialog.remove();
       render();
     };
     dialog.append(
-      el('div', { class: 'q-sheet-head' }, [el('h2', { text: `${c[lang]} · ${money(c.price)}` }), el('button', { class: 'q-close', type: 'button', text: '×', onclick: close })]),
-      el('p', { class: 'lotto-sub', text: c.how[lang] }),
-      wrap,
+      el('div', { class: 'q-sheet-head' }, [el('h2', { text: `${c[lang]} · ${money(c.price)}` }), el('button', { class: 'q-close', type: 'button', text: '×', 'aria-label': 'close', onclick: close })]),
+      ticketEl,
       result,
       el('div', { class: 'lotto-buybar' }, [
         el('button', { class: 'q-btn', type: 'button', text: t('scratchAll'), onclick: () => (clearCover(canvas), done()) }),
@@ -433,66 +443,112 @@ export function mountLottery(ctx) {
     if (ticket.status !== 'open') {
       canvas.remove();
       done();
-    } else requestAnimationFrame(() => scratchable(canvas, wrap, done));
+    } else scratchable(canvas, wrap, done);
   }
 
+  // Amounts inside a card's spots: short ($2萬, $1,000).
+  const spotMoney = v => compactMoney(v, lang).replace('NT$', '$');
   function faceEl(id, f) {
     if (f.kind === 'symbol')
       return el('div', { class: 'scratch-face symbol' }, [
         f.mult ? el('div', { class: 'scratch-mult', text: t('mult', { m: f.mult }) }) : null,
-        el('div', { class: 'scratch-spots' }, f.spots.map(s => el('div', { class: `spot${s.win ? ' win' : ''}` }, [el('span', { class: 'spot-sym', text: s.s }), el('small', { class: 'num', text: money(s.a) })])))
+        el('div', { class: 'scratch-spots' }, f.spots.map(s => el('div', { class: `spot${s.win ? ' win' : ''}` }, [el('span', { class: 'spot-sym', text: s.s }), el('small', { class: 'num', text: spotMoney(s.a) })])))
       ]);
-    if (f.kind === 'match3') return el('div', { class: 'scratch-face match3' }, f.cells.map(a => el('div', { class: 'spot' }, [el('strong', { class: 'num', text: money(a) })])));
+    if (f.kind === 'match3') return el('div', { class: 'scratch-face match3' }, f.cells.map(a => el('div', { class: `spot${f.cells.filter(x => x === a).length === 3 ? ' win' : ''}` }, [el('strong', { class: 'num', text: spotMoney(a) })])));
     if (f.kind === 'numbers')
       return el('div', { class: 'scratch-face numbers' }, [
-        el('p', { class: 'lotto-h', text: t('winNumbers') }),
-        el('div', { class: 'balls' }, f.winning.map(n => ball(n, 'special'))),
-        el('p', { class: 'lotto-h', text: t('yourNumbers') }),
-        el('div', { class: 'scratch-spots yours' }, f.yours.map(y => el('div', { class: `spot${f.winning.includes(y.n) ? ' win' : ''}` }, [el('strong', { text: String(y.n).padStart(2, '0') }), el('small', { class: 'num', text: money(y.a) })])))
+        el('p', { class: 'sc-h', text: t('winNumbers') }),
+        el('div', { class: 'sc-winning' }, f.winning.map(n => el('span', { class: 'sc-win-num num', text: String(n).padStart(2, '0') }))),
+        el('p', { class: 'sc-h', text: t('yourNumbers') }),
+        el('div', { class: 'scratch-spots yours' }, f.yours.map(y => el('div', { class: `spot${f.winning.includes(y.n) ? ' win' : ''}` }, [el('strong', { class: 'num', text: String(y.n).padStart(2, '0') }), el('small', { class: 'num', text: spotMoney(y.a) })])))
       ]);
     if (f.kind === 'bingo') {
       const called = new Set(f.called);
       return el('div', { class: 'scratch-face bingo' }, [
         el('div', { class: 'bingo-grid' }, f.grid.flatMap(row => row.map(n => el('div', { class: `bcell${!n || called.has(n) ? ' hit' : ''}`, text: n ? String(n) : '★' })))),
-        el('p', { class: 'lotto-h', text: `${t('called')} · ${money(CARDS[id].price * 2)}+` }),
-        el('div', { class: 'called' }, f.called.map(n => el('span', { text: String(n) })))
+        el('p', { class: 'sc-h', text: `${t('called')} · ${money(CARDS[id].price * 2)}+` }),
+        el('div', { class: 'called' }, f.called.map(n => el('span', { class: 'num', text: String(n) })))
       ]);
     }
     return el('div');
   }
 
-  // The silver layer: scratched away with a finger or the mouse; mostly gone
-  // (55%), it clears and the card pays.
+  // The silver layer over the play area: scratched away with a finger or the
+  // mouse; mostly gone (55%), it clears and the card pays. Sized to the play
+  // area once it's laid out (and again if that changes before a scratch).
   function scratchable(canvas, wrap, done) {
-    const rect = wrap.getBoundingClientRect();
     const ratio = window.devicePixelRatio || 1;
-    canvas.width = rect.width * ratio;
-    canvas.height = rect.height * ratio;
-    const g = canvas.getContext('2d');
-    g.scale(ratio, ratio);
-    const grad = g.createLinearGradient(0, 0, rect.width, rect.height);
-    grad.addColorStop(0, '#d1d5db');
-    grad.addColorStop(0.5, '#9ca3af');
-    grad.addColorStop(1, '#d1d5db');
-    g.fillStyle = grad;
-    g.fillRect(0, 0, rect.width, rect.height);
-    g.fillStyle = 'rgba(255,255,255,.55)';
-    g.font = '600 15px system-ui';
-    g.textAlign = 'center';
-    g.fillText(t('scratchHint'), rect.width / 2, rect.height / 2);
-    g.globalCompositeOperation = 'destination-out';
-    let down = false;
+    let g = null;
+    let touched = false;
     let finished = false;
-    const scratch = e => {
-      if (!down || finished) return;
-      const r = canvas.getBoundingClientRect();
+    let down = false;
+    let last = null;
+    const paint = () => {
+      const w = wrap.clientWidth;
+      const h = wrap.clientHeight;
+      if (!w || !h) return;
+      canvas.width = Math.round(w * ratio);
+      canvas.height = Math.round(h * ratio);
+      g = canvas.getContext('2d');
+      g.setTransform(ratio, 0, 0, ratio, 0, 0);
+      g.globalCompositeOperation = 'source-over';
+      const grad = g.createLinearGradient(0, 0, w, h);
+      grad.addColorStop(0, '#e5e7eb');
+      grad.addColorStop(0.25, '#a8adb6');
+      grad.addColorStop(0.5, '#f3f4f6');
+      grad.addColorStop(0.75, '#9ca3af');
+      grad.addColorStop(1, '#d1d5db');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, w, h);
+      // A faint pattern and sparkle, like foil.
+      g.save();
+      g.globalAlpha = 0.14;
+      g.fillStyle = '#374151';
+      g.font = '800 12px system-ui, sans-serif';
+      g.rotate(-0.35);
+      for (let y = -h; y < h * 2; y += 26) for (let x = -w; x < w * 2; x += 70) g.fillText('QUADRA', x + ((y / 26) % 2) * 35, y);
+      g.restore();
+      for (let i = 0; i < 90; i++) {
+        g.fillStyle = `rgba(255,255,255,${0.25 + Math.random() * 0.5})`;
+        g.fillRect(Math.random() * w, Math.random() * h, 1.5, 1.5);
+      }
+      // The badge in the middle.
+      const text = t('scratchHint');
+      g.font = '800 15px system-ui, sans-serif';
+      const tw = g.measureText(text).width + 36;
+      g.fillStyle = getComputedStyle(wrap).getPropertyValue('--lotto').trim() || '#6b7280';
       g.beginPath();
-      g.arc(e.clientX - r.left, e.clientY - r.top, 20, 0, Math.PI * 2);
+      g.roundRect((w - tw) / 2, h / 2 - 20, tw, 40, 20);
       g.fill();
+      g.fillStyle = '#fff';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(`🪙 ${text}`, w / 2, h / 2 + 1);
+      g.globalCompositeOperation = 'destination-out';
+      g.lineCap = 'round';
+      g.lineJoin = 'round';
+      g.lineWidth = 42;
+    };
+    const ro = new ResizeObserver(() => !touched && paint());
+    ro.observe(wrap);
+    requestAnimationFrame(paint);
+    const point = e => {
+      const r = canvas.getBoundingClientRect();
+      return [e.clientX - r.left, e.clientY - r.top];
+    };
+    // Strokes, not dots, so a quick swipe leaves no gaps.
+    const scratch = e => {
+      if (!down || finished || !g) return;
       e.preventDefault();
+      const [x, y] = point(e);
+      g.beginPath();
+      g.moveTo(...(last || [x, y]));
+      g.lineTo(x, y);
+      g.stroke();
+      last = [x, y];
     };
     const check = () => {
-      if (finished) return;
+      if (finished || !g) return;
       const data = g.getImageData(0, 0, canvas.width, canvas.height).data;
       let clear = 0;
       let n = 0;
@@ -502,14 +558,21 @@ export function mountLottery(ctx) {
       }
       if (clear / n > 0.55) {
         finished = true;
+        ro.disconnect();
         clearCover(canvas);
         done();
       }
     };
-    canvas.addEventListener('pointerdown', e => ((down = true), canvas.setPointerCapture(e.pointerId), scratch(e)));
+    canvas.addEventListener('pointerdown', e => {
+      touched = true;
+      down = true;
+      last = null;
+      canvas.setPointerCapture(e.pointerId);
+      scratch(e);
+    });
     canvas.addEventListener('pointermove', scratch);
-    canvas.addEventListener('pointerup', () => ((down = false), check()));
-    canvas.addEventListener('pointercancel', () => (down = false));
+    canvas.addEventListener('pointerup', () => ((down = false), (last = null), check()));
+    canvas.addEventListener('pointercancel', () => ((down = false), (last = null)));
   }
   const clearCover = canvas => {
     canvas.style.transition = 'opacity .35s';

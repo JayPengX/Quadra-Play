@@ -126,11 +126,11 @@ h1 { font-size: 1.1rem; letter-spacing: -0.01em; line-height: 1.2; }
 
 /* Phones: tabs become a bottom navigation bar. */
 @media (max-width: 720px) {
-  :root { --bottom-nav: calc(62px + env(safe-area-inset-bottom)); }
+  :root { --bottom-nav: calc(62px + max(env(safe-area-inset-bottom), var(--q-safe-bottom, 0px))); }
   /* A backdrop filter would make the app bar the fixed tab bar's container. */
   .appbar { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--surface); }
   .tabs {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; border-radius: 0; padding: 4px 6px calc(4px + env(safe-area-inset-bottom));
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; border-radius: 0; padding: 6px 8px calc(6px + max(env(safe-area-inset-bottom), var(--q-safe-bottom, 0px)));
     background: var(--bar-bg); backdrop-filter: saturate(1.6) blur(14px); -webkit-backdrop-filter: saturate(1.6) blur(14px);
     border-top: 1px solid var(--border);
   }
@@ -1173,24 +1173,43 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .lotto-msg { margin: 8px 0 0; color: var(--good); font-weight: 650; text-align: center; }
 
 .scratch-pending { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.scratch-wrap { position: relative; overflow: hidden; border-radius: 18px; background: linear-gradient(160deg, color-mix(in srgb, var(--lotto) 20%, var(--q-surface)), var(--q-surface)); border: 2px solid var(--lotto); }
-.scratch-cover { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; }
-.scratch-face { display: grid; gap: 8px; padding: 16px; min-height: 220px; }
+.scratch-cover { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; border-radius: inherit; }
+/* A scratch card: a band in the card's colour, the play area under foil. */
+.sc-ticket { overflow: hidden; border-radius: 20px; background: var(--q-surface); box-shadow: 0 18px 40px -22px var(--lotto), 0 0 0 2px var(--lotto); }
+.sc-band { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 16px; color: #fff; background: linear-gradient(120deg, var(--lotto), color-mix(in srgb, var(--lotto) 60%, #000)); }
+.sc-band-text, .sc-band-prize { display: grid; gap: 1px; min-width: 0; }
+.sc-band-prize { text-align: right; }
+.sc-band small { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; opacity: 0.85; }
+.sc-band strong { font-size: 1.15rem; font-weight: 900; white-space: nowrap; }
+.sc-play { position: relative; margin: 12px; border-radius: 14px; background: color-mix(in srgb, var(--lotto) 8%, var(--q-surface)); border: 1.5px dashed color-mix(in srgb, var(--lotto) 45%, transparent); }
+.sc-how { margin: 0; padding: 0 16px 14px; font-size: 0.78rem; color: var(--text-muted); line-height: 1.45; }
+.scratch-face { display: grid; gap: 8px; padding: 12px; min-height: 200px; box-sizing: border-box; }
 .scratch-mult { justify-self: start; padding: 4px 10px; border-radius: 999px; background: var(--lotto); color: #fff; font-weight: 800; }
-.scratch-spots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.scratch-spots.yours { grid-template-columns: repeat(5, 1fr); }
-.scratch-face.match3 { grid-template-columns: repeat(3, 1fr); }
-.spot { display: grid; justify-items: center; align-content: center; gap: 2px; min-height: 64px; padding: 6px 2px; border-radius: 12px; background: var(--q-surface); text-align: center; }
-.spot small { font-size: 0.7rem; color: var(--text-muted); white-space: nowrap; }
-.spot strong { font-size: 0.86rem; white-space: nowrap; }
-.spot-sym { font-size: 1.6rem; font-weight: 900; color: var(--lotto); }
-.spot.win { outline: 2px solid var(--lotto); }
-.bingo-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
-.bcell { display: grid; place-items: center; aspect-ratio: 1; border-radius: 8px; background: var(--q-surface); font-weight: 700; font-size: 0.84rem; }
-.bcell.hit { background: var(--lotto); color: #fff; }
+.scratch-spots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.scratch-spots.yours { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
+.scratch-face.match3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.spot { display: grid; justify-items: center; align-content: center; gap: 2px; min-width: 0; min-height: 58px; padding: 6px 2px; border-radius: 12px; background: var(--q-surface); box-shadow: inset 0 0 0 1px var(--q-border); text-align: center; }
+.scratch-spots.yours .spot { min-height: 48px; padding: 4px 1px; }
+.spot small { font-size: 0.68rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.spot strong { font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.spot-sym { font-size: 1.6rem; font-weight: 900; color: var(--lotto); line-height: 1.1; }
+.sc-ticket.revealed .spot.win { background: var(--lotto); box-shadow: none; animation: sc-win 0.6s ease-out 2; }
+.sc-ticket.revealed .spot.win, .sc-ticket.revealed .spot.win small, .sc-ticket.revealed .spot.win .spot-sym { color: #fff; }
+@keyframes sc-win { 50% { transform: scale(1.08); } }
+.sc-h { margin: 2px 0 0; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; color: var(--text-secondary); }
+.sc-winning { display: flex; gap: 8px; }
+.sc-win-num { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--lotto); color: #fff; font-weight: 900; }
+.bingo-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.bcell { display: grid; place-items: center; aspect-ratio: 1; border-radius: 8px; background: var(--q-surface); box-shadow: inset 0 0 0 1px var(--q-border); font-weight: 700; font-size: 0.84rem; }
+.bcell.hit { background: var(--lotto); color: #fff; box-shadow: none; }
 .called { display: flex; flex-wrap: wrap; gap: 4px; font-size: 0.74rem; color: var(--text-muted); }
-.scratch-result { margin: 12px 0 0; text-align: center; font-weight: 700; color: var(--text-secondary); }
-.scratch-result.won { color: var(--good); font-size: 1.2rem; }
+.called span { padding: 2px 6px; border-radius: 6px; background: var(--q-surface); }
+.sc-result { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px; margin: 12px 0 0; padding: 8px 14px; border-radius: 16px; text-align: center; font-weight: 700; color: var(--text-secondary); }
+.sc-result.won { background: color-mix(in srgb, var(--good) 12%, transparent); color: var(--good); animation: sc-pop 0.4s ease-out; }
+.sc-result.lost { background: var(--surface-sunken); }
+.sc-result-icon { font-size: 1.6rem; }
+.sc-result-amount { font-size: 1.4rem; font-weight: 900; }
+@keyframes sc-pop { from { transform: scale(0.9); opacity: 0; } }
 
 .lotto-tickets { display: grid; gap: 10px; }
 .lotto-ticket { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--border); border-left: 4px solid var(--lotto); border-radius: 14px; background: var(--surface); color: inherit; text-align: left; font: inherit; }
