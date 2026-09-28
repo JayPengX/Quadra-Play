@@ -1046,7 +1046,7 @@ img[src*='thesportsdb'] { object-fit: contain; }
 @keyframes hud-pulse { to { transform: scale(1.08); } }
 .hud-bar { height: 5px; border-radius: 999px; background: var(--surface-sunken); overflow: hidden; }
 .hud-bar > div { height: 100%; width: 0; background: var(--accent); border-radius: inherit; transition: width 0.25s ease; }
-.game-canvas { width: 100%; max-width: 480px; aspect-ratio: 360 / 250; border-radius: 14px; display: block; touch-action: manipulation; user-select: none; cursor: pointer; background: #1b2331; }
+.game-canvas { width: 100%; max-width: 480px; aspect-ratio: 360 / 250; border-radius: 14px; display: block; touch-action: pan-x pan-y; user-select: none; cursor: pointer; background: #1b2331; }
 .game-big-button { width: 100%; max-width: 480px; justify-self: stretch; padding: 14px; font-size: 1.05rem; }
 .sort-slot { min-height: 118px; display: grid; place-items: center; }
 .lotto-ticket { position: relative; display: grid; justify-items: center; gap: 6px; width: min(100%, 320px); padding: 14px 16px 12px; border-radius: 10px; background: #fffdf5; color: #3b3222; border: 2px dashed #d9c8a0; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12); transition: transform 0.14s ease-in, opacity 0.14s ease-in; }
@@ -1062,7 +1062,7 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .lotto-ticket.shake { animation: ticket-shake 0.3s; }
 @keyframes ticket-shake { 25% { transform: translateX(-8px); } 50% { transform: translateX(8px); } 75% { transform: translateX(-4px); } }
 .sort-bins { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.sort-bin { display: grid; justify-items: center; gap: 2px; padding: 12px 4px; border-radius: 12px; border: 1px solid var(--grid); background: var(--surface); color: inherit; font: inherit; font-weight: 600; cursor: pointer; touch-action: manipulation; }
+.sort-bin { display: grid; justify-items: center; gap: 2px; padding: 12px 4px; border-radius: 12px; border: 1px solid var(--grid); background: var(--surface); color: inherit; font: inherit; font-weight: 600; cursor: pointer; touch-action: pan-x pan-y; }
 .sort-bin-icon { font-size: 1.6rem; }
 .sort-bin.flash { animation: bin-flash 0.35s; }
 @keyframes bin-flash { from { background: color-mix(in srgb, var(--accent) 30%, var(--surface)); transform: scale(0.96); } }
