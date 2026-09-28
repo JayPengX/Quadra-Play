@@ -61,20 +61,16 @@ import {
   recoverFromWallet,
   mergeDistinct,
   poolEntries,
-  stakedThisWeek,
   compactAccount,
   isAccount
 } from './lib/account.mjs';
 import { renderHome } from './home.js';
 import { mountLottery } from './lottery-ui.js';
 import {
-  ODDS_LIMIT_KEY,
-  ECONOMY,
   othersBalance,
   APPS,
   appUrl,
   setting,
-  settingPatch,
   installGate,
   watchUpdates,
   quadraSession,
@@ -1785,7 +1781,7 @@ function payLine(label, value, cls = '') {
 // app's data on the pass (a copy on the device under the pass, so it opens
 // at once); its ledger's entries go to the pass's wallet, the one Quadra
 // money pool, and the rest of the pool (Securities' cash, Rewards' earnings,
-// Quadra's pay, transfers) is money to bet with here too.
+// Quadra's pay) is money to bet with here too.
 
 const q = quadraSession('odds', { lang: state.locale });
 let lotteryUi = null;
@@ -1798,7 +1794,8 @@ async function loadAccount() {
   // before accounts moved onto the pass (left in place as a backup).
   // The old copy only when it is this pass's: its bets are in the pass's wallet.
   const onPass = new Set((state.wallet?.entries || []).map(e => e.id));
-  for (const key of [accountKey(), ACCOUNT_KEY]) {
+  // (Also the copy older versions kept under the pass itself.)
+  for (const key of [accountKey(), q.oldPass ? `${ACCOUNT_KEY}:${q.oldPass}` : '', ACCOUNT_KEY].filter(Boolean)) {
     try {
       const stored = await unpack(localStorage.getItem(key));
       if (!isAccount(stored)) continue;
@@ -1816,12 +1813,6 @@ function poolExtra() {
 }
 function funds(account = state.account) {
   return balance(account) + poolExtra();
-}
-// The weekly betting limit: your own (0 for none), or ECONOMY.oddsDefaultLimit
-// until you set one. Kept in the wallet, so every device and app sees it.
-function weeklyLimit() {
-  const own = setting(state.wallet, ODDS_LIMIT_KEY, null);
-  return own == null || own === '' ? ECONOMY.oddsDefaultLimit : Number(own) || 0;
 }
 
 // The weekly grant (until Quadra pays the week itself) arrives by itself.
@@ -2007,21 +1998,18 @@ function placeButton(legs, sizes, cost, errors) {
   const t = state.t;
   const money = funds();
   const short = cost > money;
-  const limit = weeklyLimit();
-  const room = limit > 0 ? Math.max(0, limit - stakedThisWeek(state.account)) : Infinity;
-  const over = cost > room;
   // Opened on the last board saved: bets wait for today's odds.
   const updating = Boolean(state.fromSnapshot);
-  const blocked = errors.length > 0 || sizes.length === 0 || short || over || !state.accountReady || updating;
+  const blocked = errors.length > 0 || sizes.length === 0 || short || !state.accountReady || updating;
   return el('div', { class: 'place-row' }, [
     el('button', {
       class: 'primary-button place-button',
       type: 'button',
       disabled: blocked ? '' : null,
-      text: updating ? t('placeUpdating') : short ? t('placeShort', { v: fmtMoney(money, { sign: false }) }) : over ? t('limitHit', { v: fmtMoney(room, { sign: false }) }) : t('placeSlip', { v: fmtMoney(cost, { sign: false }) }),
+      text: updating ? t('placeUpdating') : short ? t('placeShort', { v: fmtMoney(money, { sign: false }) }) : t('placeSlip', { v: fmtMoney(cost, { sign: false }) }),
       onclick: () => {
         const slip = { id: newSlipId(), mode: state.slipMode, sizes, stake: state.slipStake, cost, legs: legs.map(legRecord) };
-        const { account, error } = placeSlip(state.account, slip, new Date(), { extra: poolExtra(), limit });
+        const { account, error } = placeSlip(state.account, slip, new Date(), { extra: poolExtra() });
         if (error) return;
         state.parlay = [];
         state.freshSlips.add(slip.id);
@@ -2113,9 +2101,7 @@ function renderAccount() {
           el('p', {}, [el('span', { class: 'muted', text: `${t('accountNet')} ` }), el('strong', { class: net < -0.5 ? 'back-low' : net > 0.5 ? 'back-high' : '', text: fmtMoney(net) })])
         ])
       ]),
-      canClaim(account, now) || state.grantNote ? el('p', { class: 'muted', text: state.grantNote ? t('grantAdded', { v: fmtMoney(WEEKLY_GRANT, { sign: false }) }) : '' }) : null,
-      limitBox(),
-      transferBox()
+      canClaim(account, now) || state.grantNote ? el('p', { class: 'muted', text: state.grantNote ? t('grantAdded', { v: fmtMoney(WEEKLY_GRANT, { sign: false }) }) : '' }) : null
     ])
   );
 }
@@ -2162,57 +2148,7 @@ function openSlips(account) {
   return { kinds: Object.fromEntries(Object.entries(kinds).filter(([k]) => used.has(k))), slips: out, n: slips.length };
 }
 
-// The weekly betting limit: kept in the wallet with a pass (so every device
-// and app sees it), on this device otherwise.
-function limitBox() {
-  const t = state.t;
-  const limit = weeklyLimit();
-  const used = stakedThisWeek(state.account);
-  const input = el('input', { class: 'sync-input', type: 'number', min: '0', step: '100', inputmode: 'numeric', value: String(limit || 0), 'aria-label': t('limitTitle') });
-  return el('details', { class: 'sync' }, [
-    el('summary', { text: `${t('limitTitle')} · ${limit ? fmtMoney(limit, { sign: false }) : '—'}` }),
-    el('p', { class: 'muted', text: t('limitIntro') }),
-    el('p', { text: limit ? t('limitNow', { used: fmtMoney(used, { sign: false }), cap: fmtMoney(limit, { sign: false }) }) : t('limitNone', { used: fmtMoney(used, { sign: false }) }) }),
-    el('form', {
-      class: 'sync-form',
-      onsubmit: async event => {
-        event.preventDefault();
-        const value = Math.max(0, Math.round(Number(input.value) || 0));
-        state.wallet = { ...state.wallet, settings: { ...(state.wallet?.settings || {}), ...settingPatch(ODDS_LIMIT_KEY, value).settings } };
-        q.write({ wallet: settingPatch(ODDS_LIMIT_KEY, value) }).then(() => renderAccount(), console.error);
-        renderAccount();
-        renderParlay();
-      }
-    }, [input, el('button', { class: 'ghost-button', type: 'submit', text: t('limitSave') })])
-  ]);
-}
 
-// Money to another Quadra Pass (a friend's, or your own second one).
-function transferBox() {
-  const t = state.t;
-  const amount = el('input', { class: 'sync-input', type: 'number', min: '1', step: '1', inputmode: 'numeric', placeholder: t('transferAmount'), 'aria-label': t('transferAmount') });
-  const to = el('input', { class: 'sync-input', type: 'text', maxlength: '12', autocapitalize: 'characters', autocomplete: 'off', spellcheck: 'false', placeholder: t('transferTo'), 'aria-label': t('transferTo') });
-  const note = el('input', { class: 'sync-input', type: 'text', maxlength: '40', placeholder: t('transferNote'), 'aria-label': t('transferNote') });
-  return el('details', { class: 'sync' }, [
-    el('summary', { text: t('transferTitle') }),
-    el('form', {
-      class: 'sync-form transfer-form',
-      onsubmit: async event => {
-        event.preventDefault();
-        const v = Math.round(Number(amount.value));
-        if (!(v > 0)) return;
-        try {
-          await q.transfer(to.value, v, note.value.trim() || undefined);
-          state.wallet = q.wallet;
-          state.sync = { ...state.sync, note: t('transferDone', { v: fmtMoney(v, { sign: false }) }), error: '' };
-        } catch (error) {
-          state.sync = { ...state.sync, error: t('transferFailed', { msg: error.message }) };
-        }
-        renderAccount();
-      }
-    }, [amount, to, note, el('button', { class: 'ghost-button', type: 'submit', text: t('transferGo') })])
-  ]);
-}
 
 const RESULT_ICON = { won: '✓', lost: '✗', void: '↺' };
 

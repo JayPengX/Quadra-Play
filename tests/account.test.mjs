@@ -326,8 +326,8 @@ test('Quadra pool: extra money to bet with, the weekly limit, entries for the po
   const { account } = placeSlip(base, slip('a', 15_000), now, { extra: 90_000 });
   assert.equal(balance(account), -5_000);
   assert.equal(stakedThisWeek(account, now), 15_000);
-  assert.deepEqual(placeSlip(account, slip('b', 600), now, { extra: 90_000, limit: 15_500 }), { error: 'limit' });
-  assert.ok(placeSlip(account, slip('b', 500), now, { extra: 90_000, limit: 15_500 }).account);
+  // No weekly limit: anything the pool covers.
+  assert.ok(placeSlip(account, slip('b', 60_000), now, { extra: 90_000 }).account);
   // A new week starts the limit over.
   assert.equal(stakedThisWeek(account, new Date('2026-09-29T04:00:00Z')), 0);
   const entries = poolEntries(account, now);

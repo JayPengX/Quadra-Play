@@ -85,12 +85,10 @@ export function stakedThisWeek(account, now = new Date()) {
 }
 
 // `extra`: money in the shared Quadra pool beyond this account's own ledger
-// (Securities' cash, rewards, transfers), spendable here too. `limit`: the
-// most that may be staked this week (0 or none: no limit).
-// Returns { account } or { error: 'funds' | 'limit' }.
-export function placeSlip(account, slip, now = new Date(), { extra = 0, limit = 0 } = {}) {
+// (Securities' cash, rewards), spendable here too.
+// Returns { account } or { error: 'funds' }.
+export function placeSlip(account, slip, now = new Date(), { extra = 0 } = {}) {
   if (!(slip.cost > 0) || slip.cost > balance(account) + extra) return { error: 'funds' };
-  if (limit > 0 && stakedThisWeek(account, now) + slip.cost > limit) return { error: 'limit' };
   const t = now.toISOString();
   const saved = { ...slip, t, status: 'open', legs: slip.legs.map(leg => compactLeg({ ...leg, result: null })) };
   const entry = { id: `stake-${slip.id}`, t, kind: 'stake', amount: -slip.cost, slipId: slip.id };
