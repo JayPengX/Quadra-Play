@@ -2,6 +2,7 @@
 // Polymarket), the next F1 race-winner market and championship (futures)
 // markets through the shared sports proxy, which adds the CORS headers
 // Polymarket doesn't send.
+import { proxyJson } from './quadra.mjs';
 import { americanToProbability, devigProportional, devigPower } from './odds.mjs';
 import { normalizeTeamName, teamZh, LEAGUES, familyOf, isSoccer, rememberLogo, rememberTeams, hasTeams } from './teams.mjs';
 import { runOrder } from './live.mjs';
@@ -121,31 +122,22 @@ export function proxied(url, trim, token = session?.token || '') {
   return `${PROXY_URL}/sports-proxy?url=${encodeURIComponent(url)}${trim ? `&trim=${trim}` : ''}${token ? `&qt=${encodeURIComponent(token)}` : ''}`;
 }
 
-// At most this many requests at once: the page asks for dozens of lists at
-// start-up (leagues, championships), and a burst is what gets a client
-// throttled. The rest wait their turn.
-const MAX_CONCURRENT = 6;
-let running = 0;
-const queue = [];
-async function slot(task) {
-  if (running >= MAX_CONCURRENT) await new Promise(resolve => queue.push(resolve));
-  running++;
-  try {
-    return await task();
-  } finally {
-    running--;
-    queue.shift()?.();
-  }
+// Through the kit's proxyJson: the dozens of lists the page asks for at
+// start-up go in batches (one Worker request per 12), and each answer is
+// kept (memory, and on the device when it lasts) for as long as that data
+// stays useful: live scores and odds 20 seconds, Kambi's pre-match lists 2
+// minutes, championship markets 10 minutes, a game's pre-game line an hour.
+function ttlFor(url) {
+  if (url.includes('/public-search')) return 10 * 60_000;
+  if (url.includes('/listView/')) return 2 * 60_000;
+  if (url.includes('/summary?event=')) return 60 * 60_000;
+  if (/scoreboard\?dates=/.test(url)) return 60_000;
+  return 20_000;
 }
-
-// One retry after a short pause: a dropped connection on a phone network
-// shouldn't lose a whole sport.
 export async function getJson(url, trim, retries = 1) {
+  const ttl = ttlFor(url);
   try {
-    const token = session ? await session.ensureToken().catch(() => session.token) : '';
-    const res = await slot(() => fetch(proxied(url, trim, token), { signal: AbortSignal.timeout(30_000) }));
-    if (!res.ok) throw new Error(`${res.status} ${url}`);
-    return await res.json();
+    return await proxyJson(url, { ttl, trim: trim || '', persist: ttl >= 60_000, timeout: 30_000 });
   } catch (error) {
     if (retries <= 0) throw error;
     await new Promise(resolve => setTimeout(resolve, 800));
