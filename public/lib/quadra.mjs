@@ -898,8 +898,11 @@ export function accountSheet(s, { extra = null } = {}) {
       }),
       act(T('更換通行碼', 'Change my pass'), async () => {
         if (!(await ask({ lang: s.lang, icon: '🔑', title: T('換一組新的通行碼？', 'Get a new pass?'), body: T('帳戶和所有資料都會移到新通行碼，舊通行碼立即失效，其他裝置也會登出。新通行碼只會顯示一次，請記下來。', 'Everything moves to the new pass, the old one stops working at once and every other device is signed out. The new pass is shown once: write it down.'), ok: T('換新通行碼', 'Get a new pass'), danger: true }))) return;
-        await showNewPass(s, await s.rotate());
-        note.textContent = T('已換成新的通行碼。', 'Your pass has been changed.');
+        const passcode = await s.rotate();
+        // The sheet closes first: a modal sheet stays above everything else,
+        // so the new pass would open behind it.
+        close();
+        await showNewPass(s, passcode);
       }),
       node('a', { class: 'q-row-btn', href: helpUrl(s.app), text: T(`${APPS[s.app].short} 使用說明`, `${APPS[s.app].short} guide`) }),
       act(
@@ -925,38 +928,52 @@ export function accountSheet(s, { extra = null } = {}) {
   return dialog;
 }
 
-// A new pass, shown once: it can't be shown again, so it waits for "saved".
+// A new pass, shown once: it can't be shown again, so it waits until it has
+// been typed back (its last five characters), which also proves it was
+// copied right. A modal <dialog>, so it sits above every other sheet and
+// dialog and nothing behind it can be tapped.
 export function showNewPass(s, passcode) {
   const en = s.lang === 'en';
   const T = (zh, e) => (en ? e : zh);
+  const shown = formatPass(passcode);
+  const tail = String(passcode).replace(/[^0-9A-Za-z]/g, '').slice(-5).toUpperCase();
   return new Promise(resolve => {
+    for (const d of document.querySelectorAll('dialog[open]')) d.close();
     const ok = node('button', { class: 'q-btn primary block', type: 'button', text: T('我已經記下來了', 'I’ve saved it'), disabled: true });
     const copy = node('button', {
       class: 'q-btn small',
       type: 'button',
       text: T('複製', 'Copy'),
-      onclick: () =>
-        navigator.clipboard?.writeText(formatPass(passcode)).then(() => {
-          copy.textContent = T('已複製', 'Copied');
-          ok.disabled = false;
-        })
+      onclick: () => navigator.clipboard?.writeText(shown).then(() => (copy.textContent = T('已複製', 'Copied')))
     });
-    const check = node('input', { type: 'checkbox', onchange: e => (ok.disabled = !e.target.checked) });
-    const box = node('div', { class: 'q-gate q-newpass', role: 'dialog', 'aria-modal': 'true', style: `--q-accent:${APPS[s.app].color}` }, [
+    const hint = node('small', { class: 'q-newpass-hint' });
+    const check = node('input', { class: 'q-pass-input q-newpass-check num', type: 'text', inputmode: 'text', autocomplete: 'off', autocapitalize: 'characters', spellcheck: 'false', maxlength: '5', placeholder: '•••••', 'aria-label': T('通行碼最後 5 個字', 'The last 5 characters of your pass') });
+    check.addEventListener('input', () => {
+      const typed = check.value.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+      ok.disabled = typed !== tail;
+      hint.textContent = typed.length === 5 && typed !== tail ? T('不對：請對照上面的通行碼。', 'That doesn’t match: check the pass above.') : '';
+    });
+    const box = node('dialog', { class: 'q-gate q-newpass', style: `--q-accent:${APPS[s.app].color}` }, [
       node('div', { class: 'q-gate-box' }, [
         node('p', { class: 'q-gate-brand', text: 'QUADRA PASS' }),
-        node('h1', { class: 'q-gate-title', text: T('這是你的通行碼', 'This is your pass') }),
-        node('div', { class: 'q-pass-code' }, [node('strong', { class: 'num', text: formatPass(passcode) }), copy]),
-        node('p', { class: 'q-gate-lede', text: T('它只會顯示這一次，裝置上也不會保存。記在安全的地方：在新裝置登入、找回帳戶都要用到它。', 'It’s shown only this once and isn’t kept on any device. Keep it somewhere safe: you need it to sign in on a new device or get your account back.') }),
-        node('label', { class: 'q-check' }, [check, node('span', { text: T('我已經把通行碼記在安全的地方', 'I’ve written my pass down somewhere safe') })]),
+        node('h1', { class: 'q-gate-title', text: T('這是你的新通行碼', 'This is your new pass') }),
+        node('div', { class: 'q-pass-code' }, [node('strong', { class: 'num', text: shown }), copy]),
+        node('p', { class: 'q-gate-lede', text: T('它只會顯示這一次，裝置上也不會保存，舊的通行碼已經失效。記在安全的地方：在新裝置登入、找回帳戶都要用到它。', 'It’s shown only this once and isn’t kept on any device; the old pass no longer works. Keep it somewhere safe: you need it to sign in on a new device or get your account back.') }),
+        node('label', { class: 'q-newpass-label', text: T('記好以後，輸入通行碼的最後 5 個字確認：', 'Once it’s saved, type its last 5 characters to confirm:') }),
+        check,
+        hint,
         ok
       ])
     ]);
+    // Not closed by Esc or a tap outside: only by the confirmed button.
+    box.addEventListener('cancel', e => e.preventDefault());
     ok.addEventListener('click', () => {
+      box.close();
       box.remove();
       resolve();
     });
     document.body.append(box);
+    box.showModal();
   });
 }
 

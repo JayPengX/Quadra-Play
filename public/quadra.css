@@ -936,6 +936,20 @@ html::before {
 .q-device-code { font-size: 30px; font-weight: 800; letter-spacing: 0.12em; color: var(--q-text); }
 .q-device-left { font-size: 12px; font-weight: 700; color: var(--q-accent); }
 .q-device-how { font-size: 12px; color: var(--q-text-2); line-height: 1.45; }
+/* The new pass is a modal <dialog> (the top layer): it fills the screen. */
+dialog.q-newpass {
+  width: 100vw;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  box-sizing: border-box;
+}
+dialog.q-newpass::backdrop { background: var(--q-page); }
+.q-newpass-label { margin-top: 6px; font-size: 14px; font-weight: 700; color: var(--q-text-2); }
+.q-newpass-check { width: 11ch; text-align: center; font-size: 22px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; }
+.q-newpass-hint { min-height: 1.2em; font-size: 13px; color: var(--q-bad); }
 .q-newpass .q-pass-code { justify-content: center; margin: 8px 0 4px; }
 .q-newpass .q-pass-code strong { font-size: 28px; letter-spacing: 0.08em; }
 .q-check {
