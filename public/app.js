@@ -79,7 +79,8 @@ import {
   recordAffinity,
   affinityPatch,
   activityPatch,
-  notify
+  notify,
+  storedAccount
 } from './lib/quadra.mjs';
 import { pack, unpack } from './lib/codec.mjs';
 import { historyStats, outlookOf, chanceOf, funFacts, crowdPercentile } from './lib/history.mjs';
@@ -3023,14 +3024,16 @@ function warmImages() {
 
 // The last board, kept on the device: the page opens on it at once and
 // swaps in today's odds when they arrive (bets wait for those). Tied to
-// this deploy, so a new version never opens on an old one's data.
+// its shape (SNAPSHOT_V: bump it when state.data's shape changes), not to the
+// deploy: tying it to the deploy made every open after a new version a cold
+// start of many seconds.
 const SNAPSHOT_KEY = 'oddsStudy.board';
+const SNAPSHOT_V = 2;
 const SNAPSHOT_MAX_AGE_MS = 24 * 3_600_000;
-const buildVersion = () => document.querySelector('meta[name="build-version"]')?.content || 'dev';
 function readSnapshot() {
   try {
     const saved = JSON.parse(localStorage.getItem(SNAPSHOT_KEY) || 'null');
-    if (!saved?.data?.games || saved.v !== buildVersion() || !(Date.now() - saved.at < SNAPSHOT_MAX_AGE_MS)) return null;
+    if (!saved?.data?.games || saved.v !== SNAPSHOT_V || !(Date.now() - saved.at < SNAPSHOT_MAX_AGE_MS)) return null;
     return saved.data;
   } catch {
     return null;
@@ -3042,7 +3045,7 @@ function saveSnapshot() {
   snapshotTimer = setTimeout(() => {
     if (!state.data || state.fromSnapshot) return;
     try {
-      localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ v: buildVersion(), at: Date.now(), data: state.data }));
+      localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ v: SNAPSHOT_V, at: Date.now(), data: state.data }));
     } catch {
       try {
         localStorage.removeItem(SNAPSHOT_KEY);
@@ -3070,15 +3073,10 @@ async function load() {
       }, BOOT_LIMIT_MS)
     : null;
   $('refresh').disabled = true;
-  // The last board saved opens the page at once; today's replaces it below.
-  const saved = booting ? readSnapshot() : null;
+  // The last board saved opens the page at once (boot drew it while signing
+  // in); today's replaces it below.
+  const saved = booting && state.fromSnapshot ? state.data : null;
   if (saved) {
-    state.data = saved;
-    state.fromSnapshot = true;
-    if (state.wantedTab && tabAvailable(state.wantedTab)) state.tab = state.wantedTab;
-    state.wantedTab = null;
-    renderAll();
-    openWantedGame();
     clearTimeout(limit);
     open();
     refreshLive();
@@ -3406,7 +3404,26 @@ function homeCtx() {
 statsUi = mountStats({ state, el, svgEl, fmtMoney, fmtInt, fmtPctShort, fmtOdds, fmtTime, sportName: key => (key === 'mixed' ? state.t('sportMixed') : state.t(`sport_${key}`) === `sport_${key}` ? String(key).toUpperCase() : state.t(`sport_${key}`)), youCard, crowdCard, funCard, picksCard, breakdownCard });
 lotteryUi = mountLottery({ state, q, el, fmtMoney, funds, commitAccount, track, getAccount: () => state.account, syncNow, showTickets });
 
+// The saved board, drawn while signing in (a network round trip).
+function drawSnapshot() {
+  const saved = storedAccount() ? readSnapshot() : null;
+  if (!saved) return;
+  try {
+    state.data = saved;
+    state.fromSnapshot = true;
+    if (state.wantedTab && tabAvailable(state.wantedTab)) state.tab = state.wantedTab;
+    state.wantedTab = null;
+    renderAll();
+    openWantedGame();
+  } catch (error) {
+    // A saved board this version can't draw: a normal start.
+    console.error(error);
+    state.data = null;
+    state.fromSnapshot = false;
+  }
+}
 async function boot() {
+  drawSnapshot();
   const first = await q.start();
   state.wallet = first.wallet || q.wallet;
   const loading = load();

@@ -686,7 +686,7 @@ body.searching #live, body.searching #f1, body.searching #futures, body.searchin
   .appbar { position: static; background: none; border: 0; }
   .appbar-inner { padding: 0; }
   .brand { display: none; }
-  .page { padding-top: calc(10px + env(safe-area-inset-top)); }
+  .page { padding-top: calc(10px + var(--q-top, env(safe-area-inset-top))); }
   .mobile-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
   .mobile-bar .status { flex: 1 1 auto; font-size: 0.74rem; }
   .mobile-bar .icon-button { width: 34px; height: 34px; border-radius: 10px; }

@@ -55,8 +55,10 @@ const modelCache = new Map();
 const MEANS_KEY = 'oddsStudy.teamRuns';
 let savedMeans = null;
 let meansTimer = null;
-// Tied to the deploy: a new version's model never reuses an old one's fits.
-const meansVersion = () => globalThis.document?.querySelector?.('meta[name="build-version"]')?.content || 'dev';
+// Tied to the model (bump MEANS_V when the fit changes), not the deploy:
+// every deploy used to throw the fits away and make the next open slow.
+const MEANS_V = 2;
+const meansVersion = () => MEANS_V;
 function storedMeans() {
   if (savedMeans) return savedMeans;
   savedMeans = new Map();
