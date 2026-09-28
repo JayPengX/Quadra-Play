@@ -58,6 +58,7 @@ import {
   legResult,
   applyResults,
   mergeAccounts,
+  recoverFromWallet,
   mergeDistinct,
   poolEntries,
   stakedThisWeek,
@@ -1792,11 +1793,20 @@ useSourcesSession(q);
 const accountKey = () => `${ACCOUNT_KEY}:${q.pass}`;
 
 async function loadAccount() {
-  try {
-    const stored = await unpack(localStorage.getItem(accountKey()));
-    if (isAccount(stored)) return compactAccount(stored);
-  } catch {}
-  return null;
+  let account = null;
+  // This pass's copy on the device, and the one Quadra Sportsbook kept
+  // before accounts moved onto the pass (left in place as a backup).
+  // The old copy only when it is this pass's: its bets are in the pass's wallet.
+  const onPass = new Set((state.wallet?.entries || []).map(e => e.id));
+  for (const key of [accountKey(), ACCOUNT_KEY]) {
+    try {
+      const stored = await unpack(localStorage.getItem(key));
+      if (!isAccount(stored)) continue;
+      if (key === ACCOUNT_KEY && !stored.ledger.some(e => e.kind === 'stake' && onPass.has(`odds:${e.id}`))) continue;
+      account = mergeAccounts(account, compactAccount(stored));
+    } catch {}
+  }
+  return account;
 }
 // A pass that got its opening money from Quadra itself opens an empty ledger.
 const freshAccount = () => newAccount(new Date(), { start: !(state.wallet?.entries || []).some(e => e.id === 'eco:start') });
@@ -1889,7 +1899,8 @@ const mergeFirst = remote => (syncChain = syncChain.then(() => mergeRemote(remot
 async function mergeRemote(remote) {
   if (!remote) return;
   const theirs = remote.payload ? await unpack(remote.payload).catch(() => null) : null;
-  if (theirs && !isAccount(theirs)) throw new Error('bad account');
+  // A copy there that can't be read is never saved over.
+  if ((remote.payload && !theirs) || (theirs && !isAccount(theirs))) throw new Error('bad account');
   let merged = mergeAccounts(state.account || (theirs ? null : freshAccount()), theirs);
   if (!merged) merged = theirs || freshAccount();
   for (const item of remote.inbox || []) {
@@ -1897,6 +1908,7 @@ async function mergeRemote(remote) {
     if (isAccount(other)) merged = mergeDistinct(merged, compactAccount(other));
   }
   const wallet = remote.wallet || state.wallet;
+  merged = recoverFromWallet(merged, wallet);
   const have = new Set((wallet?.entries || []).map(e => e.id));
   const entries = poolEntries(merged).filter(e => !have.has(e.id));
   const open = merged.slips.filter(x => x.status === 'open').reduce((sum, x) => sum + x.cost, 0);
@@ -2302,7 +2314,31 @@ function legLiveLine(leg) {
   ]);
 }
 
+// A bet brought back from the pass's money records: its cost, time and
+// payout are known, its picks aren't.
+function recoveredSlipCard(slip) {
+  const t = state.t;
+  const profit = slip.payout - slip.cost;
+  return el('article', { class: 'card saved-slip recovered' }, [
+    el('div', { class: 'saved-head' }, [
+      el('div', { class: 'saved-title' }, [
+        el('span', { class: 'mode-tag', text: t('slipRecoveredTag') }),
+        el('strong', { text: t('slipRecoveredTitle') }),
+        el('small', { class: 'muted', text: t('slipBoughtAt', { time: fmtTime(slip.t) }) })
+      ]),
+      el('span', { class: `slip-pill ${profit > 0 ? 'won' : 'lost'}`, text: slip.payout > 0 ? t('slipPaid', { v: fmtMoney(slip.payout, { sign: false }) }) : t('slipRecoveredNoPay') })
+    ]),
+    el('p', { class: 'muted recovered-note', text: t('slipRecoveredNote') }),
+    el('div', { class: 'saved-pay' }, [
+      payCell(t('slipCost'), fmtMoney(slip.cost, { sign: false })),
+      payCell(t('slipPaidLabel'), fmtMoney(slip.payout, { sign: false })),
+      payCell(t('slipResult'), fmtMoney(profit), profit > 0 ? 'back-high' : profit < 0 ? 'back-low' : '')
+    ])
+  ]);
+}
+
 function savedSlipCard(slip) {
+  if (slip.recovered) return recoveredSlipCard(slip);
   const t = state.t;
   const n = slip.legs.length;
   const now = Date.now();
@@ -2389,6 +2425,7 @@ const HISTORY_FILTERS = {
 // (a parlay with a lost pick, waiting for its other games), then settled
 // slips by the Taiwan day they were settled.
 function slipGroupKey(slip, now) {
+  if (slip.recovered) return 'recovered';
   if (slip.status === 'settled') return `day|${taipeiDayKey(slip.settledAt ?? slip.t)}`;
   if (slipRange(slip).most <= 0) return 'dead';
   return slip.legs.some(leg => legState(leg, now) === 'live') ? 'live' : 'waiting';
@@ -2399,6 +2436,7 @@ function groupTitle(key) {
   if (key === 'live') return t('groupLive');
   if (key === 'waiting') return t('groupWaiting');
   if (key === 'dead') return t('groupDead');
+  if (key === 'recovered') return t('groupRecovered');
   const day = key.slice(4);
   const today = taipeiDayKey(new Date());
   const yesterday = taipeiDayKey(new Date(Date.now() - 86_400_000));
@@ -2410,7 +2448,7 @@ function groupTitle(key) {
 function groupSummary(key, slips) {
   const t = state.t;
   const cost = slips.reduce((s, x) => s + x.cost, 0);
-  if (key.startsWith('day|')) {
+  if (key.startsWith('day|') || key === 'recovered') {
     const net = slips.reduce((s, x) => s + x.payout - x.cost, 0);
     return el('span', { class: 'group-sum' }, [
       document.createTextNode(t('groupCountCost', { n: slips.length, cost: fmtMoney(cost, { sign: false }) })),
@@ -2464,11 +2502,11 @@ function renderSaved() {
   const groups = new Map();
   for (const slip of filtered) {
     const key = slipGroupKey(slip, now);
-    if (key.startsWith('day|') && !state.showAllSaved && settledShown++ >= SAVED_SHOWN) continue;
+    if ((key.startsWith('day|') || key === 'recovered') && !state.showAllSaved && settledShown++ >= SAVED_SHOWN) continue;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(slip);
   }
-  const rank = key => ({ live: 0, waiting: 1, dead: 2 })[key] ?? 3;
+  const rank = key => ({ live: 0, waiting: 1, dead: 2, recovered: 4 })[key] ?? 3;
   const order = [...groups.keys()].sort((a, b) => rank(a) - rank(b) || b.localeCompare(a));
   const hidden = filtered.filter(s => s.status === 'settled').length - Math.min(settledShown, SAVED_SHOWN);
   const openCost = open.reduce((s, x) => s + x.cost, 0);
@@ -3539,7 +3577,7 @@ lotteryUi = mountLottery({ state, q, el, fmtMoney, funds, commitAccount, track, 
 
 async function boot() {
   const first = await q.start();
-  state.wallet = q.wallet;
+  state.wallet = first.wallet || q.wallet;
   const loading = load();
   state.account = await loadAccount();
   state.accountReady = true;

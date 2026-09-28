@@ -339,3 +339,27 @@ test('Quadra pool: extra money to bet with, the weekly limit, entries for the po
   assert.equal(balance(both), 2 * (10_000 + WEEKLY_GRANT));
   assert.equal(mergeDistinct(both, other).ledger.length, both.ledger.length);
 });
+
+test('the wallet brings back a lost ledger and slips, and a real slip wins over a recovered one', async () => {
+  const { recoverFromWallet, mergeAccounts, newAccount, balance } = await import('../public/lib/account.mjs');
+  const { historyStats } = await import('../public/lib/history.mjs');
+  const empty = newAccount(new Date('2026-09-28T00:00:00Z'), { start: false });
+  const wallet = {
+    entries: [
+      { id: 'eco:start', t: 1, app: 'eco', kind: 'start', amount: 110000 },
+      { id: 'odds:start', t: 2, app: 'odds', kind: 'start', amount: 10000 },
+      { id: 'odds:stake-a', t: 3, app: 'odds', kind: 'stake', amount: -1000 },
+      { id: 'odds:payout-a', t: 4, app: 'odds', kind: 'payout', amount: 2500 },
+      { id: 'odds:stake-b', t: 5, app: 'odds', kind: 'stake', amount: -500 }
+    ]
+  };
+  const back = recoverFromWallet(empty, wallet);
+  assert.equal(balance(back), 11000);
+  assert.deepEqual(back.slips.map(s => [s.id, s.cost, s.payout, s.recovered]), [['b', 500, 0, true], ['a', 1000, 2500, true]]);
+  assert.equal(recoverFromWallet(back, wallet), back);
+  const stats = historyStats(back);
+  assert.ok(stats);
+  const real = { ...newAccount(new Date('2026-09-20T00:00:00Z')), slips: [{ id: 'a', t: '2026-09-20T01:00:00.000Z', mode: 'single', sizes: [1], stake: 1000, cost: 1000, status: 'open', legs: [{ id: 'x', odds: 2.5, result: null }] }] };
+  assert.equal(mergeAccounts(back, real).slips.find(s => s.id === 'a').recovered, undefined);
+  assert.equal(mergeAccounts(real, back).slips.find(s => s.id === 'a').recovered, undefined);
+});

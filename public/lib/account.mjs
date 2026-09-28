@@ -278,7 +278,10 @@ export function mergeAccounts(a, b) {
   for (const slip of [...a.slips, ...b.slips]) {
     const other = slips.get(slip.id);
     if (!other) slips.set(slip.id, slip);
-    else if (other.status !== 'settled' && slip.status === 'settled') slips.set(slip.id, slip);
+    // A slip recovered from the wallet (no picks) gives way to the real one.
+    else if (other.recovered || slip.recovered) {
+      if (other.recovered && !slip.recovered) slips.set(slip.id, slip);
+    } else if (other.status !== 'settled' && slip.status === 'settled') slips.set(slip.id, slip);
     else if (other.status !== 'settled') slips.set(slip.id, { ...other, legs: other.legs.map((leg, i) => ({ ...leg, result: leg.result ?? slip.legs[i]?.result ?? null, ...(leg.final ?? slip.legs[i]?.final ? { final: leg.final ?? slip.legs[i]?.final } : {}) })) });
   }
   const out = {
@@ -312,6 +315,41 @@ export function poolEntries(account, now = new Date()) {
   return account.ledger
     .filter(e => e.kind !== 'game' || Date.parse(e.t) < settled)
     .map(e => ({ id: `odds:${e.id}`, t: Date.parse(e.t), app: 'odds', kind: e.kind, amount: e.amount }));
+}
+
+// What the pass's wallet still records of this account that the account
+// itself lost (every ledger entry goes to the wallet as `odds:<id>`, and the
+// wallet never drops one): the missing ledger entries come back as they
+// were, and each bet with no slip left comes back as a recovered slip with
+// its cost, time and payout but no picks (`recovered: true`).
+export function recoverFromWallet(account, wallet) {
+  const mine = (wallet?.entries || []).filter(e => e.app === 'odds' && typeof e.id === 'string' && e.id.startsWith('odds:'));
+  const have = new Set(account.ledger.map(e => e.id));
+  const ledger = [];
+  for (const e of mine) {
+    const id = e.id.slice(5);
+    if (have.has(id)) continue;
+    const entry = { id, t: new Date(e.t).toISOString(), kind: e.kind, amount: e.amount };
+    const slipId = /^(?:stake|payout)-(.+)$/.exec(id)?.[1];
+    if (slipId) entry.slipId = slipId;
+    ledger.push(entry);
+  }
+  const all = [...account.ledger, ...ledger];
+  const slipIds = new Set(account.slips.map(s => s.id));
+  const paid = new Map(all.filter(e => e.kind === 'payout' && e.slipId).map(e => [e.slipId, e]));
+  const slips = [];
+  for (const e of all) {
+    if (e.kind !== 'stake' || !e.slipId || slipIds.has(e.slipId)) continue;
+    const payout = paid.get(e.slipId);
+    const cost = -e.amount;
+    slips.push({ id: e.slipId, t: e.t, mode: 'single', sizes: [1], stake: cost, cost, legs: [], status: 'settled', payout: payout ? payout.amount : 0, settledAt: payout ? payout.t : e.t, recovered: true });
+  }
+  if (!ledger.length && !slips.length) return account;
+  return {
+    ...account,
+    ledger: all.sort((x, y) => x.t.localeCompare(y.t)),
+    slips: [...account.slips, ...slips].sort((x, y) => y.t.localeCompare(x.t))
+  };
 }
 
 // Whether a stored value looks like an account (from storage or the sync).
