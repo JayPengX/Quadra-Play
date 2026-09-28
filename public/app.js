@@ -3425,7 +3425,13 @@ window.addEventListener('hashchange', () => {
 // open with every market, scrolled into view.
 function openWantedGame() {
   const id = state.wantedGame;
-  const game = id && state.data?.games.find(g => g.id === id || g.id.toLowerCase() === id.toLowerCase());
+  // By id; or, from Quadra Fixtures, the same league and teams (a start
+  // time moved since leaves the id's hour behind).
+  const [sport, , away, home] = String(id || '').split('_');
+  const game =
+    id &&
+    (state.data?.games.find(g => g.id === id || g.id.toLowerCase() === id.toLowerCase()) ||
+      state.data?.games.find(g => g.sport === sport && g.id.endsWith(`_${away}_${home}`)));
   if (!game) return;
   state.wantedGame = null;
   state.tab = 'games';
