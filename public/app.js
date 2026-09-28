@@ -80,7 +80,8 @@ import {
   affinityPatch,
   activityPatch,
   notify,
-  storedAccount
+  storedAccount,
+  helpUrl
 } from './lib/quadra.mjs';
 import { pack, unpack } from './lib/codec.mjs';
 import { historyStats, outlookOf, chanceOf, funFacts, crowdPercentile } from './lib/history.mjs';
@@ -3325,14 +3326,18 @@ window.addEventListener('resize', () => {
 
 // Phones: no app header. The status and refresh move to a
 // slim row at the top of the page (the tabs are already at the bottom).
+// The same top-right in every Quadra app: help, refresh, then the account.
+const helpLink = Object.assign(document.createElement('a'), { className: 'icon-button help-button', href: helpUrl('odds'), textContent: '?' });
+helpLink.addEventListener('click', e => (e.preventDefault(), q.go('vocab', 'help=odds')));
+helpLink.setAttribute('aria-label', state.locale === 'en' ? 'Help' : '說明');
 {
   const phone = matchMedia('(max-width: 720px)');
   const place = () => {
     const into = phone.matches ? $('mobile-bar') : document.querySelector('.appbar-inner');
-    if (phone.matches) into.append($('status'), $('account-slot'), $('refresh'));
+    if (phone.matches) into.append($('status'), helpLink, $('refresh'), $('account-slot'));
     else {
       document.querySelector('.brand-text').append($('status'));
-      into.append($('account-slot'), $('refresh'));
+      into.append(helpLink, $('refresh'), $('account-slot'));
     }
   };
   place();

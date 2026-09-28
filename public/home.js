@@ -118,7 +118,8 @@ export function renderHome(ctx) {
     return el('div', { class: 'q-rec home-pick', role: 'button', tabindex: '0', onclick: () => ctx.openGame(b.gameId) }, [
       el('div', { class: 'pick-head' }, [logos(gameOf(b.gameId)), el('span', { class: 'q-rec-why', text: whyOf(p) })]),
       el('p', { class: 'q-rec-title', text: b.shortLabel || b.label }),
-      el('p', { class: 'q-rec-sub', text: `${b.matchup} · ${fmtTime(b.start)}` }),
+      el('p', { class: 'q-rec-sub', text: b.matchup }),
+      el('p', { class: 'q-rec-when', text: fmtTime(b.start) }),
       el('div', { class: 'q-rec-foot' }, [
         el('span', { class: 'q-rec-big', text: fmtOdds(b.estOdds) }),
         el('button', {

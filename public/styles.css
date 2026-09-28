@@ -1402,3 +1402,6 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .st-fold > summary::after { content: '›'; font-size: 1.2rem; color: var(--text-muted); transition: transform 0.15s; }
 .st-fold[open] > summary::after { transform: rotate(90deg); }
 .st-fold > :not(summary) { padding: 0 16px 16px; }
+
+/* Help, in the top-right like every Quadra app. */
+.help-button { display: inline-grid; place-items: center; font-weight: 800; font-size: 16px; text-decoration: none; color: var(--q-text-2); }
