@@ -17,7 +17,9 @@ import { isSoccer, f1Driver } from './teams.mjs';
 // opened; a pass made since then gets its opening money from Quadra).
 export const START_BALANCE = 10_000;
 export const WEEKLY_GRANT = 500;
-export const GRANTS_UNTIL_WEEK = '2026-10-05';
+// Play's own weekly grants ended with the week of 2026-09-28: Quadra's
+// monthly payday is the one income.
+export const GRANTS_UNTIL_WEEK = '2026-09-28';
 
 // start: false for an account funded by the Quadra pool alone.
 export function newAccount(now = new Date(), { start = true } = {}) {

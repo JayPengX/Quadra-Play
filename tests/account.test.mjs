@@ -26,17 +26,18 @@ test('weeks start on Monday, Taiwan time', () => {
   assert.equal(weekKey(at('2026-09-27T16:30:00Z')), '2026-09-28');
 });
 
-test('a new account starts with NT$10,000 and gets its weekly grant once a week, until Quadra pays it', () => {
-  let account = newAccount(at('2026-09-25T00:00:00Z'));
+test('a new account starts with NT$10,000 and gets its weekly grant once a week, until Quadra\'s payday replaced it', () => {
+  let account = newAccount(at('2026-09-18T00:00:00Z'));
   assert.equal(balance(account), START_BALANCE);
-  assert.equal(canClaim(account, at('2026-09-26T00:00:00Z')), false);
-  const monday = at('2026-09-28T02:00:00Z');
+  assert.equal(canClaim(account, at('2026-09-19T00:00:00Z')), false);
+  const monday = at('2026-09-21T02:00:00Z');
   assert.equal(canClaim(account, monday), true);
   account = claimGrant(account, monday);
   assert.equal(balance(account), START_BALANCE + WEEKLY_GRANT);
   assert.equal(canClaim(account, monday), false);
   assert.equal(claimGrant(account, monday), account);
-  // From the week of 2026-10-05 Quadra pays the week into the pool itself.
+  // From the week of 2026-09-28 there are no grants (Quadra's monthly payday).
+  assert.equal(canClaim(account, at('2026-09-29T02:00:00Z')), false);
   assert.equal(canClaim(account, at('2026-10-06T02:00:00Z')), false);
   assert.equal(claimGrant(account, at('2026-10-14T02:00:00Z')), account);
   // A pool-funded account opens empty.
