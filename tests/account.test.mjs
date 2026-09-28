@@ -363,3 +363,36 @@ test('the wallet brings back a lost ledger and slips, and a real slip wins over 
   assert.equal(mergeAccounts(back, real).slips.find(s => s.id === 'a').recovered, undefined);
   assert.equal(mergeAccounts(real, back).slips.find(s => s.id === 'a').recovered, undefined);
 });
+
+test('a lost slip that was never settled is refunded once it is old enough, and a found one is not paid twice', async () => {
+  const { recoverFromWallet, refundLost, applyResults, newAccount, balance, REFUND_AFTER_MS } = await import('../public/lib/account.mjs');
+  const t0 = Date.parse('2026-09-01T00:00:00Z');
+  const wallet = {
+    entries: [
+      { id: 'odds:stake-a', t: t0, app: 'odds', kind: 'stake', amount: -1000 },
+      { id: 'odds:payout-a', t: t0 + 1, app: 'odds', kind: 'payout', amount: 0 },
+      { id: 'odds:stake-b', t: t0 + 2, app: 'odds', kind: 'stake', amount: -2000 }
+    ]
+  };
+  const back = recoverFromWallet(newAccount(new Date(t0), { start: false }), wallet);
+  assert.equal(balance(back), -3000);
+  // Too soon: another device may still hold the real slip.
+  assert.equal(refundLost(back, new Date(t0 + REFUND_AFTER_MS - 1000)), back);
+  const later = new Date(t0 + REFUND_AFTER_MS + 1000);
+  const refunded = refundLost(back, later);
+  assert.equal(balance(refunded), -1000);
+  const b = refunded.slips.find(s => s.id === 'b');
+  assert.equal(b.refunded, true);
+  assert.equal(b.payout, 2000);
+  // The lost bet that did settle (a loss) is left alone; nothing is refunded twice.
+  assert.equal(refunded.slips.find(s => s.id === 'a').refunded, undefined);
+  assert.equal(refundLost(refunded, later), refunded);
+  // Rebuilt again from the wallet (which now has the refund), it stays refunded.
+  const again = recoverFromWallet(newAccount(new Date(t0), { start: false }), { entries: [...wallet.entries, { id: 'odds:refund-b', t: later.getTime(), app: 'odds', kind: 'refund', amount: 2000 }] });
+  assert.equal(again.slips.find(s => s.id === 'b').refunded, true);
+  assert.equal(balance(refundLost(again, later)), -1000);
+  // The real slip turns up and wins: it pays only what's beyond the refunded cost.
+  const found = { ...refunded, slips: refunded.slips.map(s => (s.id === 'b' ? { id: 'b', t: s.t, mode: 'single', sizes: [1], stake: 2000, cost: 2000, status: 'open', legs: [{ id: 'x', odds: 2, result: null }] } : s)) };
+  const settled = applyResults(found, 'b', ['won'], later);
+  assert.equal(balance(settled), -3000 + settled.slips.find(s => s.id === 'b').payout);
+});

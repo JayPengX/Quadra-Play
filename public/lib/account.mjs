@@ -259,7 +259,10 @@ export function applyResults(account, slipId, results, now = new Date(), finals 
     const { gross, net } = settleSlip({ legs, sizes: slip.sizes, stake: slip.stake });
     const payout = Math.round(net);
     updated = { ...updated, status: 'settled', settledAt: now.toISOString(), gross: Math.round(gross), payout };
-    if (!ledger.some(e => e.id === `payout-${slip.id}`)) ledger = [...ledger, { id: `payout-${slip.id}`, t: now.toISOString(), kind: 'payout', amount: payout, slipId: slip.id }];
+    // (A slip refunded while it was lost, then found on another device, has
+    // had its cost back already.)
+    const refunded = ledger.some(e => e.id === `refund-${slip.id}`) ? slip.cost : 0;
+    if (!ledger.some(e => e.id === `payout-${slip.id}`)) ledger = [...ledger, { id: `payout-${slip.id}`, t: now.toISOString(), kind: 'payout', amount: payout - refunded, slipId: slip.id }];
   }
   return touched({ ...account, ledger, slips: account.slips.map(s => (s.id === slipId ? updated : s)) }, now);
 }
@@ -302,7 +305,7 @@ export function mergeDistinct(a, b) {
   if (!b) return a;
   const tag = `m${Date.parse(b.created).toString(36)}`;
   const have = new Set(a.ledger.map(e => e.id));
-  const ledger = b.ledger.map(e => (have.has(e.id) && !/^(stake|payout|game)-/.test(e.id) ? { ...e, id: `${e.id}-${tag}` } : e));
+  const ledger = b.ledger.map(e => (have.has(e.id) && !/^(stake|payout|refund|game)-/.test(e.id) ? { ...e, id: `${e.id}-${tag}` } : e));
   return mergeAccounts(a, { ...b, created: a.created, ledger });
 }
 
@@ -328,19 +331,21 @@ export function recoverFromWallet(account, wallet) {
     const id = e.id.slice(5);
     if (have.has(id)) continue;
     const entry = { id, t: new Date(e.t).toISOString(), kind: e.kind, amount: e.amount };
-    const slipId = /^(?:stake|payout)-(.+)$/.exec(id)?.[1];
+    const slipId = /^(?:stake|payout|refund)-(.+)$/.exec(id)?.[1];
     if (slipId) entry.slipId = slipId;
     ledger.push(entry);
   }
   const all = [...account.ledger, ...ledger];
   const slipIds = new Set(account.slips.map(s => s.id));
   const paid = new Map(all.filter(e => e.kind === 'payout' && e.slipId).map(e => [e.slipId, e]));
+  const refunds = new Set(all.filter(e => e.kind === 'refund' && e.slipId).map(e => e.slipId));
   const slips = [];
   for (const e of all) {
     if (e.kind !== 'stake' || !e.slipId || slipIds.has(e.slipId)) continue;
     const payout = paid.get(e.slipId);
     const cost = -e.amount;
-    slips.push({ id: e.slipId, t: e.t, mode: 'single', sizes: [1], stake: cost, cost, legs: [], status: 'settled', payout: payout ? payout.amount : 0, settledAt: payout ? payout.t : e.t, recovered: true });
+    const refunded = !payout && refunds.has(e.slipId);
+    slips.push({ id: e.slipId, t: e.t, mode: 'single', sizes: [1], stake: cost, cost, legs: [], status: 'settled', payout: payout ? payout.amount : refunded ? cost : 0, settledAt: payout ? payout.t : e.t, recovered: true, ...(refunded ? { refunded: true } : {}) });
   }
   if (!ledger.length && !slips.length) return account;
   return {
@@ -348,6 +353,24 @@ export function recoverFromWallet(account, wallet) {
     ledger: all.sort((x, y) => x.t.localeCompare(y.t)),
     slips: [...account.slips, ...slips].sort((x, y) => y.t.localeCompare(x.t))
   };
+}
+
+// A recovered bet with no payout on record was never settled: its picks are
+// gone, so it can never be. Once it is old enough that no other device can
+// still be holding the real slip (REFUND_AFTER_MS), its cost comes back
+// (`refund-<slip>`) and it shows as refunded.
+export const REFUND_AFTER_MS = 3 * 86_400_000;
+export function refundLost(account, now = new Date()) {
+  const have = new Set(account.ledger.map(e => e.id));
+  const add = [];
+  const slips = account.slips.map(slip => {
+    if (!slip.recovered || slip.refunded || have.has(`payout-${slip.id}`)) return slip;
+    if (now.getTime() - Date.parse(slip.t) < REFUND_AFTER_MS) return slip;
+    if (!have.has(`refund-${slip.id}`)) add.push({ id: `refund-${slip.id}`, t: now.toISOString(), kind: 'refund', amount: slip.cost, slipId: slip.id });
+    return { ...slip, payout: slip.cost, refunded: true, settledAt: slip.settledAt || now.toISOString() };
+  });
+  if (!add.length && slips.every((s, i) => s === account.slips[i])) return account;
+  return { ...account, ledger: [...account.ledger, ...add].sort((x, y) => x.t.localeCompare(y.t)), slips };
 }
 
 // Whether a stored value looks like an account (from storage or the sync).

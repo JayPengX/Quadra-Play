@@ -345,8 +345,8 @@ export function moneySources(account) {
       out.stakes.n++;
       out.stakes.sum -= e.amount;
       week(e.t).staked -= e.amount;
-    } else if (e.kind === 'payout') {
-      if (e.amount > 0) out.payouts.n++;
+    } else if (e.kind === 'payout' || e.kind === 'refund') {
+      if (e.amount > 0 && e.kind === 'payout') out.payouts.n++;
       out.payouts.sum += e.amount;
       week(e.t).paid += e.amount;
     }
@@ -367,4 +367,45 @@ export function moneySources(account) {
   out.houseKept = out.settled.staked - out.settled.gross;
   out.weeks = [...weeks.values()].sort((a, b) => b.week.localeCompare(a.week));
   return out;
+}
+
+// ---- The lottery --------------------------------------------------------------------
+
+// Lottery tickets and scratch cards in numbers: how many, what they cost and
+// won (after tax), what came back per NT$100, the biggest prize, and each
+// game's part (scratch cards together as 'scratch').
+export function lotteryStats(account) {
+  const tickets = account.tickets || [];
+  const byGame = new Map();
+  const out = { n: tickets.length, open: 0, spent: 0, won: 0, wins: 0, best: null };
+  for (const x of tickets) {
+    const key = x.card ? 'scratch' : x.game;
+    if (!byGame.has(key)) byGame.set(key, { key, n: 0, spent: 0, won: 0, wins: 0 });
+    const g = byGame.get(key);
+    g.n++;
+    g.spent += x.cost;
+    out.spent += x.cost;
+    if (x.status === 'open') {
+      out.open++;
+      continue;
+    }
+    const prize = x.prize || 0;
+    g.won += prize;
+    out.won += prize;
+    if (prize > 0) {
+      g.wins++;
+      out.wins++;
+      if (!out.best || prize > out.best.prize) out.best = x;
+    }
+  }
+  const settledSpent = tickets.filter(x => x.status !== 'open').reduce((s, x) => s + x.cost, 0);
+  return { ...out, net: out.won - settledSpent, back: settledSpent ? (out.won / settledSpent) * 100 : null, byGame: [...byGame.values()].sort((a, b) => b.spent - a.spent) };
+}
+
+// The account over a stretch of time (from `since`, ms): its slips, ledger
+// and tickets from then on, for the stats page's period filter.
+export function accountSince(account, since) {
+  if (!since) return account;
+  const after = x => Date.parse(x.t) >= since;
+  return { ...account, ledger: account.ledger.filter(after), slips: account.slips.filter(after), tickets: (account.tickets || []).filter(after) };
 }

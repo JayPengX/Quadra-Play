@@ -45,7 +45,6 @@ import { ticketProfile, accountTickets } from './lib/profile.mjs';
 import { useSourcesSession, loadOdds, loadExtraLeagues, loadExtraFutures, taipeiDayKey, fetchOutcomes, loadLive, loadLeagueTeams, parseInning, loadFutureTeams, futureTeamLeagues, FUTURES, EXTRA_FUTURES } from './lib/sources.mjs';
 import { inningsLeft, liveBaseball, liveSoccer, fitGoals, liveMarkets, liveOdds, pregameRuns, nextRunChances, nextRunOdds, LIVE_MIN_LIQUIDITY } from './lib/live.mjs';
 import {
-  START_BALANCE,
   WEEKLY_GRANT,
   newAccount,
   balance,
@@ -59,6 +58,7 @@ import {
   applyResults,
   mergeAccounts,
   recoverFromWallet,
+  refundLost,
   mergeDistinct,
   poolEntries,
   compactAccount,
@@ -66,6 +66,7 @@ import {
 } from './lib/account.mjs';
 import { renderHome } from './home.js';
 import { mountLottery } from './lottery-ui.js';
+import { mountStats } from './stats-ui.js';
 import {
   othersBalance,
   APPS,
@@ -81,7 +82,7 @@ import {
   notify
 } from './lib/quadra.mjs';
 import { pack, unpack } from './lib/codec.mjs';
-import { historyStats, outlookOf, chanceOf, funFacts, crowdPercentile, moneySources } from './lib/history.mjs';
+import { historyStats, outlookOf, chanceOf, funFacts, crowdPercentile } from './lib/history.mjs';
 import { detectLocale, makeT } from './lib/i18n.mjs';
 import { f1Driver, f1Constructor, findTeamLogo, countryFlag, leagueLogo, teamLogo, teamZh, LEAGUES, familyOf, isSoccer, isSets, isNeutral, normalizeTeamName } from './lib/teams.mjs';
 import { houseRule, minLegsProblem } from './lib/rules.mjs';
@@ -1786,6 +1787,7 @@ function payLine(label, value, cls = '') {
 
 const q = quadraSession('odds', { lang: state.locale });
 let lotteryUi = null;
+let statsUi = null;
 useSourcesSession(q);
 const accountKey = () => `${ACCOUNT_KEY}:${q.pass}`;
 
@@ -1860,13 +1862,14 @@ function noticeSettled(prev, next) {
       title: won ? state.t('noticeSlipWon', { v: fmtMoney(slip.payout, { sign: false }) }) : state.t('noticeSlipLost'),
       body: slip.legs.map(l => l.shortLabel || l.label).slice(0, 3).join('、'),
       tag: `slip:${slip.id}`,
-      hash: 'history'
+      hash: 'history',
+      kind: 'slip'
     });
   }
   const had = new Map((prev.tickets || []).map(x => [x.id, x.status]));
   for (const ticket of next.tickets || []) {
     if (ticket.status !== 'settled' || had.get(ticket.id) !== 'open' || !(ticket.prize > 0) || ticket.card) continue;
-    notify(q, { title: state.t('noticeTicketWon', { v: fmtMoney(ticket.prize, { sign: false }) }), body: '', tag: `ticket:${ticket.id}`, hash: 'lottery' });
+    notify(q, { title: state.t('noticeTicketWon', { v: fmtMoney(ticket.prize, { sign: false }) }), body: '', tag: `ticket:${ticket.id}`, hash: 'tickets', kind: 'ticket' });
   }
 }
 
@@ -1923,7 +1926,7 @@ async function mergeRemote(remote) {
     if (isAccount(other)) merged = mergeDistinct(merged, compactAccount(other));
   }
   const wallet = remote.wallet || state.wallet;
-  merged = recoverFromWallet(merged, wallet);
+  merged = refundLost(recoverFromWallet(merged, wallet));
   const have = new Set((wallet?.entries || []).map(e => e.id));
   const entries = poolEntries(merged).filter(e => !have.has(e.id));
   const open = merged.slips.filter(x => x.status === 'open').reduce((sum, x) => sum + x.cost, 0);
@@ -2286,9 +2289,9 @@ function recoveredSlipCard(slip) {
         el('strong', { text: t('slipRecoveredTitle') }),
         el('small', { class: 'muted', text: t('slipBoughtAt', { time: fmtTime(slip.t) }) })
       ]),
-      el('span', { class: `slip-pill ${profit > 0 ? 'won' : 'lost'}`, text: slip.payout > 0 ? t('slipPaid', { v: fmtMoney(slip.payout, { sign: false }) }) : t('slipRecoveredNoPay') })
+      el('span', { class: `slip-pill ${slip.refunded ? '' : profit > 0 ? 'won' : 'lost'}`, text: slip.refunded ? t('slipRefunded') : slip.payout > 0 ? t('slipPaid', { v: fmtMoney(slip.payout, { sign: false }) }) : t('slipRecoveredNoPay') })
     ]),
-    el('p', { class: 'muted recovered-note', text: t('slipRecoveredNote') }),
+    el('p', { class: 'muted recovered-note', text: t(slip.refunded ? 'slipRefundedNote' : 'slipRecoveredNote') }),
     el('div', { class: 'saved-pay' }, [
       payCell(t('slipCost'), fmtMoney(slip.cost, { sign: false })),
       payCell(t('slipPaidLabel'), fmtMoney(slip.payout, { sign: false })),
@@ -2381,12 +2384,21 @@ const HISTORY_FILTERS = {
   lost: s => s.status === 'settled' && s.payout <= s.cost
 };
 
+// When a settled slip's last game was played: its day is the day to file it
+// under, not the day the app happened to settle it (an F1 result can come
+// in days after the race, or a slip is settled when the app is next opened).
+function slipEndedAt(slip) {
+  const last = slip.legs.map(leg => leg.start || '').filter(Boolean).sort().at(-1);
+  if (last && slip.settledAt && last < slip.settledAt) return last;
+  return slip.settledAt ?? slip.t;
+}
+
 // Groups for the slip list: games on now, waiting to start, already lost
 // (a parlay with a lost pick, waiting for its other games), then settled
 // slips by the Taiwan day they were settled.
 function slipGroupKey(slip, now) {
   if (slip.recovered) return 'recovered';
-  if (slip.status === 'settled') return `day|${taipeiDayKey(slip.settledAt ?? slip.t)}`;
+  if (slip.status === 'settled') return `day|${taipeiDayKey(slipEndedAt(slip))}`;
   if (slipRange(slip).most <= 0) return 'dead';
   return slip.legs.some(leg => legState(leg, now) === 'live') ? 'live' : 'waiting';
 }
@@ -2426,24 +2438,37 @@ function applyHistoryView() {
   const t = state.t;
   if (!state.accountReady) return;
   const any = state.account.slips.length > 0;
-  const view = state.historyView === 'stats' ? 'stats' : 'slips';
+  const view = ['stats', 'tickets'].includes(state.historyView) ? state.historyView : 'slips';
+  const openTickets = (state.account.tickets || []).filter(x => x.status === 'open').length;
   $('history-tabs').hidden = false;
   $('history-tabs').replaceChildren(
-    ...['slips', 'stats'].map(key =>
-      el('button', {
-        type: 'button',
-        'aria-pressed': String(key === view),
-        text: t(`historyView_${key}`),
-        onclick: () => {
-          state.historyView = key;
-          applyHistoryView();
-          renderStats();
-        }
-      })
+    ...['slips', 'tickets', 'stats'].map(key =>
+      el(
+        'button',
+        {
+          type: 'button',
+          'aria-pressed': String(key === view),
+          onclick: () => {
+            state.historyView = key;
+            applyHistoryView();
+            renderStats();
+          }
+        },
+        [document.createTextNode(t(`historyView_${key}`)), key === 'tickets' && openTickets ? el('span', { class: 'lotto-count', text: String(openTickets) }) : null]
+      )
     )
   );
   $('saved').hidden = view !== 'slips' || !any;
   $('stats').hidden = view !== 'stats';
+  $('tickets').hidden = view !== 'tickets';
+  if (view === 'tickets') lotteryUi?.renderTickets($('tickets-body'));
+}
+
+// 紀錄's lottery tickets (the 彩券 tab's “我的彩券” and notices lead here).
+function showTickets() {
+  state.historyView = 'tickets';
+  showTab('history');
+  applyHistoryView();
 }
 
 function renderSaved() {
@@ -2527,125 +2552,9 @@ function netCell(v) {
   return el('span', { class: v < -0.5 ? 'back-low' : v > 0.5 ? 'back-high' : '', text: fmtMoney(v) });
 }
 
-// The balance after every entry: start, weekly top-ups, slips bought, payouts.
-function balanceChart(timeline) {
-  const t = state.t;
-  const w = 600;
-  const h = 170;
-  const m = { top: 12, right: 8, bottom: 22, left: 8 };
-  const values = timeline.map(p => p.balance);
-  const lo = Math.min(0, ...values);
-  const hi = Math.max(START_BALANCE, ...values);
-  const x = i => m.left + (timeline.length < 2 ? 0 : (i / (timeline.length - 1)) * (w - m.left - m.right));
-  const y = v => m.top + ((hi - v) / (hi - lo || 1)) * (h - m.top - m.bottom);
-  const svg = svgEl('svg', { class: 'balance-chart', viewBox: `0 0 ${w} ${h}`, role: 'img', 'aria-label': t('balanceChart') });
-  svg.append(
-    svgEl('line', { class: 'zero-line', x1: m.left, x2: w - m.right, y1: y(START_BALANCE), y2: y(START_BALANCE) }),
-    Object.assign(svgEl('text', { class: 'chart-note', x: w - m.right, y: y(START_BALANCE) - 4, 'text-anchor': 'end' }), { textContent: fmtMoney(START_BALANCE, { sign: false }) })
-  );
-  // Steps: the balance holds until the next entry.
-  let d = `M${x(0)},${y(values[0])}`;
-  for (let i = 1; i < values.length; i++) d += `H${x(i).toFixed(1)}V${y(values[i]).toFixed(1)}`;
-  svg.append(svgEl('path', { class: 'balance-line', d }));
-  timeline.forEach((p, i) => {
-    if (p.kind === 'payout' && p.amount > 0) svg.append(svgEl('circle', { class: 'balance-win', cx: x(i), cy: y(p.balance), r: 3.5 }));
-    if (p.kind === 'grant') svg.append(svgEl('circle', { class: 'balance-grant', cx: x(i), cy: y(p.balance), r: 3 }));
-    if (p.kind === 'game' && p.amount > 0) svg.append(svgEl('circle', { class: 'balance-game', cx: x(i), cy: y(p.balance), r: 2.5 }));
-  });
-  const first = new Date(timeline[0].t);
-  const last = new Date(timeline.at(-1).t);
-  const day = d => formatter('md', locale => new Intl.DateTimeFormat(locale, { month: 'numeric', day: 'numeric', timeZone: 'Asia/Taipei' })).format(d);
-  svg.append(
-    Object.assign(svgEl('text', { class: 'chart-note', x: m.left, y: h - 6 }), { textContent: day(first) }),
-    Object.assign(svgEl('text', { class: 'chart-note', x: w - m.right, y: h - 6, 'text-anchor': 'end' }), { textContent: day(last) })
-  );
-  return el('div', { class: 'card' }, [
-    el('h3', { class: 'card-title', text: t('balanceChart') }),
-    svg,
-    el('p', { class: 'legend' }, [
-      el('span', {}, [el('span', { class: 'legend-key dot win' }), document.createTextNode(t('chartPayout'))]),
-      el('span', {}, [el('span', { class: 'legend-key dot grant' }), document.createTextNode(t('chartGrant'))]),
-      el('span', {}, [el('span', { class: 'legend-key dot game' }), document.createTextNode(t('chartGame'))])
-    ])
-  ]);
-}
 
-// Where the account's money came from and went: one bar for money in (the
-// start, weekly grants, mini games, slips' payouts) and one for money out
-// (stakes), then what that means: betting's result, work's pay against the
-// minimum wage, what the lottery and the tax took, and how many rounds of
-// work betting's losses cost.
-const MONEY_IN = [['start', 'var(--axis)'], ['grants', 'var(--series-1)'], ['games', 'var(--good)'], ['payouts', '#f9a825']];
-function moneyCard(m) {
-  const t = state.t;
-  const money = v => fmtMoney(v, { sign: false });
-  const ins = { start: m.start, grants: m.grants.sum, games: m.games.sum, payouts: m.payouts.sum };
-  const totalIn = Object.values(ins).reduce((a, b) => a + b, 0) || 1;
-  const bar = (parts, total) =>
-    el('div', { class: 'flow-bar', role: 'img' }, parts.filter(([, v]) => v > 0).map(([key, v, color]) => el('span', { class: `flow-seg seg-${key}`, style: `width:${(v / total) * 100}%;background:${color}`, title: `${t(`moneyIn_${key}`)} ${money(v)}` })));
-  const legend = parts =>
-    el('ul', { class: 'flow-legend' }, parts.filter(([, v]) => v > 0).map(([key, v, color, note]) => el('li', {}, [
-      el('span', { class: 'legend-key', style: `background:${color}` }),
-      el('span', { text: t(`moneyIn_${key}`) }),
-      el('strong', { text: money(v) }),
-      el('small', { class: 'muted', text: note ?? fmtPctShort(v / totalIn) })
-    ])));
-  const inParts = MONEY_IN.map(([key, color]) => [key, ins[key], color, key === 'grants' ? t('moneyGrantsNote', { n: fmtInt(m.grants.n) }) : key === 'games' ? t('moneyGamesNote', { n: fmtInt(m.games.rounds) }) : key === 'payouts' ? t('moneyPayoutsNote', { n: fmtInt(m.payouts.n) }) : null]);
-  const outParts = [['stakes', m.stakes.sum, 'var(--bad)', t('moneyStakesNote', { n: fmtInt(m.stakes.n) })]];
-  const facts = [];
-  if (m.settled.staked) {
-    facts.push([t('moneyBetting'), netCell(m.bettingNet), t('moneyBettingNote', { staked: money(m.settled.staked), paid: money(m.settled.paid) })]);
-    facts.push([t('moneyHouse'), money(Math.max(0, m.houseKept)), t('moneyHouseNote', { v: fmtPctShort(Math.max(0, m.houseKept) / m.settled.staked) })]);
-    if (m.tax > 0) facts.push([t('moneyTax'), money(m.tax), t('moneyTaxNote')]);
-  }
-  if (m.open.n) facts.push([t('moneyOpen'), money(m.open.sum), t('moneyOpenNote', { n: fmtInt(m.open.n) })]);
-  return el('div', { class: 'card money-card' }, [
-    el('h3', { class: 'card-title', text: t('moneyTitle') }),
-    el('p', { class: 'lede', text: t('moneyLede', { v: money(m.balance) }) }),
-    el('p', { class: 'flow-label', text: t('moneyInTitle', { v: money(totalIn) }) }),
-    bar(inParts, totalIn),
-    legend(inParts),
-    m.stakes.sum ? el('p', { class: 'flow-label', text: t('moneyOutTitle', { v: money(m.stakes.sum) }) }) : null,
-    m.stakes.sum ? bar(outParts, totalIn) : null,
-    m.stakes.sum ? legend(outParts) : null,
-    facts.length ? el('dl', { class: 'money-facts' }, facts.flatMap(([k, v, note]) => [el('dt', { text: k }), el('dd', {}, [typeof v === 'string' ? el('strong', { text: v }) : v, el('small', { class: 'muted', text: note })])])) : null
-  ]);
-}
 
-function weeksMoneyCard(m) {
-  const t = state.t;
-  if (m.weeks.length < 2) return null;
-  const money = v => fmtMoney(v, { sign: false });
-  // Short cells so it fits a phone: whole dollars, the week as its Monday.
-  const n = v => fmtInt(Math.round(v));
-  const rows = m.weeks.slice(0, 12).map(w => {
-    const [, mo, d] = w.week.split('-').map(Number);
-    return [`${mo}/${d}`, n(w.grants), n(w.games), netCell(w.paid - w.staked), netCell(w.grants + w.games + w.paid - w.staked)];
-  });
-  return el('div', { class: 'card' }, [
-    el('h3', { class: 'card-title', text: t('weeksMoneyTitle') }),
-    table([t('colWeek'), t('moneyIn_grants'), t('moneyIn_games'), t('moneyBetting'), t('colWeekNet')], rows),
-    el('p', { class: 'note', text: t('weeksMoneyNote') })
-  ]);
-}
 
-// Luck against the lottery's cut: what the odds said these slips would pay
-// back, what they did, and how unusual the gap is.
-function luckCard(s) {
-  const t = state.t;
-  const pct = Math.round(s.luckShare * 100);
-  const verdict =
-    Math.abs(s.luckZ) < 0.5 ? t('luckNormal') : s.luckZ > 0 ? t('luckGood', { p: Math.max(1, 100 - pct) }) : t('luckBad', { p: Math.max(1, pct) });
-  return el('div', { class: 'card' }, [
-    el('h3', { class: 'card-title', text: t('luckTitle') }),
-    el('ul', { class: 'facts' }, [
-      el('li', { text: t('luckExpected', { staked: fmtMoney(s.staked, { sign: false }), exp: fmtMoney(s.expected, { sign: false }), back: fmtBack(s.expectedBack), loss: fmtMoney(s.expectedLoss, { sign: false }) }) }),
-      el('li', { text: t('luckActual', { paid: fmtMoney(s.paid, { sign: false }), back: fmtBack(s.back), diff: fmtMoney(s.luck), sd: fmtMoney(s.luckSd, { sign: false }) }) }),
-      el('li', { text: verdict }),
-      el('li', { text: t('luckLongRun') })
-    ])
-  ]);
-}
 
 function picksCard(s) {
   const t = state.t;
@@ -2677,31 +2586,7 @@ function breakdownCard(s) {
   ]);
 }
 
-function recordsCard(s) {
-  const t = state.t;
-  const r = s.records;
-  const slipName = slip => `${fmtTime(slip.t)} · ${t(`slipMode_${slip.mode}`)} ${t('slipLegs', { n: slip.legs.length })}`;
-  const items = [];
-  const streakNow = s.streak.current > 0 ? t('streakWinNow', { n: s.streak.current }) : s.streak.current < 0 ? t('streakLossNow', { n: -s.streak.current }) : null;
-  if (streakNow) items.push(streakNow);
-  items.push(t('streakBest', { win: s.streak.bestWin, loss: s.streak.bestLoss }));
-  if (r.best && r.best.profit > 0) items.push(t('recordBest', { v: fmtMoney(r.best.profit), slip: slipName(r.best.slip) }));
-  if (r.worst && r.worst.profit < 0) items.push(t('recordWorst', { v: fmtMoney(r.worst.profit), slip: slipName(r.worst.slip) }));
-  if (r.longest) items.push(t('recordLongest', { x: fmtOdds(r.longest.odds), slip: slipName(r.longest.slip) }));
-  items.push(t('recordAverage', { cost: fmtMoney(s.avgCost, { sign: false }), combos: fmtInt(s.combos) }));
-  if (s.tax > 0) items.push(t('recordTax', { v: fmtMoney(s.tax, { sign: false }) }));
-  return el('div', { class: 'card' }, [el('h3', { class: 'card-title', text: t('recordsTitle') }), el('ul', { class: 'facts records' }, items.map(text => el('li', { text })))]);
-}
 
-function weeksCard(s) {
-  const t = state.t;
-  if (s.weeks.length < 2) return null;
-  const day = iso => formatter('md', locale => new Intl.DateTimeFormat(locale, { month: 'numeric', day: 'numeric', timeZone: 'UTC' })).format(new Date(`${iso}T00:00:00Z`));
-  return el('details', { class: 'card fold' }, [
-    el('summary', { text: t('weeksTitle') }),
-    table([t('colWeek'), t('colSlips'), t('colStaked'), t('colNet'), t('colBackActual')], s.weeks.map(b => [t('weekOf', { d: day(b.week) }), fmtInt(b.slips), fmtMoney(b.staked, { sign: false }), netCell(b.net), fmtBack(b.back)]))
-  ]);
-}
 
 // Fun facts from the slips.
 function funCard() {
@@ -2815,31 +2700,8 @@ function crowdCard(s) {
 function renderStats() {
   // Drawn only when on screen: it can start the crowd simulation.
   if (!state.accountReady || state.tab !== 'history' || state.historyView !== 'stats') return;
-  const t = state.t;
-  const s = historyStats(state.account);
-  const m = moneySources(state.account);
-  // Shown once there's anything to count: a slip, a grant or a mini game.
-  $('stats').hidden = s.placed === 0 && !m.grants.n && !m.games.rounds;
-  if (!s.placed) {
-    $('stats-body').replaceChildren(...[moneyCard(m), weeksMoneyCard(m)].filter(Boolean));
-    return;
-  }
-  const kpis = el('div', { class: 'kpis' }, [
-    statTile(t('kpiSettled'), `${fmtInt(s.settled)} / ${fmtInt(s.placed)}`),
-    statTile(t('kpiStaked'), fmtMoney(s.staked, { sign: false })),
-    statTile(t('kpiPaid'), fmtMoney(s.paid, { sign: false })),
-    statTile(t('kpiNet'), fmtMoney(s.net), s.net < -0.5 ? 'back-low' : s.net > 0.5 ? 'back-high' : ''),
-    statTile(t('kpiBack'), s.settled ? `${fmtBack(s.back)} / ${fmtBack(s.expectedBack)}` : '–'),
-    statTile(t('kpiHit'), s.settled ? `${fmtRate(s.paidSlips / s.settled)} / ${fmtRate(s.expectedPaidSlips / s.settled)}` : '–'),
-    statTile(t('kpiOpen'), `${fmtInt(s.open)} · ${fmtMoney(s.openStake, { sign: false })}`)
-  ]);
-  const cards = [el('div', { class: 'card' }, [kpis, el('p', { class: 'note', text: t('kpiNote') })]), moneyCard(m)];
-  if (s.timeline.length > 1) cards.push(balanceChart(s.timeline));
-  cards.push(weeksMoneyCard(m));
-  cards.push(youCard(), crowdCard(s), funCard());
-  if (s.settled) cards.push(el('div', { class: 'two-col' }, [luckCard(s), recordsCard(s)]), picksCard(s), breakdownCard(s), weeksCard(s));
-  else cards.push(el('p', { class: 'muted', text: t('statsWait') }));
-  $('stats-body').replaceChildren(...cards.filter(Boolean));
+  $('stats').hidden = false;
+  statsUi.render($('stats-body'));
 }
 
 // ---- Simulator ----------------------------------------------------------------
@@ -3408,12 +3270,17 @@ $('tabs').addEventListener('keydown', event => {
 {
   const fromHash = location.hash.slice(1);
   if (TABS.includes(fromHash)) state.tab = state.wantedTab = fromHash;
+  if (fromHash === 'tickets') ((state.tab = state.wantedTab = 'history'), (state.historyView = 'tickets'));
   // #game=<id>: Quadra Fixtures' "bet on this" opens that game.
   const wanted = /^game=(.+)$/.exec(fromHash);
   if (wanted) state.wantedGame = decodeURIComponent(wanted[1]);
 }
 window.addEventListener('hashchange', () => {
-  const wanted = /^game=(.+)$/.exec(location.hash.slice(1));
+  const hash = location.hash.slice(1);
+  // A notice's tap: its tab, or 紀錄's tickets.
+  if (hash === 'tickets') return showTickets();
+  if (TABS.includes(hash)) return showTab(hash);
+  const wanted = /^game=(.+)$/.exec(hash);
   if (!wanted) return;
   state.wantedGame = decodeURIComponent(wanted[1]);
   openWantedGame();
@@ -3533,7 +3400,8 @@ q.on('active', live => {
 function homeCtx() {
   return { state, q, el, fmtMoney, fmtOdds, fmtTime, pickTitle, gameSeries, matchupText, logoImg, leagueImg, toggleLeg, showTab, openGame: id => ((state.wantedGame = id), openWantedGame()), betKeys, track, funds, slipRange };
 }
-lotteryUi = mountLottery({ state, q, el, fmtMoney, funds, commitAccount, track, getAccount: () => state.account, syncNow });
+statsUi = mountStats({ state, el, svgEl, fmtMoney, fmtInt, fmtPctShort, fmtOdds, fmtTime, sportName: key => (key === 'mixed' ? state.t('sportMixed') : state.t(`sport_${key}`) === `sport_${key}` ? String(key).toUpperCase() : state.t(`sport_${key}`)), youCard, crowdCard, funCard, picksCard, breakdownCard });
+lotteryUi = mountLottery({ state, q, el, fmtMoney, funds, commitAccount, track, getAccount: () => state.account, syncNow, showTickets });
 
 async function boot() {
   const first = await q.start();

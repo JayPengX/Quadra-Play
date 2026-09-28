@@ -38,7 +38,10 @@ export function mountLottery(ctx) {
   const ui = { view: 'draws', latest: null, settling: false };
   const box = () => document.getElementById('lottery-body');
 
-  const extra = () => Math.max(0, ctx.funds(ctx.getAccount()) - balance(ctx.getAccount()));
+  // The rest of the pool, which is below zero when other apps have spent
+  // more than they have (money moved into Securities, say): never floored at
+  // zero, or Play would sell tickets the pool can't pay for.
+  const extra = (account = ctx.getAccount()) => ctx.funds(account) - balance(account);
   const timeText = ms => new Date(ms).toLocaleString(lang === 'en' ? 'en-US' : 'zh-TW', { month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Taipei' });
 
   // A random selection for a game (quick pick), in the picker's shape.
@@ -78,7 +81,7 @@ export function mountLottery(ctx) {
     let cost = 0;
     let bought = 0;
     for (const sel of lines) {
-      const r = buyTicket(account, { id: newSlipId(), game: id, sel: structuredClone(sel), multiple }, new Date(), { extra: Math.max(0, ctx.funds(account) - balance(account)) });
+      const r = buyTicket(account, { id: newSlipId(), game: id, sel: structuredClone(sel), multiple }, new Date(), { extra: extra(account) });
       if (r.error) {
         if (!bought) return { error: r.error };
         break;
@@ -133,16 +136,17 @@ export function mountLottery(ctx) {
         .catch(() => {});
     }
     settleDue();
+    if (ui.view === 'mine') ui.view = 'draws';
     const open = (ctx.getAccount().tickets || []).filter(x => x.status === 'open').length;
     const seg = el(
       'div',
       { class: 'segmented lotto-seg', role: 'group' },
-      ['draws', 'scratch', 'mine'].map(v =>
-        el('button', { type: 'button', 'aria-pressed': String(ui.view === v), onclick: () => ((ui.view = v), render()) }, [document.createTextNode(t(v)), v === 'mine' && open ? el('span', { class: 'lotto-count', text: String(open) }) : null])
-      )
+      ['draws', 'scratch'].map(v => el('button', { type: 'button', 'aria-pressed': String(ui.view === v), onclick: () => ((ui.view = v), render()) }, [document.createTextNode(t(v))]))
     );
-    const body = ui.view === 'draws' ? drawGames() : ui.view === 'scratch' ? scratchCards() : myTickets();
-    root.replaceChildren(seg, body);
+    // Tickets bought live in 紀錄 (next to the slips); a link to them here.
+    const mine = el('button', { class: 'lotto-mine-link', type: 'button', onclick: () => ctx.showTickets() }, [el('span', { text: `🎟️ ${t('mine')}` }), open ? el('span', { class: 'lotto-count', text: String(open) }) : null, el('span', { class: 'chev', 'aria-hidden': 'true', text: '›' })]);
+    const body = ui.view === 'draws' ? drawGames() : scratchCards();
+    root.replaceChildren(seg, body, mine);
   }
 
   function drawGames() {
@@ -158,28 +162,10 @@ export function mountLottery(ctx) {
           el('div', { class: 'lotto-top' }, [el('span', { class: 'lotto-emblem', 'aria-hidden': 'true', text: gameName(id, lang).slice(0, 1) }), el('div', { class: 'lotto-id' }, [el('span', { class: 'lotto-name', text: gameName(id, lang) }), el('span', { class: 'lotto-price', text: t('perBet', { v: money(g.price) }) })])]),
           latest?.jackpot && !g.of ? el('strong', { class: 'lotto-jackpot num', text: compactMoney(latest.jackpot, lang) }) : el('strong', { class: 'lotto-jackpot small', text: id === 'bingo' ? t('every5') : g.house ? t('house') : topLine(id) }),
           nums.length ? el('div', { class: 'balls mini' }, nums.map(n => ball(n))) : null,
-          el('span', { class: 'lotto-when', text: d ? untilText(d.at) : t('closed') }),
-          d
-            ? el('button', {
-                class: 'q-btn small lotto-quick',
-                type: 'button',
-                text: `⚡ ${t('quick1')}`,
-                onclick: e => {
-                  e.stopPropagation();
-                  const r = buyLines(id, [randomSel(id)], 1);
-                  toastIn(r.error ? t(r.error === 'funds' ? 'funds' : 'closed') : t('boughtN', { n: 1, v: money(r.cost) }));
-                  render();
-                }
-              })
-            : null
+          el('span', { class: 'lotto-when', text: d ? untilText(d.at) : t('closed') })
         ]);
       })
     );
-  }
-  function toastIn(text) {
-    const box = el('div', { class: 'lotto-toast', role: 'status', text });
-    document.body.append(box);
-    setTimeout(() => box.remove(), 2600);
   }
   function topLine(id) {
     const g = GAMES[id];
@@ -212,7 +198,7 @@ export function mountLottery(ctx) {
             el('strong', { text: t('boughtN', { n: st.done.bought, v: money(st.done.cost) }) }),
             el('span', { class: 'muted', text: d ? untilText(d.at) : '' }),
             el('div', { class: 'lotto-buybar' }, [
-              el('button', { class: 'q-btn', type: 'button', text: t('seeTickets'), onclick: () => ((ui.view = 'mine'), close()) }),
+              el('button', { class: 'q-btn', type: 'button', text: t('seeTickets'), onclick: () => (close(), ctx.showTickets()) }),
               el('button', { class: 'q-btn primary', type: 'button', text: t('again'), onclick: () => ((st.done = null), paint()) })
             ])
           ])
@@ -226,7 +212,8 @@ export function mountLottery(ctx) {
           el('div', { class: 'balls' }, selBalls(id, st.sel).length ? selBalls(id, st.sel) : [el('span', { class: 'muted small', text: '—' })]),
           el('div', { class: 'lc-actions' }, [
             el('button', { class: 'q-btn small', type: 'button', text: `＋ ${t('addLine')}`, disabled: check.ok ? null : '', onclick: () => ((st.lines = [...st.lines, structuredClone(st.sel)]), (st.sel = blankSel(id)), paint()) }),
-            el('button', { class: 'q-chip', type: 'button', text: `⚡ ${t('quickN', { n: 5 })}`, onclick: () => ((st.lines = [...st.lines, ...Array.from({ length: 5 }, () => randomSel(id, st.sel))]), paint()) })
+            // Quick picks only fill the list: nothing is bought until 購買.
+            ...[1, 5].map(n => el('button', { class: 'q-chip', type: 'button', text: `⚡ ${t(n === 1 ? 'quick1' : 'quickN', { n })}`, onclick: () => ((st.lines = [...st.lines, ...Array.from({ length: n }, () => randomSel(id, st.sel))]), paint()) }))
           ])
         ]),
         picker(id, st, paint),
@@ -566,5 +553,12 @@ export function mountLottery(ctx) {
     ]);
   }
 
-  return { render, settleDue };
+  // 紀錄's 彩券 view.
+  function renderTickets(root) {
+    if (!root || !ctx.getAccount()) return;
+    settleDue();
+    root.replaceChildren(myTickets());
+  }
+
+  return { render, settleDue, renderTickets };
 }
