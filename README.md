@@ -273,7 +273,7 @@ The page depends on that Worker:
 - **Allowed hosts only:** `site.api.espn.com`, `gamma-api.polymarket.com` and `eu-offering-api.kambicdn.com` are the ones used here.
 - **Fetching politely:** every response is cached at the Worker for every viewer (Kambi's lists 2 minutes, Polymarket's championship search 10 minutes, live scores 20 seconds), Kambi's responses are trimmed to the fields used (`&trim=kambi-events`, about 5× smaller), the page sends at most 6 requests at once, and live scores are polled only while the page is visible.
 
-The practice account's sync uses Shared-Proxy's other Worker, `orbit-workers-proxy` (`SYNC_URL` in `public/lib/sync.mjs`), route `/odds-sync`. Without it the account still works on each device alone.
+The account lives on the Quadra Pass: Shared-Proxy's `orbit-workers-proxy`, route `/eco` (the shared kit, `public/lib/quadra.mjs`). A Quadra Pass is required.
 
 | File | Purpose |
 | --- | --- |
