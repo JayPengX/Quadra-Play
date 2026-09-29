@@ -1312,6 +1312,34 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .st-card { margin: 0; padding: 16px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); display: grid; gap: 10px; }
 .st-head h3 { font-size: 1rem; font-weight: 800; }
 .st-head p { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+/* 戰績: the wins */
+.wins-hero {
+  display: grid; gap: 2px; padding: 20px 18px; border-radius: var(--radius); color: #fff;
+  background: linear-gradient(140deg, #052e24 0%, #065f46 55%, #10b981 100%); box-shadow: var(--shadow);
+}
+.wins-label { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; opacity: 0.85; }
+.wins-total { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
+.wins-sub { font-size: 0.82rem; opacity: 0.85; }
+.wins-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.wins-tile { display: grid; gap: 2px; min-width: 0; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--border); }
+.wins-tile small { font-size: 0.72rem; color: var(--text-muted); }
+.wins-tile strong { font-size: 1.1rem; font-weight: 800; }
+.wins-tile span { font-size: 0.72rem; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.moments { display: grid; gap: 10px; list-style: none; margin: 0; padding: 0; }
+.moment { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.moment-mark { flex: 0 0 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); font-weight: 800; font-size: 0.8rem; }
+.moment-mark.lotto { background: color-mix(in srgb, #f59e0b 16%, transparent); color: #d97706; }
+.moment-main { flex: 1; min-width: 0; display: grid; }
+.moment-main strong { font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.moment-main small { font-size: 0.72rem; color: var(--text-muted); }
+.moment-amt { display: grid; justify-items: end; }
+.moment-amt strong { font-weight: 800; color: var(--good); }
+.moment-amt small { font-size: 0.72rem; color: var(--text-muted); }
+.wins-bars { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.wins-bars li { display: grid; grid-template-columns: 5.5em 1fr auto; align-items: center; gap: 10px; font-size: 0.85rem; }
+.wins-bars i { display: block; height: 8px; border-radius: 99px; background: linear-gradient(90deg, var(--good) var(--w), var(--border) var(--w)); }
+.wins-bars strong { font-weight: 700; }
+.wins-cta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .st-now { display: flex; align-items: baseline; gap: 8px; }
 .st-now strong { font-size: 1.35rem; font-weight: 800; }
 .st-now span { font-size: 0.85rem; font-weight: 700; }

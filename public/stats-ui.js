@@ -7,7 +7,7 @@ import { CARDS } from './lib/scratch.mjs';
 const T = {
   zh: {
     all: '全部', d30: '30 天', d7: '7 天',
-    total: '累計中獎', totalSub: '中獎 {n} 次 · 最大一筆 {v}', none: '還沒有中獎紀錄，第一筆就在今天。',
+    total: '累計中獎', totalSub: '中獎 {n} 次 · 最大一筆 {v}', none: '還沒有中獎',
     month: '本月中獎', streak: '最長連中', streakN: '{n} 張', top: '最高倍數', cashed: '提前兌現', bigLotto: '彩券最大獎',
     moments: '中獎時刻', momentsSub: '最大的幾筆', sports: '拿手運動', sportsSub: '依中獎金額',
     slipWin: '{n} 場', lottery: '彩券', scratch: '刮刮樂', cashTag: '兌現',
@@ -15,7 +15,7 @@ const T = {
   },
   en: {
     all: 'All', d30: '30 days', d7: '7 days',
-    total: 'Total won', totalSub: '{n} wins · biggest {v}', none: 'No wins yet: the first one could be today.',
+    total: 'Total won', totalSub: '{n} wins · biggest {v}', none: 'No wins yet',
     month: 'Won this month', streak: 'Longest run', streakN: '{n} slips', top: 'Top multiple', cashed: 'Cashed out', bigLotto: 'Biggest lottery prize',
     moments: 'Big moments', momentsSub: 'Your biggest wins', sports: 'Your best sports', sportsSub: 'By winnings',
     slipWin: '{n} picks', lottery: 'Lottery', scratch: 'Scratch card', cashTag: 'Cashed out',
@@ -111,10 +111,10 @@ export function mountStats(ctx) {
       chips,
       hero,
       tiles,
-      el('section', { class: 'st-card' }, [el('div', { class: 'st-head' }, [el('h3', { text: t('moments') }), el('p', { text: t('momentsSub') })]), el('ul', { class: 'moments' }, biggest.slice(0, 6).map(moment))]),
+      el('section', { class: 'st-card' }, [el('div', { class: 'st-head' }, [el('h3', { text: t('moments') })]), el('ul', { class: 'moments' }, biggest.slice(0, 6).map(moment))]),
       sports.length
         ? el('section', { class: 'st-card' }, [
-            el('div', { class: 'st-head' }, [el('h3', { text: t('sports') }), el('p', { text: t('sportsSub') })]),
+            el('div', { class: 'st-head' }, [el('h3', { text: t('sports') })]),
             el('ul', { class: 'wins-bars' }, sports.map(([sport, v]) => el('li', {}, [el('span', { text: sportName(sport) }), el('i', { style: `--w:${((v / max) * 100).toFixed(1)}%` }), el('strong', { class: 'num', text: money(v) })])))
           ])
         : null,
