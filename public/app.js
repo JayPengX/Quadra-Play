@@ -80,6 +80,7 @@ import {
   affinityPatch,
   activityPatch,
   notify,
+  schedulePush,
   storedAccount,
   helpUrl
 } from './lib/quadra.mjs';
@@ -1832,9 +1833,26 @@ function commitAccount(next) {
   pushSoon();
 }
 
+// While Play is closed: when an open slip's last game should be over, a
+// notice to come and see how it went (it settles when Play is opened).
+const GAME_HOURS = { baseball: 3.3, football: 3.5, basketball: 2.6, hockey: 2.7, soccer: 2.1, sets: 2.5, racing: 2.2 };
+function syncPush(profile) {
+  const now = Date.now();
+  const items = [];
+  for (const slip of profile?.slips || []) {
+    if (slip.status !== 'open') continue;
+    const ends = slip.legs.map(l => (l.start ? Date.parse(l.start) + (GAME_HOURS[familyOf(l.sport)] || 3) * 3_600_000 : NaN)).filter(Number.isFinite);
+    if (!ends.length) continue;
+    const at = Math.max(...ends);
+    if (at > now && at < now + 30 * 86_400_000) items.push({ at, title: state.t('noticeSlipDone'), body: slip.legs.map(l => l.shortLabel || l.label).slice(0, 3).join('、'), tag: `slip:${slip.id}`, hash: 'history', kind: 'slip' });
+  }
+  schedulePush(q, items);
+}
+
 // A slip or lottery ticket just settled: a notice (a banner on screen, a
 // system notice when Play is in the background and they're allowed).
 function noticeSettled(prev, next) {
+  syncPush(next);
   if (!prev) return;
   const was = new Map(prev.slips.map(x => [x.id, x.status]));
   for (const slip of next.slips) {
