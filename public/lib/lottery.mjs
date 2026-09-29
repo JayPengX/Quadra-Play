@@ -182,7 +182,6 @@ export function nextDraw(gameId, now = Date.now()) {
   }
   return null;
 }
-export const drawKey = (gameId, draw) => (draw.slot != null ? `${gameId}:${draw.date}:${draw.slot}` : `${gameId}:${draw.date}`);
 
 // ---- Picks ----------------------------------------------------------------------------
 
@@ -529,38 +528,5 @@ export function mergeTickets(a = [], b = []) {
 
 // ---- Odds --------------------------------------------------------------------------------
 
-// Each prize tier's chance for one bet: [{ key, p }] in the game's order,
-// and any prize at all. 大樂透's special is one of the other 43; 威力彩's
-// second zone is 1 in 8; 3/4星彩 by the play (組彩 by how many orders the
-// digits make); 樂合彩 by the size; BINGO by how many stars.
-export function tierOdds(gameId, sel = {}) {
-  const g = GAMES[gameId];
-  const pick = (max, n, drawn, k) => (choose(n, k) * choose(max - n, drawn - k)) / choose(max, drawn);
-  let rows = [];
-  if (gameId === 'super638') rows = g.tiers.map(x => ({ key: x.key, p: pick(38, 6, 6, x.m[0]) * (x.m[1] ? 1 / 8 : 7 / 8) }));
-  else if (gameId === 'lotto649')
-    rows = g.tiers.map(x => {
-      if (x.hits === 6) return { key: x.key, p: 1 / choose(49, 6) };
-      // k of the six, and the special among the six not hit or not.
-      const ways = choose(6, x.hits) * (x.sp ? choose(42, 5 - x.hits) : choose(42, 6 - x.hits));
-      return { key: x.key, p: ways / choose(49, 6) };
-    });
-  else if (g.tiers) {
-    const { n, max } = g.zones[0];
-    rows = g.tiers.map(x => ({ key: x.key, p: pick(max, n, n, x.hits) }));
-  } else if (g.mirror) rows = Object.keys(g.mirror).map(k => ({ key: k, p: pick(24, 12, 12, Number(k)) + pick(24, 12, 12, 12 - Number(k)) }));
-  else if (g.digits) {
-    const d = g.digits;
-    const ways = sel.digits ? boxWays(sel.digits) : null;
-    rows = Object.keys(g.plays).map(k => ({ key: k, p: k === 'straight' ? 10 ** -d : k === 'pair' ? 1 / 100 : ways > 1 ? ways / 10 ** d : null }));
-  } else if (g.combo) rows = Object.keys(g.combo.sizes).map(k => ({ key: k, p: choose(g.combo.drawn, Number(k)) / choose(g.combo.max, Number(k)) }));
-  else if (gameId === 'bingo') {
-    const n = sel.numbers?.length || 5;
-    rows = Object.keys(g.stars[n] || {}).map(h => ({ key: h, p: pick(80, n, 20, Number(h)) }));
-  }
-  // A 樂合彩 or 3/4星彩 row is a choice of play, not tiers of one bet.
-  const any = g.combo || g.digits ? null : rows.reduce((s, r) => s + (r.p || 0), 0);
-  return { rows, any };
-}
 // "1 in 8.5", "1 in 22,085,448".
 export const oneIn = p => (p > 0 ? (1 / p < 100 ? Math.round((1 / p) * 10) / 10 : Math.round(1 / p)) : null);

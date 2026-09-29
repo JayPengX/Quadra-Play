@@ -23,9 +23,6 @@ export const F1_PRICING = {
   pre: { scale: 1, exponent: 0.692, steps: [[0.01, null], [0.004, 65], [0.001, 325], [0, 500]] },
   post: { scale: 1.17, exponent: 0.765, steps: [[0.01, null], [0.004, 65], [0.0015, 275], [0, 500]] }
 };
-export const F1_SCALE = F1_PRICING.post.scale;
-export const F1_EXPONENT = F1_PRICING.post.exponent;
-export const F1_LONGSHOT_STEPS = F1_PRICING.post.steps;
 // Never below this, however big the favourite.
 export const F1_MIN_ODDS = 1.05;
 // The lottery reprices once qualifying is over: this long after it starts.

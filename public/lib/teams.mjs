@@ -228,11 +228,6 @@ export function rememberTeams(sport, teams) {
   fetchedTeams.set(sport, teams.map(t => t.name));
 }
 export const hasTeams = sport => (fetchedTeams.get(sport)?.length ?? 0) > 0 || Boolean(TEAM_BADGES[sport]);
-// A club's name without its city ("Packers", "Tigers"): ESPN's nickname, or
-// the last word of the name for the Asian leagues' clubs.
-export function teamNick(sport, name) {
-  return nicknames.get(`${sport}|${name}`) ?? (TEAM_BADGES[sport] ? name.split(' ').at(-1) : name);
-}
 export function leagueTeams(sport) {
   let names = [];
   if (fetchedTeams.get(sport)?.length) names = fetchedTeams.get(sport);

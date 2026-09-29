@@ -34,10 +34,6 @@ export function lotteryWindowEnd(now, days = 1) {
   return new Date(Date.UTC(y, m - 1, d + 1 + days) - TAIPEI_OFFSET_MS);
 }
 
-// A Premier League round is listed once it's close: its first game starts
-// within the next 3 days (Taiwan time), not two weeks out after a break.
-export const EPL_OPEN_DAYS = 3;
-
 // The NBA only shows during its season: from opening night (the first
 // Tuesday on or after 19 October) to the end of June, after the Finals.
 export function nbaInSeason(now) {
@@ -118,10 +114,6 @@ let session = null;
 export function useSourcesSession(s) {
   session = s;
   useKambiToken(() => session?.token || '');
-}
-
-export function proxied(url, trim, token = session?.token || '') {
-  return `${PROXY_URL}/sports-proxy?url=${encodeURIComponent(url)}${trim ? `&trim=${trim}` : ''}${token ? `&qt=${encodeURIComponent(token)}` : ''}`;
 }
 
 // Through the kit's proxyJson: the dozens of lists the page asks for at

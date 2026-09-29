@@ -1,9 +1,8 @@
 {
-  "name": "quadra-sportsbook",
+  "name": "quadra-play",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node scripts/build-data.mjs",
     "test": "node --test"
   }
 }

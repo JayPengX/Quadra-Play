@@ -253,17 +253,14 @@ test('every text the page builds from a key exists in both languages', async () 
   const { FUTURES, EXTRA_FUTURES } = await import('../public/lib/sources.mjs');
   const keys = [
     ...TRAIT_ROWS.flatMap(r => [`trait_${r.key}`, `traitDesc_${r.key}`]),
-    ...Object.keys(LEADERBOARDS).flatMap(k => [`lb_${k}`, `lbNote_${k}`]),
     ...[...Object.keys(LEAGUES), 'f1', 'all'].map(k => `sport_${k}`),
     ...[...FUTURES, ...EXTRA_FUTURES].flatMap(f => [`future_${f.key}`, `futureSettle_${f.key}`]),
     ...['games', 'points', 'frames'].map(u => `unit_${u}`),
-    ...['value', 'steady', 'shot'].flatMap(r => [`rec_${r}`, `recWhy_${r}`]),
     ...['low', 'high'].map(l => `lock_${l}`),
     ...['locked', 'minLegs'].map(e => `slipError_${e}`),
-    ...['style', 'react', 'fan'].flatMap(g => [`groupTab_${g}`, `groupNote_${g}`]),
     ...['baseball', 'basketball', 'soccer', 'football', 'hockey', 'tennis', 'badminton', 'tabletennis', 'volleyball', 'snooker', 'f1'].map(g => `group_${g}`),
     ...['secHtft', 'secGoalBands', 'secQ1', 'secFirstSet', 'secSets', 'secTotalSets', 'secSetHcap', 'secGameHcap', 'secGameTotal', 'secHalfTotal', 'secDoubleChance'],
-    ...['fanEverything', 'seriesDesc', 'givePoints', 'f1Podium', 'f1PodiumShort', 'f1PodiumSub', 'f1PodiumNote']
+    ...['givePoints', 'f1Podium', 'f1PodiumShort', 'f1PodiumSub', 'f1PodiumNote']
   ];
   for (const locale of ['zh', 'en']) {
     const t = makeT(locale);

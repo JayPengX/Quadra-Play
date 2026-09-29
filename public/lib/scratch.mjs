@@ -49,7 +49,6 @@ const TREASURES = ['🐚', '🪙', '🗝️', '🏺', '📿', '💍', '👑', '�
 
 export const tiersOf = id => tableOf(id).map(([mult, odds]) => ({ prize: mult * CARDS[id].price, odds }));
 export const topPrize = id => tableOf(id).at(-1)[0] * CARDS[id].price;
-export const winRate = id => tableOf(id).reduce((s, [, odds]) => s + 1 / odds, 0);
 export const expectedReturn = id => tiersOf(id).reduce((s, t) => s + t.prize / t.odds, 0) / CARDS[id].price;
 
 // The prize a new card holds: one uniform draw against the table.

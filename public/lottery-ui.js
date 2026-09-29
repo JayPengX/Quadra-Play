@@ -2,7 +2,7 @@
 // scratch cards (lib/scratch.mjs), bought with the Quadra balance. Tickets
 // live on the account next to the slips, settle against the real draws as
 // they come out, and pay into the same pool.
-import { GAMES, GAME_ORDER, gameName, nextDraw, quickPick, betCount, checkSelection, buyTicket, settleTicket, dueTickets, drawFor, latestResults, choose, boxWays } from './lib/lottery.mjs';
+import { GAMES, GAME_ORDER, gameName, nextDraw, quickPick, betCount, checkSelection, buyTicket, settleTicket, dueTickets, drawFor, latestResults, choose } from './lib/lottery.mjs';
 import { CARDS, CARD_ORDER, face, facePays, buyScratch, revealScratch, topPrize } from './lib/scratch.mjs';
 import { balance, newSlipId } from './lib/account.mjs';
 import { compactMoney } from './home.js';
@@ -187,8 +187,6 @@ export function mountLottery(ctx) {
     const close = () => (dialog.close(), dialog.remove(), render());
     dialog.addEventListener('click', e => e.target === dialog && close());
     dialog.addEventListener('close', () => dialog.remove());
-    const need = () => (g.digits ? g.digits : g.combo ? st.sel.size : id === 'bingo' ? 1 : g.zones.reduce((s, z) => s + z.n, 0));
-    const have = () => (g.digits ? g.digits : st.sel.side ? 1 : (st.sel.zones ? st.sel.zones.flat() : st.sel.numbers).length);
     const fill = (...kids) => dialog.replaceChildren(...kids.filter(Boolean));
     const paint = () => {
       const check = checkSelection(id, st.sel);
@@ -332,13 +330,6 @@ export function mountLottery(ctx) {
     ]);
   }
 
-  function latestLine(id) {
-    const g = GAMES[id];
-    const r = ui.latest?.[g.of || id];
-    if (!r) return null;
-    const balls = r.digits ? r.digits.map(n => ball(n)) : [...r.numbers.map(n => ball(n)), r.special != null ? ball(r.special, 'special') : null, r.zone2 != null ? ball(r.zone2, 'special') : null];
-    return el('div', { class: 'lotto-latest' }, [el('span', { class: 'muted', text: `${t('latest')} ${r.date}` }), el('div', { class: 'balls' }, balls.filter(Boolean))]);
-  }
   const ball = (n, cls = '') => el('span', { class: `ball ${cls}`, text: String(n).padStart(2, '0') });
 
   // A slip's grid: ten numbers a row like the real slip (eight for a second
@@ -764,7 +755,6 @@ export function mountLottery(ctx) {
     const keys = [...days.keys()];
     const out = keys.slice(0, ui.doneDays).map(k => {
       const items = days.get(k);
-      const spent = items.reduce((s, x) => s + (x.cost || 0), 0);
       const got = items.reduce((s, x) => s + (x.prize || 0), 0);
       const groups = new Map();
       for (const x of items) {
@@ -789,7 +779,6 @@ export function mountLottery(ctx) {
     const g = GAMES[x0.game];
     const drawn = x0.drawn;
     const got = list.reduce((s, x) => s + (x.prize || 0), 0);
-    const cost = list.reduce((s, x) => s + (x.cost || 0), 0);
     return el('div', { class: 'lt-group', style: `--lotto:${g.color}` }, [
       el('div', { class: 'lt-head' }, [el('div', { class: 'lt-title' }, [el('strong', { text: gameName(x0.game, lang) }), el('small', { class: 'num', text: hourText(x0.draw.at) })]), netChip(got)]),
       drawn ? el('div', { class: 'lt-drawn' }, [el('span', { class: 'lt-label', text: t('called') }), el('div', { class: 'balls' }, [...(drawn.digits || drawn.numbers || []).map(n => ball(n, 'dim')), drawn.special != null ? ball(drawn.special, 'dim special') : null, drawn.zone2 != null ? ball(drawn.zone2, 'dim special') : null].filter(Boolean))]) : null,
@@ -800,7 +789,6 @@ export function mountLottery(ctx) {
   function scratchGroup(list) {
     const c = CARDS[list[0].card];
     const got = list.reduce((s, x) => s + (x.prize || 0), 0);
-    const cost = list.reduce((s, x) => s + (x.cost || 0), 0);
     return el('div', { class: 'lt-group', style: `--lotto:${c.color}` }, [
       el('div', { class: 'lt-head' }, [el('div', { class: 'lt-title' }, [el('strong', { text: `${c.icon} ${c[lang]}${list.length > 1 ? ` ×${list.length}` : ''}` }), el('small', { class: 'num', text: t('scratch') })]), netChip(got)]),
       el('div', { class: 'lt-cards' }, list.map(x => el('button', { type: 'button', class: `lt-card${x.prize > 0 ? ` won out-up` : ''}`, onclick: () => openScratch(x.id), text: x.prize > 0 ? compactMoney(x.prize, lang) : '—' }))),

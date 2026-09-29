@@ -1,114 +1,32 @@
 import {
-  FUTURES_OVERROUND,
-  ODDS_ERROR,
-  backMargin,
-  estimateF1LotteryOdds,
-  f1Phase,
-  estimateFuturesOdds,
-  analyzeSlip,
-  slipPayoutTable,
-  expectedReturn,
-  settleSlip,
-  boostRate,
-  PARLAY_BOOST,
-  median,
-  quantile,
-  SLIP_RULES,
-  afterTax,
-  seededRandom,
-  slipErrors,
-  slipSizes,
-  combosBySize,
-  comboCount,
-  estimateLineOdds,
-  MLB_MARKET_OVERROUND
+  FUTURES_OVERROUND, ODDS_ERROR, estimateF1LotteryOdds, f1Phase, estimateFuturesOdds, slipPayoutTable, settleSlip, boostRate, PARLAY_BOOST, median, quantile, SLIP_RULES, afterTax, slipErrors, slipSizes, combosBySize, comboCount, estimateLineOdds, MLB_MARKET_OVERROUND
 } from './lib/odds.mjs';
 import {
-  FANS,
-  fanSeries,
-  STYLES,
-  TRAITS,
-  TRAIT_ROWS,
-  SPORTS,
-  SIM_SPORTS,
-  traitKeys,
-  sportTemplate,
-  weekOfYear,
-  crowdPools,
-  crowdSize,
-  hashString,
-  SIM_START_BALANCE,
-  SIM_WEEKLY_GRANT,
-  simulateCrowd,
-  gamesInWeek,
-  MONTH_WEEKS,
-  PERIOD_MONTHS,
-  monthWeeks,
-  replayPlayer
+  FANS, STYLES, SPORTS, SIM_SPORTS, sportTemplate, weekOfYear, crowdPools, crowdSize, hashString, simulateCrowd, MONTH_WEEKS, PERIOD_MONTHS, monthWeeks
 } from './lib/sim.mjs';
 import { ticketProfile, accountTickets } from './lib/profile.mjs';
-import { useSourcesSession, loadOdds, loadExtraLeagues, loadExtraFutures, taipeiDayKey, fetchOutcomes, loadLive, loadLeagueTeams, parseInning, loadFutureTeams, futureTeamLeagues, FUTURES, EXTRA_FUTURES } from './lib/sources.mjs';
+import { useSourcesSession, loadOdds, loadExtraLeagues, loadExtraFutures, taipeiDayKey, fetchOutcomes, loadLive, parseInning, loadFutureTeams, futureTeamLeagues } from './lib/sources.mjs';
 import { inningsLeft, liveBaseball, liveSoccer, fitGoals, liveMarkets, liveOdds, pregameRuns, nextRunChances, nextRunOdds, LIVE_MIN_LIQUIDITY, LIVE_THREE_WAY } from './lib/live.mjs';
 import {
-  WEEKLY_GRANT,
-  newAccount,
-  balance,
-  canClaim,
-  claimGrant,
-  nextGrantAt,
-  weekKey,
-  newSlipId,
-  placeSlip,
-  placeFreeSlip,
-  legResult,
-  applyResults,
-  mergeAccounts,
-  recoverFromWallet,
-  refundLost,
-  mergeDistinct,
-  poolEntries,
-  compactAccount,
-  cashOut,
-  isAccount
+  WEEKLY_GRANT, newAccount, balance, canClaim, claimGrant, newSlipId, placeSlip, placeFreeSlip, legResult, applyResults, mergeAccounts, recoverFromWallet, refundLost, mergeDistinct, poolEntries, compactAccount, cashOut, isAccount
 } from './lib/account.mjs';
 import { cashOutValue, CASHOUT_KEEP } from './lib/cashout.mjs';
 import { renderHome } from './home.js';
 import { mountLottery } from './lottery-ui.js';
 import { mountStats } from './stats-ui.js';
 import {
-  othersBalance,
-  APPS,
-  appUrl,
-  setting,
-  installGate,
-  watchUpdates,
-  quadraSession,
-  tabBar,
-  topActions,
-  recordAffinity,
-  affinityPatch,
-  activityPatch,
-  notify,
-  schedulePush,
-  storedAccount,
-  PLUS,
-  plusMember,
-  openPlus,
-  ask,
-  tell,
-  freeBets
+  othersBalance, installGate, watchUpdates, quadraSession, tabBar, topActions, recordAffinity, affinityPatch, activityPatch, notify, schedulePush, storedAccount, PLUS, plusMember, openPlus, ask, tell, freeBets
 } from './lib/quadra.mjs';
 import { pack, unpack } from './lib/codec.mjs';
-import { historyStats, outlookOf, chanceOf, funFacts, crowdPercentile } from './lib/history.mjs';
+import { historyStats, funFacts, crowdPercentile } from './lib/history.mjs';
 import { detectLocale, makeT } from './lib/i18n.mjs';
-import { f1Driver, f1Constructor, findTeamLogo, countryFlag, leagueLogo, teamLogo, teamZh, LEAGUES, familyOf, isSoccer, isSets, isNeutral, normalizeTeamName } from './lib/teams.mjs';
+import { f1Driver, f1Constructor, findTeamLogo, countryFlag, leagueLogo, teamLogo, teamZh, LEAGUES, familyOf, isSoccer, isNeutral, normalizeTeamName } from './lib/teams.mjs';
 import { logoPicture, raceName } from './lib/logos.mjs';
 import { houseRule, minLegsProblem, leagueTier } from './lib/rules.mjs';
 import { gameOptions, crowdPool, f1Podium, f1Markets } from './lib/board.mjs';
-import { auditPools, auditCrowd } from './lib/audit.mjs';
+import { auditPools } from './lib/audit.mjs';
 import { recommend } from './lib/recommend.mjs';
 
-const STAKE = 100;
 // Simulated people per pick style x series-follow group, on average: each style
 // gets its share of the crowd, 100,000 people in all.
 const PER_GROUP = Math.ceil(100_000 / (STYLES.length * FANS.length));
@@ -116,11 +34,9 @@ const SIM_PLAYERS = crowdSize(PER_GROUP);
 const SIM_SEED = 1;
 // Shown as a round "100,000".
 const SIM_PLAYERS_SHOWN = Math.round(SIM_PLAYERS / 1000) * 1000;
-const THIN_LIQUIDITY = 10_000;
 // Championship teams shown before the rest fold away.
 const FUTURES_SHOWN = 8;
 const ACCOUNT_KEY = 'oddsStudy.account';
-const SYNC_KEY = 'oddsStudy.syncCode';
 // Saved slips shown before the rest fold away.
 const SAVED_SHOWN = 10;
 
@@ -223,20 +139,6 @@ function fmtMoney(value, { sign = true } = {}) {
   const abs = fmtInt(Math.abs(Math.round(value)));
   if (!sign) return `NT$${abs}`;
   return `${value < -0.5 ? '−' : value > 0.5 ? '+' : ''}NT$${abs}`;
-}
-
-// A small amount that may be a half dollar: NT$0.5, NT$3.
-function fmtPay(value) {
-  return Number.isInteger(value) ? fmtMoney(value, { sign: false }) : `NT$${value}`;
-}
-
-function fmtAxis(value) {
-  const abs = fmtInt(Math.abs(Math.round(value)));
-  return value < -0.5 ? `−${abs}` : abs;
-}
-
-function fmtPct(p) {
-  return `${(p * 100).toFixed(1)}%`;
 }
 
 function fmtOdds(o) {
@@ -469,23 +371,6 @@ function effectiveOdds(bet) {
   return bet.estOdds;
 }
 
-function betReturn(bet) {
-  return expectedReturn(bet.fairChance, effectiveOdds(bet), STAKE);
-}
-
-// Relative margin of the odds used: none once real odds are typed in.
-function oddsError(bet) {
-  return ODDS_ERROR[bet.errKey]?.rel ?? 0;
-}
-
-function betBackMargin(bet) {
-  return backMargin(bet.fairChance, bet.fairMargin, effectiveOdds(bet), oddsError(bet));
-}
-
-function fmtMarginPts(m) {
-  return `±${(m * 100).toFixed(m < 0.01 ? 1 : 0)}`;
-}
-
 // Days follow Taiwan time, like the lottery.
 function dayKey(iso) {
   return taipeiDayKey(iso);
@@ -510,10 +395,6 @@ const groupOfSport = sport => Object.keys(SPORT_GROUPS).find(g => SPORT_GROUPS[g
 function inSport(sport) {
   if (state.sport === 'all' || state.sport === sport) return true;
   return state.sport.startsWith('g:') && SPORT_GROUPS[state.sport.slice(2)]?.leagues.includes(sport);
-}
-
-function visibleBets() {
-  return state.bets.filter(b => inSport(b.sport) && dayKey(b.start) === state.day);
 }
 
 function rerenderFiltered() {
@@ -615,8 +496,7 @@ function renderDayFilter() {
     ...days.map(day => {
       const games = state.data.games.filter(g => inSport(g.sport) && dayKey(g.startUtc) === day).length;
       const hasF1 = inSport('f1') && state.data.f1 && dayKey(state.data.f1.startUtc) === day;
-      const [y, m, d] = day.split('-').map(Number);
-      const date = new Date(y, m - 1, d);
+      const [, m, d] = day.split('-').map(Number);
       const label = dayLabel(day);
       return el('button', {
         class: 'day-tile',
@@ -634,13 +514,6 @@ function renderDayFilter() {
     })
   );
 }
-
-function backClass(back) {
-  if (back > 100) return 'back-high';
-  if (back < 80) return 'back-low';
-  return '';
-}
-
 
 // A team logo, or its initials in a circle when there's no logo (or it fails).
 function logoImg(sport, enName, label, size = '') {
@@ -698,27 +571,6 @@ function renderStatic() {
     $(id).textContent = t(key);
   for (const node of document.querySelectorAll('[data-t]')) node.textContent = t(node.dataset.t);
   for (const tab of TABS) tabNav.label(tab, t(`tab_${tab}`));
-}
-
-// One icon per guide group, in order: reading the numbers, the odds math,
-// traits, fans, kinds of bet, the lottery's rules, recommendations, the
-// simulator, data and margins.
-const GUIDE_ICONS = ['🔎', '🗂️', '🧮', '🧑‍🤝‍🧑', '🏟️', '🎫', '⚖️', '👍', '🎲', '📡'];
-
-// Every sport and league the page covers, and every championship board,
-// built from the page's own lists, so it's always complete: one line per
-// sport (its leagues and where their odds come from), then the championships.
-function supportedGames() {
-  const t = state.t;
-  const source = league => (league === 'f1' ? 'sourceF1' : LEAGUES[league]?.kambi ? 'sourceKambiShort' : ['mlb', 'epl'].includes(league) ? 'sourceBothShort' : 'sourceEspnShort');
-  const sports = Object.entries(SPORT_GROUPS).map(([group, { icon, leagues }]) => {
-    const bySource = groupBy(leagues, source);
-    const text = [...bySource].map(([src, list]) => `${list.map(l => t(`sport_${l}`)).join('、')}（${t(src)}）`).join('；');
-    return [`${icon} ${t(`group_${group}`)}`, text];
-  });
-  // Names without their season ("{season} 西甲冠軍" → "西甲冠軍").
-  const futures = [...FUTURES, ...EXTRA_FUTURES].map(f => t(`future_${f.key}`, { season: '' }).trim());
-  return [...sports, [`🏆 ${t('guideFuturesTitle')}`, futures.join('、')], [t('guideWhenTitle'), t('guideWhen')]];
 }
 
 function renderStatus(kind) {
@@ -910,7 +762,6 @@ function gameMore(game, bets) {
 // One line of a two-way market: the line (tagged when the lottery posts it)
 // and its two picks.
 function lineRow(label, pair, { posted = false, main = false } = {}) {
-  const t = state.t;
   // Outside MLB the tagged line is DraftKings' main line, not a checked lottery line.
   if (posted && pair[0]?.sport !== 'mlb') main = true;
   return el('div', { class: `line-row ${posted ? 'posted' : ''} ${main ? 'main' : ''}` }, [
@@ -1287,302 +1138,11 @@ function slipLegs() {
   return { legs: legs.filter(b => !started(b)), dropped: live.length };
 }
 
-// A number with its label.
-function statTile(label, value, extraClass = '', icon = null) {
-  return el('div', { class: `stat ${icon ? 'has-icon' : ''}` }, [
-    icon ? el('span', { class: 'stat-icon', 'aria-hidden': 'true', text: icon }) : null,
-    el('p', { class: `stat-value ${extraClass}`, text: value }),
-    el('p', { class: 'stat-label', text: label })
-  ]);
-}
-
-function fmtChance(p) {
-  if (p >= 0.995) return p >= 1 ? '100%' : '>99%';
-  if (p >= 0.1) return `${Math.round(p * 100)}%`;
-  if (p >= 0.001) return `${(p * 100).toFixed(1)}%`;
-  if (p >= 0.0001) return `${(p * 100).toFixed(2)}%`;
-  return p > 0 ? '<0.01%' : '0%';
-}
-
 function sizeName(k, n) {
   return k === n ? state.t('slipAll') : state.t('slipSize', { k });
 }
 
-// A deep look at the ticket, all computed exactly from each pick's fair chance.
-function slipAnalysisView(a, legs, extra) {
-  const t = state.t;
-  const money = v => fmtMoney(v, { sign: false });
-  const n = legs.length;
-  const cards = [];
-  cards.push(gradeCard(a));
-
-  // Key numbers.
-  cards.push(
-    el('div', { class: 'card' }, [
-      el('div', { class: 'kpis' }, [
-        statTile(t('slipCost'), money(a.cost), '', '💵'),
-        statTile(t('slipBest'), money(a.top.net), 'back-high', '🏆'),
-        statTile(t('slipExpected'), money(a.expectedNet), a.backPer100 < 100 ? 'back-low' : 'back-high', '⚖️'),
-        statTile(t('slipProfit'), fmtChance(a.profit), a.profit < 0.5 ? 'back-low' : '', '📈')
-      ])
-    ])
-  );
-  cards.push(drawCard(legs, a, extra.sig));
-
-  // Where each NT$100 goes.
-  const { take, tax, back } = a.per100;
-  const seg = (cls, v) => el('span', { class: `split-seg ${cls}`, style: `flex:${Math.max(0, v)}` });
-  cards.push(
-    el('div', { class: 'card' }, [
-      el('h3', { class: 'card-title', text: `${t('anaSplitTitle')}` }),
-      el('div', { class: 'split-bar', 'aria-hidden': 'true' }, [seg('split-back', back), seg('split-take', take), seg('split-tax', tax)]),
-      el('div', { class: 'split-legend' }, [
-        el('span', {}, [el('i', { class: 'split-back' }), document.createTextNode(`${t('anaBack')} ${money(back)}`)]),
-        el('span', {}, [el('i', { class: 'split-take' }), document.createTextNode(`${t('anaTake')} ${money(take)}`)]),
-        el('span', {}, [el('i', { class: 'split-tax' }), document.createTextNode(`${t('anaTax')} ${money(tax)}`)])
-      ])
-    ])
-  );
-
-  // Every result, exactly.
-  const scale = Math.max(...a.byHits.map(r => r.chance));
-  cards.push(
-    el('div', { class: 'card' }, [
-      el('h3', { class: 'card-title', text: `${t('anaResultsTitle')}` }),
-      el('ol', { class: 'run-bars' },
-        [...a.byHits].reverse().map(r =>
-          el('li', { class: r.profit ? 'row-profit' : '' }, [
-            el('span', { class: 'run-hits', text: t('slipHitsN', { k: r.hits, n }) }),
-            el('span', { class: 'run-track' }, [el('span', { class: 'run-bar', style: `width:${(r.chance / scale) * 100}%` })]),
-            el('span', { class: 'run-share' }, [el('strong', { text: fmtChance(r.chance) }), el('small', { text: r.max > 0 ? (r.min === r.max ? money(r.max) : `${money(r.min)}–${money(r.max)}`) : '—' })])
-          ])
-        )
-      ),
-      el('p', { class: 'note', text: a.profitFrom == null ? t('anaNoProfit') : t('anaProfitFrom', { k: a.profitFrom, n, p: fmtChance(a.profit) }) })
-    ])
-  );
-
-  cards.push(rareCard(a));
-
-  // Each pick on its own.
-  cards.push(
-    el('div', { class: 'card' }, [
-      el('h3', { class: 'card-title', text: `${t('anaLegsTitle')}` }),
-      el('ul', { class: 'leg-analysis' },
-        legs.map((b, i) => {
-          const info = a.legs[i];
-          return el('li', { class: i === a.weakest && n > 1 ? 'weakest' : '' }, [
-            betIcon(b),
-            el('span', { class: 'leg-main' }, [
-              el('strong', { text: b.shortLabel }),
-              el('small', { class: 'slip-leg-game', text: t('anaLegOdds', { odds: fmtOdds(effectiveOdds(b)), fair: fmtOdds(info.fairOdds), p: fmtPctShort(b.fairChance) }) })
-            ]),
-            el('span', { class: 'leg-value' }, [
-              el('strong', { class: backClass(info.value), text: money(info.value) })
-            ])
-          ]);
-        })
-      ),
-      n > 1 ? el('p', { class: 'note', text: t('anaWeakest', { leg: legs[a.weakest].shortLabel, v: money(a.legs[a.weakest].value) }) }) : null
-    ])
-  );
-
-  // Missing by one only means something when the picks share one ticket.
-  if (state.slipMode !== 'single') cards.push(heartbreakCard(a, legs));
-  return cards;
-}
-
 // ---- Bet slip extras: a grade, how rare a win is, and trying a draw ----------
-
-// Things everyone knows the odds of, to measure a ticket's chances against.
-const RARE_EVENTS = [
-  { key: 'coin', p: 1 / 2, icon: '🪙' },
-  { key: 'dice', p: 1 / 6, icon: '🎲' },
-  { key: 'birthday', p: 1 / 365, icon: '🎂' },
-  { key: 'tenHeads', p: 1 / 1024, icon: '🪙' },
-  { key: 'royal', p: 1 / 649_740, icon: '🃏' },
-  { key: 'lotto', p: 1 / 13_983_816, icon: '🎱' },
-  { key: 'power', p: 1 / 22_085_448, icon: '🎱' }
-];
-const TICKET_TYPES = [
-  { key: 'steady', min: 0.4, icon: '🐢' },
-  { key: 'balanced', min: 0.15, icon: '⚖️' },
-  { key: 'thrill', min: 0.03, icon: '🎢' },
-  { key: 'dream', min: 0.002, icon: '🌈' },
-  { key: 'lottery', min: 0, icon: '🎰' }
-];
-
-// A school grade from the average back per NT$100 (a single game at the
-// lottery's usual cut gets about 87, an A), and a type from the chance of profit.
-function slipGrade(a) {
-  const b = a.backPer100;
-  const grade = b >= 100 ? 'S' : b >= 85 ? 'A' : b >= 72 ? 'B' : b >= 62 ? 'C' : b >= 50 ? 'D' : 'F';
-  return { grade, type: TICKET_TYPES.find(x => a.profit >= x.min) };
-}
-
-function gradeCard(a) {
-  const t = state.t;
-  const { grade, type } = slipGrade(a);
-  const loss = a.cost - a.expectedNet;
-  return el('div', { class: 'card grade-card' }, [
-    el('div', { class: `grade-letter grade-${grade}`, text: grade, 'aria-label': t('gradeTitle') }),
-    el('div', { class: 'grade-main' }, [
-      el('p', { class: 'grade-kicker', text: t('gradeTitle') }),
-      el('p', { class: 'grade-type' }, [el('span', { 'aria-hidden': 'true', text: type.icon }), document.createTextNode(` ${t(`type_${type.key}`)}`)]),
-      el('p', { class: 'grade-note', text: `${t(`typeNote_${type.key}`)} · ${t(`gradeNote_${grade}`)}` }),
-      el('div', { class: 'grade-lines' }, [
-        loss > 0 ? el('span', { text: t('gradeLoss', { loss: fmtMoney(loss, { sign: false }), cups: (loss / BOBA_PRICE).toLocaleString(numberLocale(), { maximumFractionDigits: 1 }) }) }) : null,
-        a.paid > 0 ? el('span', { text: t('gradeEvery', { n: (1 / a.paid).toLocaleString(numberLocale(), { maximumFractionDigits: 1 }) }) }) : null
-      ])
-    ])
-  ]);
-}
-
-function fmtOneIn(p) {
-  return t => t('anaOneIn', { n: fmtCount(1 / Math.max(p, 1e-12)) });
-}
-
-// The ticket's chances placed among well-known odds, rarest at the bottom.
-function rareCard(a) {
-  const t = state.t;
-  const same = Math.abs(a.profit - a.top.chance) < 1e-12;
-  const mine = [{ key: same ? 'mineBoth' : 'mineTop', p: a.top.chance, icon: '🎫', mine: true }];
-  if (!same && a.profit > 0) mine.push({ key: 'mineProfit', p: a.profit, icon: '💰', mine: true });
-  const all = [...RARE_EVENTS, ...mine].sort((x, y) => y.p - x.p);
-  // Keep the neighbours of the ticket's rows: one well-known event above and below.
-  const idx = all.map((r, i) => (r.mine ? i : -1)).filter(i => i >= 0);
-  const rows = all.slice(Math.max(0, idx[0] - 1), Math.min(all.length, idx.at(-1) + 2));
-  const rarest = Math.max(...rows.map(r => -Math.log10(r.p)));
-  const coins = Math.round(Math.log2(1 / Math.max(a.top.chance, 1e-15)));
-  return el('div', { class: 'card' }, [
-    el('h3', { class: 'card-title', text: t('rareTitle') }),
-    el('ol', { class: 'rare-list' },
-      rows.map(r =>
-        el('li', { class: r.mine ? 'rare-mine' : '' }, [
-          el('span', { class: 'rare-icon', 'aria-hidden': 'true', text: r.icon }),
-          el('span', { class: 'rare-name', text: t(`rare_${r.key}`) }),
-          el('span', { class: 'rare-track' }, [el('span', { class: 'rare-bar', style: `width:${Math.max(3, (-Math.log10(r.p) / rarest) * 100)}%` })]),
-          el('strong', { class: 'rare-odds', text: r.p >= 0.5 ? fmtChance(r.p) : fmtOneIn(r.p)(t) })
-        ])
-      )
-    ),
-    coins >= 2 ? el('p', { class: 'note', text: t('rareCoins', { n: coins }) }) : null
-  ]);
-}
-
-// Opens the ticket for real: every pick drawn from its fair chance. One at a
-// time with each pick revealed in turn, with a running tally.
-function drawCard(legs, a, sig) {
-  const t = state.t;
-  const money = v => fmtMoney(v, { sign: false });
-  if (state.draws?.sig !== sig) state.draws = { sig, n: 0, spent: 0, back: 0, best: 0, wins: 0, path: [], last: null, busy: false };
-  const d = state.draws;
-  const box = el('div', { class: 'card draw-card' });
-  const drawOne = () => legs.reduce((won, b, i) => (Math.random() < b.fairChance ? won | (1 << i) : won), 0);
-  const record = won => {
-    const pay = a.net[won];
-    d.n++;
-    d.spent += a.cost;
-    d.back += pay;
-    if (pay > 0) d.wins++;
-    d.best = Math.max(d.best, pay);
-    d.path.push(d.back - d.spent);
-    return pay;
-  };
-  const openOne = () => {
-    if (d.busy) return;
-    d.busy = true;
-    d.last = { won: drawOne(), shown: 0 };
-    paint();
-    const step = () => {
-      if (state.draws !== d || !box.isConnected) return (d.busy = false);
-      d.last.shown++;
-      if (d.last.shown >= legs.length) {
-        d.last.pay = record(d.last.won);
-        d.busy = false;
-      } else setTimeout(step, 380);
-      paint();
-    };
-    setTimeout(step, 380);
-  };
-  function paint() {
-    const last = d.last;
-    const parts = [
-      el('h3', { class: 'card-title', text: t('drawTitle') }),
-      el('p', { class: 'lede', text: t('drawNote') }),
-      el('div', { class: 'draw-buttons' }, [
-        el('button', { class: 'primary-button', type: 'button', text: t(d.n > 0 ? 'drawAgain' : 'drawStart'), disabled: d.busy ? '' : null, onclick: openOne })
-      ])
-    ];
-    if (last && last.batch == null) {
-      const done = last.shown >= legs.length;
-      parts.push(
-        el('ul', { class: 'draw-legs' },
-          legs.map((b, i) => {
-            const shown = i < last.shown;
-            const hit = (last.won >> i) & 1;
-            return el('li', { class: shown ? (hit ? 'hit' : 'miss') : 'wait' }, [
-              el('span', { class: 'draw-mark', 'aria-hidden': 'true', text: shown ? (hit ? '✓' : '✗') : '?' }),
-              el('span', { class: 'draw-leg', text: b.shortLabel }),
-              el('small', { text: fmtPctShort(b.fairChance) })
-            ]);
-          })
-        )
-      );
-      if (done) {
-        const pay = last.pay;
-        const text = pay <= 0 ? t('drawLost', { cost: money(a.cost) }) : pay > a.cost ? t('drawWon', { v: money(pay), profit: money(pay - a.cost) }) : t('drawBackSome', { v: money(pay), loss: money(a.cost - pay) });
-        parts.push(el('p', { class: `draw-result ${pay > a.cost ? 'win' : 'lose'}`, text }));
-      }
-    }
-    if (d.n > 0) {
-      const net = d.back - d.spent;
-      parts.push(
-        el('div', { class: 'kpis draw-tally' }, [
-          statTile(t('drawOpened'), fmtCount(d.n), '', '🎫'),
-          statTile(t('drawWins'), `${fmtCount(d.wins)} (${fmtShare(d.wins / d.n)})`, '', '🎯'),
-          statTile(t('drawNet'), fmtMoney(net), net < 0 ? 'back-low' : 'back-high', '💵'),
-          statTile(t('drawBest'), d.best > 0 ? money(d.best) : '—', '', '🏆')
-        ]),
-        d.path.length > 1 ? sparkline(d.path) : null,
-        el('p', { class: 'note', text: t('drawExpected', { n: fmtCount(d.n), v: fmtMoney(d.n * (a.expectedNet - a.cost)) }) })
-      );
-    }
-    box.replaceChildren(...parts.filter(Boolean));
-  }
-  paint();
-  return box;
-}
-
-// Missing by one pick: how often it happens next to winning outright, and
-// which pick is most often the one that lets the ticket down.
-function heartbreakCard(a, legs) {
-  const t = state.t;
-  const n = legs.length;
-  if (n < 2) return null;
-  const scale = Math.max(...a.lone);
-  const worst = a.lone.indexOf(scale);
-  const times = a.top.chance > 0 ? a.nearMiss / a.top.chance : 0;
-  return el('div', { class: 'card' }, [
-    el('h3', { class: 'card-title', text: t('heartTitle') }),
-    el('p', { class: 'heart-big' }, [
-      el('span', { 'aria-hidden': 'true', text: '💔 ' }),
-      document.createTextNode(t('heartPre')),
-      el('strong', { text: fmtChance(a.nearMiss) }),
-      document.createTextNode(times >= 1.05 ? t('heartTimes', { x: times.toLocaleString(numberLocale(), { maximumFractionDigits: 1 }) }) : t('heartPost'))
-    ]),
-    el('ol', { class: 'run-bars heart-bars' },
-      legs.map((b, i) =>
-        el('li', { class: i === worst ? 'heart-worst' : '' }, [
-          el('span', { class: 'run-hits', text: b.shortLabel }),
-          el('span', { class: 'run-track' }, [el('span', { class: 'run-bar', style: `width:${scale > 0 ? (a.lone[i] / scale) * 100 : 0}%` })]),
-          el('span', { class: 'run-share' }, [el('strong', { text: fmtChance(a.lone[i]) })])
-        ])
-      )
-    ),
-    el('p', { class: 'note', text: t('heartWorst', { leg: legs[worst].shortLabel, p: fmtPctShort(1 - legs[worst].fairChance) }) })
-  ]);
-}
 
 function renderParlay() {
   renderSlipBar();
@@ -2286,7 +1846,6 @@ function renderAccount() {
   const t = state.t;
   const account = state.account;
   const now = new Date();
-  const own = balance(account);
   const money = funds();
   const open = account.slips.filter(x => x.status === 'open');
   const atStake = open.reduce((sum, x) => sum + x.cost, 0);
@@ -2347,10 +1906,6 @@ function openSlips(account) {
   const used = new Set(out.flatMap(slip => slip.l.map(leg => leg.k)));
   return { kinds: Object.fromEntries(Object.entries(kinds).filter(([k]) => used.has(k))), slips: out, n: slips.length };
 }
-
-
-
-const RESULT_ICON = { won: '✓', lost: '✗', void: '↺' };
 
 // Where each pick stands: won / lost / void, 'live' (its game is on), or
 // 'waiting' (not started).
@@ -2584,22 +2139,6 @@ function savedSlipCard(slip) {
   ]);
 }
 
-// What the odds said when the slip was bought, and (once settled) how it
-// went against that; each pick's chance in the folded part.
-function slipInsight(slip) {
-  const t = state.t;
-  const look = outlookOf(slip);
-  const lines = slip.free ? [t('freeBetSlip', { v: fmtMoney(slip.stake, { sign: false }) })] : [t('insightBought', { exp: fmtMoney(look.mean, { sign: false }), back: fmtBack((look.mean / slip.cost) * 100), any: fmtPctShort(look.any) })];
-  if (slip.status === 'settled') lines.push(t('insightLuck', { v: fmtMoney(slip.payout - look.mean) }));
-  const tax = (slip.gross ?? slip.payout) - slip.payout;
-  if (tax > 0) lines.push(t('insightTax', { v: fmtMoney(tax, { sign: false }) }));
-  return el('details', { class: 'slip-insight' }, [
-    el('summary', { text: lines[0] }),
-    ...lines.slice(1).map(text => el('p', { text })),
-    table([t('colPick'), t('colOddsBought'), t('colFair'), t('colBackPer')], slip.legs.map(leg => [leg.shortLabel, fmtOdds(leg.odds), fmtPctShort(chanceOf(leg)), fmtBack(chanceOf(leg) * leg.odds * 100)]))
-  ]);
-}
-
 const HISTORY_FILTERS = {
   all: () => true,
   open: s => s.status === 'open',
@@ -2657,7 +2196,6 @@ function groupSummary(key, slips) {
 function applyHistoryView() {
   const t = state.t;
   if (!state.accountReady) return;
-  const any = state.account.slips.length > 0;
   const view = ['stats', 'tickets'].includes(state.historyView) ? state.historyView : 'slips';
   const openTickets = (state.account.tickets || []).filter(x => x.status === 'open').length;
   $('history-tabs').hidden = false;
@@ -2678,7 +2216,7 @@ function applyHistoryView() {
       )
     )
   );
-  $('saved').hidden = view !== 'slips' || !any;
+  $('saved').hidden = view !== 'slips';
   $('stats').hidden = view !== 'stats';
   $('tickets').hidden = view !== 'tickets';
   if (view === 'tickets') lotteryUi?.renderTickets($('tickets-body'));
@@ -2697,9 +2235,12 @@ function renderSaved() {
   const t = state.t;
   const slips = state.account.slips;
   const open = slips.filter(s => s.status === 'open');
-  $('saved').hidden = slips.length === 0;
   applyHistoryView();
-  if (!slips.length) return;
+  // No slips yet: a line and the way to the games, not an empty page.
+  if (!slips.length)
+    return void $('saved-body').replaceChildren(
+      el('div', { class: 'card empty-slips' }, [el('p', { text: t('noSlipsYet') }), el('button', { class: 'primary-button', type: 'button', text: t('goPick'), onclick: () => showTab('games') })])
+    );
   const now = Date.now();
   const filtered = slips.filter(HISTORY_FILTERS[state.historyFilter] ?? HISTORY_FILTERS.all);
   // Open slips all show; settled ones fold after SAVED_SHOWN.
@@ -2781,10 +2322,6 @@ function netCell(v) {
   return el('span', { class: v < -0.5 ? 'back-low' : v > 0.5 ? 'back-high' : '', text: fmtMoney(v) });
 }
 
-
-
-
-
 function picksCard(s) {
   const t = state.t;
   if (!s.picks.legs) return null;
@@ -2814,8 +2351,6 @@ function breakdownCard(s) {
     table(head(t('colLegs')), moneyRows(legs))
   ]);
 }
-
-
 
 // Fun facts from the slips.
 function funCard() {
@@ -2955,20 +2490,6 @@ function simSportBets() {
   return pools;
 }
 
-function niceStep(range, target) {
-  const raw = range / target;
-  const mag = 10 ** Math.floor(Math.log10(raw));
-  const norm = raw / mag;
-  return (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag;
-}
-
-// Each character is the real simulated player at that point of the ranking.
-const CHARACTERS = [
-  { key: 'best', name: 'simLucky', rank: 'simLuckyRank', color: 'var(--good)', icon: '🍀' },
-  { key: 'median', name: 'simTypical', rank: 'simTypicalRank', color: 'var(--series-1)', icon: '🙂' },
-  { key: 'worst', name: 'simUnlucky', rank: 'simUnluckyRank', color: 'var(--bad-strong)', icon: '🌧️' }
-];
-
 function fmtShare(p) {
   if (p === 0) return '0%';
   if (p < 0.01) return '<1%';
@@ -3065,20 +2586,6 @@ const TRAIT_ICON = {
   rider: '⛄', guardian: '🛡️', stopLoss: '🛑', content: '😊', moody: '🎭', bored: '🥱', hailMary: '🙏', loyal: '❤️', hopper: '🦘', plainStyle: '😐', plainReact: '😐'
 };
 const BOBA_PRICE = 65;
-function sparkline(path) {
-  const w = 300;
-  const h = 64;
-  let lo = 0;
-  let hi = 0;
-  for (const v of path) (lo = Math.min(lo, v), hi = Math.max(hi, v));
-  const span = hi - lo || 1;
-  const y = v => 4 + ((hi - v) / span) * (h - 8);
-  let d = `M0,${y(0).toFixed(1)}`;
-  path.forEach((v, i) => (d += `L${(((i + 1) / path.length) * w).toFixed(1)},${y(v).toFixed(1)}`));
-  const svg = svgEl('svg', { class: 'sparkline', viewBox: `0 0 ${w} ${h}`, preserveAspectRatio: 'none', 'aria-hidden': 'true' });
-  svg.append(svgEl('line', { class: 'zero-line', x1: 0, x2: w, y1: y(0), y2: y(0) }), svgEl('path', { class: path.at(-1) < 0 ? 'spark-bad' : 'spark-good', d }));
-  return svg;
-}
 
 // ---- Number fields ---------------------------------------------------------------------
 

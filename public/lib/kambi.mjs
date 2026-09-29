@@ -103,10 +103,6 @@ export function parseKambiLive(data) {
   return out;
 }
 
-export async function fetchKambiLive(getJson) {
-  return parseKambiLive(await getJson(`${KAMBI}/event/live/open.json?lang=en_GB&market=GB`, 'kambi-events'));
-}
-
 // Sets each side has won from the set scores. A set counts once someone has
 // won it: reached the set's target (the deciding set's, if it has its own)
 // two clear, or the cap (badminton's 30), or in tennis 7 games (a tiebreak).

@@ -10,7 +10,7 @@
 // share, one at most from each group of how-they-bet traits.
 import { SLIP_RULES, afterTax, seededRandom, estimateF1LotteryOdds } from './odds.mjs';
 import { houseRule } from './rules.mjs';
-import { gameOptions, crowdPool, f1Podium } from './board.mjs';
+import { crowdPool, f1Podium, gameOptions } from './board.mjs';
 import { recommend } from './recommend.mjs';
 
 // ---- Money --------------------------------------------------------------------

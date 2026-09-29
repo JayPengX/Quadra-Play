@@ -1,8 +1,6 @@
 # Quadra Play
 
-**Live site: https://jaypengx.github.io/Quadra-Play/** (this repository is
-still named Quadra-Sportsbook until it's renamed to **Quadra-Play**; the app
-already links to its new address).
+**Live site: https://jaypengx.github.io/Quadra-Play/**
 
 Quadra Play is the place to play in **Quadra**: sports bets on every sport
 and match the sources carry, and Taiwan Lottery's draw games and scratch
@@ -166,7 +164,7 @@ An educational app about the math of the Taiwan Sports Lottery (台灣運彩): w
 
 ## The app
 
-Five tabs. On phones they sit in a bottom bar and there's no app header; its controls (status, refresh) sit in a slim row at the top. Big numbers never wrap: they shrink (to 60% at most) to fit on one line. On desktop the tabs are in the top bar.
+Five tabs, drawn by the kit (`tabBar`, the same in every Quadra app): a bottom bar on phones, the top bar on desktop; the slip's count is a badge on 投注單. The top right is the kit's `topActions`: help, refresh, the account. Big numbers never wrap: they shrink (to 60% at most) to fit on one line. On desktop the tabs are in the top bar.
 
 Logos come from ESPN, with dark-background versions in dark mode: the leagues on the filters, cards and boards, and the teams on the games.
 

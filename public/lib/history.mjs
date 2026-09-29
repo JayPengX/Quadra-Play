@@ -3,7 +3,6 @@
 // how often picks came in against their chances, breakdowns, streaks and
 // records. Pure: the page and the tests both use it.
 import { slipOutlook, comboCount } from './odds.mjs';
-import { expectedReturn } from './scratch.mjs';
 
 // A pick's fair chance as saved; a pick saved without one counts at its odds.
 export const chanceOf = leg => (leg.fairChance >= 0 && leg.fairChance <= 1 ? leg.fairChance : Math.min(1, 1 / leg.odds));
@@ -372,59 +371,3 @@ export function moneySources(account) {
 
 // ---- The lottery --------------------------------------------------------------------
 
-// Lottery tickets and scratch cards in numbers: how many, what they cost and
-// won (after tax), what came back per NT$100, the biggest prize, and each
-// game's part (scratch cards together as 'scratch').
-// What each game pays back per NT$ spent, about (Taiwan Lottery's are 50-60%;
-// the fixed-prize ones exactly, the pool ones on average): the lottery's
-// "what the odds say", like a slip's.
-const LOTTO_RETURN = { super638: 0.55, lotto649: 0.55, daily539: 0.56, star3: 0.5, star4: 0.5, m38: 0.55, m39: 0.53, m49: 0.55, bingo: 0.6, lotto1224: 0.54, lotto740: 0.3 };
-const ticketReturn = x => (x.card ? expectedReturn(x.card) : LOTTO_RETURN[x.game] ?? 0.55);
-
-export function lotteryStats(account) {
-  const tickets = account.tickets || [];
-  const byGame = new Map();
-  const weeks = new Map();
-  const out = { n: tickets.length, open: 0, spent: 0, won: 0, wins: 0, best: null, expected: 0 };
-  for (const x of tickets) {
-    const key = x.card ? 'scratch' : x.game;
-    if (!byGame.has(key)) byGame.set(key, { key, n: 0, spent: 0, won: 0, wins: 0 });
-    const g = byGame.get(key);
-    g.n++;
-    g.spent += x.cost;
-    out.spent += x.cost;
-    if (x.status === 'open') {
-      out.open++;
-      continue;
-    }
-    const prize = x.prize || 0;
-    g.won += prize;
-    out.won += prize;
-    out.expected += x.cost * ticketReturn(x);
-    const week = weekOf(x.settledAt ?? x.t);
-    if (!weeks.has(week)) weeks.set(week, { week, net: 0 });
-    weeks.get(week).net += prize - x.cost;
-    if (prize > 0) {
-      g.wins++;
-      out.wins++;
-      if (!out.best || prize > out.best.prize) out.best = x;
-    }
-  }
-  const settledSpent = tickets.filter(x => x.status !== 'open').reduce((s, x) => s + x.cost, 0);
-  return {
-    ...out,
-    net: out.won - settledSpent,
-    back: settledSpent ? (out.won / settledSpent) * 100 : null,
-    expectedBack: settledSpent ? (out.expected / settledSpent) * 100 : null,
-    weeks: [...weeks.values()].sort((a, b) => b.week.localeCompare(a.week)),
-    byGame: [...byGame.values()].sort((a, b) => b.spent - a.spent)
-  };
-}
-
-// The account over a stretch of time (from `since`, ms): its slips, ledger
-// and tickets from then on, for the stats page's period filter.
-export function accountSince(account, since) {
-  if (!since) return account;
-  const after = x => Date.parse(x.t) >= since;
-  return { ...account, ledger: account.ledger.filter(after), slips: account.slips.filter(after), tickets: (account.tickets || []).filter(after) };
-}

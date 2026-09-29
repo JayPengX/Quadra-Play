@@ -30,7 +30,7 @@ import {
   K_DRAFTKINGS,
   TOP_INNING_ODDS
 } from './odds.mjs';
-import { pointsModel, pointsMarkets, goalMarkets, fitHockey, baseballMarkets, setsMarkets, marketOdds, unitModel, unitLineMarkets, guessBestOf } from './markets.mjs';
+import { pointsModel, pointsMarkets, goalMarkets, fitHockey, baseballMarkets, setsMarkets, marketOdds, unitModel, guessBestOf, unitLineMarkets } from './markets.mjs';
 import { fitGoals } from './live.mjs';
 import { houseCut, houseRule } from './rules.mjs';
 import { withModelLines } from './lines.mjs';
