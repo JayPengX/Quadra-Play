@@ -401,6 +401,16 @@ export function crowdPool(options, oddsOf = o => o.estOdds) {
 
 // ---- F1: 前三名 (podium) --------------------------------------------------------
 
+// Pole position from the race winner's chances when no market prices it:
+// the same order, a little sharper (qualifying is pace alone, no strategy or
+// incidents; the pole sitter goes on to win about 45% of races).
+export const POLE_SHARPEN = 1.2;
+export function f1PoleFromWinner(drivers) {
+  const w = drivers.map(d => Math.max(0, d.fair) ** POLE_SHARPEN);
+  const sum = w.reduce((a, b) => a + b, 0) || 1;
+  return drivers.map((d, i) => ({ name: d.name, fair: w[i] / sum }));
+}
+
 // Each driver's chance of a top-three finish from the win chances (Harville:
 // second place goes as the win chances of the rest, and so on), priced to
 // return what the race's winner board does on average (the lottery takes

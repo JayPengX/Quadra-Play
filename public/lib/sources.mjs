@@ -397,6 +397,28 @@ export function parseKambiF1Race(event, offers) {
   };
 }
 
+// Pole position (排位賽第一): Polymarket's driver pole market for the race
+// weekend ("f1-…-grand-prix-driver-pole-position-<date>", opened a few days
+// before), else Kambi's when it lists one. { source, drivers: [{ name, fair }] }
+// or null (the page then prices it from the race winner's chances).
+export function parseF1Pole(events, raceUtc) {
+  const event = (events || []).find(e => /-driver-pole-position-\d{4}-\d{2}-\d{2}$/.test(e.slug || '') && !/sprint/.test(e.slug) && Math.abs(Date.parse(e.startTime || e.endDate) - Date.parse(raceUtc)) < 3 * DAY_MS);
+  const drivers = (event?.markets || [])
+    .filter(m => !m.closed)
+    .map(m => ({ name: m.groupItemTitle || futureTeamName(m) || m.question, raw: Number(parseJsonArray(m.outcomePrices)?.[0]) }))
+    .filter(d => d.raw > 0 && !/^(driver [a-z]|other)$/i.test(d.name));
+  if (drivers.length < 10) return null;
+  const fair = devigPower(drivers.map(d => d.raw));
+  return { source: 'polymarket', drivers: drivers.map((d, i) => ({ name: d.name, fair: fair[i] })).sort((a, b) => b.fair - a.fair) };
+}
+export function parseKambiF1Pole(offers) {
+  const offer = (offers?.betOffers || []).find(o => /pole|qualifying/i.test(o.criterion?.englishLabel || '') && !/sprint|team|constructor/i.test(o.criterion?.englishLabel || '') && !o.suspended);
+  const drivers = (offer?.outcomes || []).filter(o => o.odds > 1000 && o.participant).map(o => ({ name: o.participant, raw: 1000 / o.odds }));
+  if (drivers.length < 10) return null;
+  const fair = devigPower(drivers.map(d => d.raw));
+  return { source: 'kambi', drivers: drivers.map((d, i) => ({ name: d.name, fair: fair[i] })).sort((a, b) => b.fair - a.fair) };
+}
+
 // Safety car, virtual safety car and red flag during the race: yes or no.
 // Polymarket's price when it has the race's market; else how often each
 // happened in the 85 races of 2023 to Azerbaijan 2026 (OpenF1's race
@@ -552,7 +574,9 @@ export async function loadOdds(now = new Date(), onProgress) {
       fetchPolymarketEvents(POLYMARKET_TAG.epl, 'polymarket-events'),
       fetchPolymarketEvents(POLYMARKET_TAG.f1),
       fetchPolymarketEvents(POLYMARKET_TAG.nba, 'polymarket-events'),
-      getJson(`${ESPN}/racing/f1/scoreboard`),
+      // The whole season (the plain scoreboard stays on the last race until the
+      // week's first session): the next race's qualifying time.
+      getJson(`${ESPN}/racing/f1/scoreboard?dates=${now.getUTCFullYear()}`),
       getJson(KAMBI_F1_LIST)
     ].map(track)
   );
@@ -561,11 +585,17 @@ export async function loadOdds(now = new Date(), onProgress) {
   let race = parseF1RaceWinner(f1, now);
   // Polymarket not open for the next race yet (or only for a later one): Kambi's.
   const kambiRace = nextKambiF1Race(f1Kambi, now);
-  if (kambiRace && (!race || Date.parse(kambiRace.start) < Date.parse(race.startUtc) - DAY_MS)) {
-    const offers = await getJson(`${KAMBI}/betoffer/event/${kambiRace.id}.json?lang=en_GB&market=GB`).catch(() => null);
-    race = parseKambiF1Race(kambiRace, offers) ?? race;
+  let kambiOffers = null;
+  if (kambiRace && (!race || Date.parse(kambiRace.start) < Date.parse(race.startUtc) + DAY_MS)) kambiOffers = await getJson(`${KAMBI}/betoffer/event/${kambiRace.id}.json?lang=en_GB&market=GB`).catch(() => null);
+  if (kambiRace && (!race || Date.parse(kambiRace.start) < Date.parse(race.startUtc) - DAY_MS)) race = parseKambiF1Race(kambiRace, kambiOffers) ?? race;
+  if (race) {
+    const sameRace = kambiRace && Math.abs(Date.parse(kambiRace.start) - Date.parse(race.startUtc)) < DAY_MS;
+    Object.assign(race, {
+      qualifyingUtc: parseF1Schedule(f1Espn, race.startUtc)?.qualifyingUtc ?? null,
+      flags: parseF1Flags(f1, race.startUtc),
+      pole: parseF1Pole(f1, race.startUtc) ?? (sameRace ? parseKambiF1Pole(kambiOffers) : null)
+    });
   }
-  if (race) Object.assign(race, { qualifyingUtc: parseF1Schedule(f1Espn, race.startUtc)?.qualifyingUtc ?? null, flags: parseF1Flags(f1, race.startUtc) });
   return {
     loadedAt: now.toISOString(),
     games: lotteryGames(mergeGames([...mlbDk, ...eplDk], [...parsePolymarketMlb(mlbPm, now), ...parsePolymarketEpl(eplPm, now)]), now),
@@ -639,6 +669,26 @@ export function parseEspnRace(data, startUtc) {
   // The whole order, for top six and ten, head-to-heads and the winning team.
   const order = ranked.map(name);
   return first ? { status: 'final', winner: name(first), ...(podium.length === 3 ? { podium } : {}), ...(order.length >= 10 ? { order } : {}) } : { status: 'pending' };
+}
+
+// The pole-sitter of the qualifying session nearest `startUtc` (a pole
+// pick's start is the qualifying's): { status: 'final', pole } once over.
+export function parseEspnPole(data, startUtc) {
+  let best = null;
+  for (const event of data.events || []) {
+    for (const comp of event.competitions || []) {
+      if (comp.type?.abbreviation !== 'Qual') continue;
+      const gap = Math.abs(Date.parse(comp.date) - Date.parse(startUtc));
+      if (gap <= 2 * DAY_MS && (!best || gap < best.gap)) best = { gap, comp };
+    }
+  }
+  if (!best) return null;
+  const type = best.comp.status?.type || {};
+  if (VOID_STATUS.test(type.name || '')) return { status: 'void' };
+  if (!type.completed && !/SESSION_COMPLETE|FINAL/.test(type.name || '')) return { status: 'pending' };
+  const first = (best.comp.competitors || []).find(c => Number(c.order) === 1);
+  const name = first?.athlete?.displayName || first?.athlete?.fullName;
+  return name ? { status: 'final', pole: name } : { status: 'pending' };
 }
 
 // A championship's winner once Polymarket has resolved the market.
@@ -720,6 +770,15 @@ export async function fetchOutcomes(legs, now = new Date()) {
         if (race) out.set(leg.id, parseOpenF1Flags(await page(`${OPENF1}/race_control?session_key=${race.key}`)));
         // No race run within a week of its date (called off): the stake back.
         else if (Array.isArray(sessions) && now.getTime() - Date.parse(leg.start) > 7 * DAY_MS) out.set(leg.id, { status: 'void' });
+        return;
+      }
+      if (leg.kind === 'f1pole') {
+        // The qualifying's day and the next (its start is the qualifying's).
+        for (const days of [0, 1]) {
+          const data = await page(`${ESPN}/racing/f1/scoreboard?dates=${yyyymmdd(new Date(Date.parse(leg.start) + days * DAY_MS))}`);
+          const result = data && parseEspnPole(data, leg.start);
+          if (result) return out.set(leg.id, result);
+        }
         return;
       }
       if (leg.kind?.startsWith('f1')) {

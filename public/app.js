@@ -24,7 +24,7 @@ import { detectLocale, makeT } from './lib/i18n.mjs';
 import { f1Driver, f1Constructor, findTeamLogo, countryFlag, leagueLogo, teamLogo, teamZh, LEAGUES, familyOf, isSoccer, isNeutral, normalizeTeamName } from './lib/teams.mjs';
 import { logoPicture, raceName } from './lib/logos.mjs';
 import { houseRule, houseCut, minLegsProblem, leagueTier } from './lib/rules.mjs';
-import { gameOptions, crowdPool, f1Podium, f1Markets } from './lib/board.mjs';
+import { gameOptions, crowdPool, f1Podium, f1Markets, f1PoleFromWinner } from './lib/board.mjs';
 import { auditPools } from './lib/audit.mjs';
 import { recommend } from './lib/recommend.mjs';
 
@@ -308,6 +308,35 @@ function buildBets(data) {
     }
     for (const p of more.teams) {
       bets.push({ id: `f1team|${p.team}`, gameId: 'f1team', kind: 'f1team', sport: 'f1', market: 'f1team', matchup: raceName(data.f1.title, state.locale), start: data.f1.startUtc, team: p.team, label: `F1 ${t('f1TeamShort')} ${p.team}`, shortLabel: p.team, fairChance: p.fair, estOdds: p.odds, errKey: 'extra', lock: p.lock, minLegs: p.minLegs });
+    }
+    // 排位賽第一 (pole position), until qualifying starts: Polymarket's or
+    // Kambi's price when either has one, else from the race winner's chances
+    // (the pole sitter is usually among the favourites, a little more so).
+    if (data.f1.qualifyingUtc && Date.parse(data.f1.qualifyingUtc) > Date.now()) {
+      const pole = data.f1.pole?.drivers?.length ? data.f1.pole.drivers : f1PoleFromWinner(data.f1.drivers);
+      for (const d of pole) {
+        const w = winners.find(b => normalizeTeamName(b.driverEn) === normalizeTeamName(d.name));
+        const driver = w?.driver ?? f1Driver(d.name);
+        const name = w?.shortLabel ?? (state.locale === 'zh' ? driver.zh : d.name);
+        bets.push({
+          id: `f1pole|${d.name}`,
+          gameId: 'f1pole',
+          kind: 'f1pole',
+          sport: 'f1',
+          market: 'f1pole',
+          matchup: `${raceName(data.f1.title, state.locale)} ${t('f1PoleShort')}`,
+          start: data.f1.qualifyingUtc,
+          label: `F1 ${t('f1PoleShort')} ${name}`,
+          shortLabel: name,
+          driverEn: d.name,
+          driver,
+          poleSource: data.f1.pole?.source ?? 'model',
+          fairChance: d.fair,
+          fairMargin: null,
+          errKey: data.f1.pole ? `f1Pre${d.fair < 0.01 ? 'Longshot' : ''}` : 'extra',
+          estOdds: estimateF1LotteryOdds(d.fair, 'pre')
+        });
+      }
     }
     // Safety car, virtual safety car, red flag: yes or no, priced like a
     // two-way game line.
@@ -1085,6 +1114,8 @@ async function refreshLive() {
     renderLive();
     renderParlay();
     renderTabs();
+    // A game Fixtures asked for that's already on.
+    if (state.wantedGame) openWantedGame();
   } catch (error) {
     console.error(error);
   } finally {
@@ -1411,7 +1442,7 @@ function renderSlipBar() {
 // A kind of bet's name (its board section's).
 function kindKey(kind) {
   const sec = SECTIONS.find(x => x.kind === kind);
-  return { f1: 'f1Title', f1podium: 'f1PodiumShort', f1top6: 'f1Top6Short', f1top10: 'f1Top10Short', f1h2h: 'f1H2HShort', f1team: 'f1TeamShort', f1sc: 'f1Sc', f1vsc: 'f1Vsc', f1red: 'f1Red', future: 'futuresTitle' }[kind] ?? sec?.short ?? sec?.title ?? null;
+  return { f1: 'f1Title', f1pole: 'f1PoleShort', f1podium: 'f1PodiumShort', f1top6: 'f1Top6Short', f1top10: 'f1Top10Short', f1h2h: 'f1H2HShort', f1team: 'f1TeamShort', f1sc: 'f1Sc', f1vsc: 'f1Vsc', f1red: 'f1Red', future: 'futuresTitle' }[kind] ?? sec?.short ?? sec?.title ?? null;
 }
 
 // The market a pick is from, as a small tag: 不讓分, 大小分, 讓分 …
@@ -1740,7 +1771,7 @@ function legLogo(bet) {
 
 // A saved pick's picture: its team's logo, the driver's badge, or the league's logo.
 function legIcon(leg) {
-  if ((leg.kind === 'f1' || leg.kind === 'f1podium') && leg.driver) {
+  if ((leg.kind === 'f1' || leg.kind === 'f1pole' || leg.kind === 'f1podium') && leg.driver) {
     const driver = f1Driver(leg.driver);
     return driverBadge({ driverEn: leg.driver, driver }, 'logo-sm');
   }
@@ -2691,6 +2722,7 @@ function numberField(input, { digits = 7, onEnter = null } = {}) {
 const FLAG_ICON = { f1sc: '🚗', f1vsc: '🟨', f1red: '🟥' };
 const F1_TABS = [
   { kind: 'f1', tab: 'f1WinnerTab', sub: null, notes: ['f1Intro', 'f1PhaseNote'] },
+  { kind: 'f1pole', tab: 'f1PoleShort', sub: 'f1PoleSub', notes: ['f1PoleNote'], shown: 10 },
   { kind: 'f1podium', tab: 'f1PodiumShort', sub: 'f1PodiumSub', notes: ['f1PodiumNote'], shown: 10 },
   { kind: 'f1top6', tab: 'f1Top6Short', sub: 'f1Top6Sub', notes: ['f1PodiumNote'], shown: 10 },
   { kind: 'f1top10', tab: 'f1Top10Short', sub: 'f1Top10Sub', notes: ['f1PodiumNote'], shown: 12 },
@@ -3103,13 +3135,47 @@ function hashGame(hash) {
 // open with every market, scrolled into view.
 function openWantedGame() {
   const id = state.wantedGame;
+  // F1 from Quadra Fixtures ("f1", or "f1pole" for qualifying): the race's board.
+  if (/^f1(pole)?$/.test(id || '') && state.data?.f1) {
+    state.wantedGame = null;
+    state.tab = 'games';
+    state.day = dayKey(state.data.f1.startUtc);
+    state.dayPicked = true;
+    state.sport = 'all';
+    if (id === 'f1pole' && state.bets.some(b => b.kind === 'f1pole')) state.f1Tab = 'f1pole';
+    renderAll();
+    showTab('games');
+    requestAnimationFrame(() => $('f1')?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+    return;
+  }
   // By id; or, from Quadra Fixtures, the same league and teams (a start
-  // time moved since leaves the id's hour behind).
-  const [sport, , away, home] = String(id || '').split('_');
+  // time moved since leaves the id's hour behind), or teams sharing a name
+  // word each (sources spell clubs differently: "Uni-President Lions",
+  // "Uni Lions").
+  const [sport, hour, away, home] = String(id || '').split('_');
+  const near = (name, want = '') => {
+    const key = normalizeTeamName(name);
+    const flat = key.replace(/\s+/g, '');
+    return Boolean(want) && (flat === want || want.includes(flat) || flat.includes(want) || key.split(' ').some(w => w.length >= 4 && want.includes(w)));
+  };
+  const alike = g => g.sport === sport && near(g.away.en, away) && near(g.home.en, home) && (!hour || Math.abs(Date.parse(g.startUtc) - Date.parse(`${hour}:00:00Z`)) < 12 * 3_600_000);
   const game =
     id &&
     (state.data?.games.find(g => g.id === id || g.id.toLowerCase() === id.toLowerCase()) ||
-      state.data?.games.find(g => g.sport === sport && g.id.endsWith(`_${away}_${home}`)));
+      state.data?.games.find(g => g.sport === sport && g.id.endsWith(`_${away}_${home}`)) ||
+      state.data?.games.find(alike));
+  // Already under way: its live card.
+  const live = !game && id ? state.liveGames.find(alike) : null;
+  if (live) {
+    state.wantedGame = null;
+    state.tab = 'games';
+    state.sport = 'all';
+    state.open.add(live.id);
+    renderAll();
+    showTab('games');
+    requestAnimationFrame(() => document.querySelector(`[data-game="${CSS.escape(live.id)}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+    return;
+  }
   if (!game) return;
   state.wantedGame = null;
   state.tab = 'games';
