@@ -479,6 +479,63 @@ export function choose(n, k) {
   return Math.round(c);
 }
 
+// Picks of the same game (the same gameId: both sides, two lines of one
+// market) can all go on a slip, but never in one combination: a single buys
+// each on its own; a parlay or system combination holds at most one pick of
+// each game. Legs saved before gameIds were kept are each their own game.
+const gameOf = (leg, i) => leg.gameId ?? `#${i}`;
+// For each leg, the mask of the other legs of its game.
+export function clashMasks(legs) {
+  return legs.map((leg, i) => legs.reduce((m, other, j) => (j !== i && gameOf(other, j) === gameOf(leg, i) ? m | (1 << j) : m), 0));
+}
+const clashes = (pick, masks) => masks.some((m, i) => pick & (1 << i) && pick & m);
+// How many combinations of each size the legs make (index = size).
+export function combosBySize(legs) {
+  const groups = new Map();
+  legs.forEach((leg, i) => groups.set(gameOf(leg, i), (groups.get(gameOf(leg, i)) ?? 0) + 1));
+  let poly = [1];
+  for (const g of groups.values()) {
+    const next = new Array(poly.length + 1).fill(0);
+    poly.forEach((c, k) => {
+      next[k] += c;
+      next[k + 1] += c * g;
+    });
+    poly = next;
+  }
+  return poly;
+}
+// Picks that rule each other out: the same game and the same market (both
+// sides of a line, two winners of one race). They're one draw, not
+// independent: at most one of them wins. Masks of such groups (2+ legs).
+export function exclusiveMasks(legs) {
+  const groups = new Map();
+  legs.forEach((leg, i) => {
+    if (leg.gameId == null) return;
+    const key = `${leg.gameId}|${leg.market ?? ''}`;
+    groups.set(key, (groups.get(key) ?? 0) | (1 << i));
+  });
+  return [...groups.values()].filter(m => m & (m - 1));
+}
+// The chance of exactly the legs in `won` winning.
+export function maskChance(legs, won, groups = exclusiveMasks(legs)) {
+  let p = 1;
+  let grouped = 0;
+  for (const g of groups) {
+    grouped |= g;
+    const hit = won & g;
+    if (hit & (hit - 1)) return 0;
+    let sum = 0;
+    for (let i = 0; i < legs.length; i++) if (g & (1 << i)) sum += legs[i].fairChance;
+    p *= hit ? legs[Math.log2(hit)].fairChance : Math.max(0, 1 - sum);
+  }
+  for (let i = 0; i < legs.length; i++) if (!(grouped & (1 << i))) p *= won & (1 << i) ? legs[i].fairChance : 1 - legs[i].fairChance;
+  return p;
+}
+export function comboCount(legs, sizes) {
+  const by = combosBySize(legs);
+  return sizes.reduce((s, k) => s + (by[k] ?? 0), 0);
+}
+
 // Combination sizes each mode buys for n legs: 一關 = every game on its own,
 // 全部過關 = all n together, 過關組合 = the chosen sizes.
 export function slipSizes(mode, n, chosen = []) {
@@ -493,7 +550,10 @@ export function slipErrors({ mode, legs, sizes, stake }) {
   const n = legs.length;
   if (n === 0) return ['empty'];
   if (n > SLIP_RULES.maxLegs) errors.push('tooManyLegs');
-  if (new Set(legs.map(l => l.gameId)).size !== n) errors.push('sameGame');
+  // Two picks of one game can't share a combination: a parlay of them, or a
+  // system size with no combination left, can't be bought.
+  const by = combosBySize(legs);
+  if (mode !== 'single' && sizes.some(k => !(by[k] > 0))) errors.push('sameGame');
   if (mode === 'parlay' && n < 2) errors.push('parlayNeedsTwo');
   if (mode === 'system' && n < 3) errors.push('systemNeedsThree');
   if (mode === 'system' && n >= 3 && sizes.length === 0) errors.push('noSizes');
@@ -502,7 +562,7 @@ export function slipErrors({ mode, legs, sizes, stake }) {
   // bought, parlay-only ones need every combination to be big enough.
   if (legs.some(l => l.lock)) errors.push('locked');
   if (minLegsProblem(legs, sizes)) errors.push('minLegs');
-  const combos = sizes.reduce((s, k) => s + choose(n, k), 0);
+  const combos = comboCount(legs, sizes);
   const cost = combos * stake;
   if (combos > 0 && cost < SLIP_RULES.minTicket) errors.push('ticketMin');
   if (cost > SLIP_RULES.maxTicket) errors.push('ticketMax');
@@ -515,7 +575,8 @@ export function slipErrors({ mode, legs, sizes, stake }) {
 export function evaluateSlip({ legs, sizes, stake }) {
   const n = legs.length;
   const sizeSet = new Set(sizes);
-  const combos = sizes.reduce((s, k) => s + choose(n, k), 0);
+  const masks = clashMasks(legs);
+  const combos = comboCount(legs, sizes);
   const cost = combos * stake;
   const byHits = Array.from({ length: n + 1 }, (_, hits) => ({ hits, chance: 0, min: Infinity, max: 0 }));
   let expected = 0;
@@ -523,23 +584,19 @@ export function evaluateSlip({ legs, sizes, stake }) {
   let anyPayout = 0;
   let profit = 0;
   let best = 0;
+  const groups = exclusiveMasks(legs);
   for (let won = 0; won < 1 << n; won++) {
-    let chance = 1;
-    const odds = [];
-    for (let i = 0; i < n; i++) {
-      if (won & (1 << i)) {
-        chance *= legs[i].fairChance;
-        odds.push(legs[i].odds);
-      } else chance *= 1 - legs[i].fairChance;
-    }
+    const chance = maskChance(legs, won, groups);
+    let m = 0;
+    for (let i = 0; i < n; i++) if (won & (1 << i)) m++;
     // Every combination made only of winning legs pays stake x its odds.
     let gross = 0;
     let net = 0;
-    const m = odds.length;
-    for (let pick = 1; pick < 1 << m; pick++) {
+    for (let pick = won; pick > 0; pick = (pick - 1) & won) {
+      if (clashes(pick, masks)) continue;
       let size = 0;
       let product = 1;
-      for (let j = 0; j < m; j++) if (pick & (1 << j)) (size++, (product *= odds[j]));
+      for (let i = 0; i < n; i++) if (pick & (1 << i)) (size++, (product *= legs[i].odds));
       if (!sizeSet.has(size)) continue;
       const pay = stake * product;
       gross += pay;
@@ -568,6 +625,7 @@ export function evaluateSlip({ legs, sizes, stake }) {
 export function slipPayoutTable({ legs, sizes, stake }) {
   const n = legs.length;
   const sizeSet = new Set(sizes);
+  const masks = clashMasks(legs);
   const gross = new Float64Array(1 << n);
   const net = new Float64Array(1 << n);
   for (let won = 0; won < 1 << n; won++) {
@@ -575,6 +633,7 @@ export function slipPayoutTable({ legs, sizes, stake }) {
     let t = 0;
     // Every combination made only of winning legs pays stake x its odds.
     for (let pick = won; pick > 0; pick = (pick - 1) & won) {
+      if (clashes(pick, masks)) continue;
       let size = 0;
       let product = 1;
       for (let i = 0; i < n; i++) if (pick & (1 << i)) (size++, (product *= legs[i].odds));
@@ -598,12 +657,12 @@ export function slipPayoutTable({ legs, sizes, stake }) {
 // can land. Used to tell luck from the lottery's cut in the slip history.
 export function slipOutlook({ legs, sizes, stake }) {
   const { net } = slipPayoutTable({ legs, sizes, stake });
+  const groups = exclusiveMasks(legs);
   let mean = 0;
   let square = 0;
   let any = 0;
   for (let won = 0; won < net.length; won++) {
-    let chance = 1;
-    for (let i = 0; i < legs.length; i++) chance *= won & (1 << i) ? legs[i].fairChance : 1 - legs[i].fairChance;
+    const chance = maskChance(legs, won, groups);
     mean += chance * net[won];
     square += chance * net[won] ** 2;
     if (net[won] > 0) any += chance;
@@ -615,7 +674,7 @@ export function slipOutlook({ legs, sizes, stake }) {
 // off: the lottery counts it at odds 1.00, so a single gets its stake back
 // and a parlay goes on without it). Gross is before tax, net after.
 export function settleSlip({ legs, sizes, stake }) {
-  const { gross, net } = slipPayoutTable({ legs: legs.map(l => ({ odds: l.result === 'void' ? 1 : l.odds })), sizes, stake });
+  const { gross, net } = slipPayoutTable({ legs: legs.map(l => ({ gameId: l.gameId, odds: l.result === 'void' ? 1 : l.odds })), sizes, stake });
   const mask = legs.reduce((m, l, i) => (l.result === 'lost' ? m : m | (1 << i)), 0);
   return { gross: gross[mask], net: net[mask] };
 }
@@ -629,12 +688,11 @@ export function settleSlip({ legs, sizes, stake }) {
 export function analyzeSlip({ legs, sizes, stake }) {
   const n = legs.length;
   const { gross, net } = slipPayoutTable({ legs, sizes, stake });
-  const cost = sizes.reduce((s, k) => s + choose(n, k), 0) * stake;
+  const cost = comboCount(legs, sizes) * stake;
   const chance = new Float64Array(1 << n);
+  const groups = exclusiveMasks(legs);
   for (let won = 0; won < 1 << n; won++) {
-    let p = 1;
-    for (let i = 0; i < n; i++) p *= won & (1 << i) ? legs[i].fairChance : 1 - legs[i].fairChance;
-    chance[won] = p;
+    chance[won] = maskChance(legs, won, groups);
   }
   let expectedGross = 0;
   let expectedNet = 0;

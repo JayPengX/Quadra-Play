@@ -13,10 +13,11 @@ import {
   quantile,
   SLIP_RULES,
   afterTax,
-  choose,
   seededRandom,
   slipErrors,
   slipSizes,
+  combosBySize,
+  comboCount,
   estimateLineOdds,
   MLB_MARKET_OVERROUND
 } from './lib/odds.mjs';
@@ -369,22 +370,22 @@ function buildBets(data) {
     const winners = bets.filter(b => b.kind === 'f1');
     f1Podium(winners.map(b => ({ fair: b.fairChance, odds: b.estOdds }))).forEach((p, i) => {
       const w = winners[i];
-      bets.push({ ...w, id: `f1pod|${w.driverEn}`, kind: 'f1podium', market: `f1podium|${w.driverEn}`, label: `F1 ${t('f1PodiumShort')} ${w.shortLabel}`, fairChance: p.fair, estOdds: p.odds, errKey: 'extra', lock: p.lock, minLegs: p.minLegs });
+      bets.push({ ...w, id: `f1pod|${w.driverEn}`, gameId: `f1pod|${w.driverEn}`, kind: 'f1podium', market: `f1podium|${w.driverEn}`, label: `F1 ${t('f1PodiumShort')} ${w.shortLabel}`, fairChance: p.fair, estOdds: p.odds, errKey: 'extra', lock: p.lock, minLegs: p.minLegs });
     });
     // Top six, top ten, teammates head to head and the winning team.
     const more = f1Markets(winners.map(b => ({ fair: b.fairChance, odds: b.estOdds, team: b.driver.team })));
     for (const [key, list, short] of [['f1top6', more.top6, 'f1Top6Short'], ['f1top10', more.top10, 'f1Top10Short']])
       list.forEach((p, i) => {
         const w = winners[i];
-        bets.push({ ...w, id: `${key}|${w.driverEn}`, kind: key, market: `${key}|${w.driverEn}`, label: `F1 ${t(short)} ${w.shortLabel}`, fairChance: p.fair, estOdds: p.odds, errKey: 'extra', lock: p.lock, minLegs: p.minLegs });
+        bets.push({ ...w, id: `${key}|${w.driverEn}`, gameId: `${key}|${w.driverEn}`, kind: key, market: `${key}|${w.driverEn}`, label: `F1 ${t(short)} ${w.shortLabel}`, fairChance: p.fair, estOdds: p.odds, errKey: 'extra', lock: p.lock, minLegs: p.minLegs });
       });
     for (const p of more.h2h) {
       const w = winners[p.driver];
       const r = winners[p.rival];
-      bets.push({ ...w, id: `f1h2h|${w.driverEn}|${r.driverEn}`, kind: 'f1h2h', market: `f1h2h|${[w.driverEn, r.driverEn].sort().join('|')}`, rival: r.driverEn, settle: { rival: r.driverEn }, rivalLabel: r.shortLabel, label: `F1 ${w.shortLabel} ${t('f1H2HBeats')} ${r.shortLabel}`, shortLabel: `${w.shortLabel} > ${r.shortLabel}`, fairChance: p.fair, estOdds: p.odds, errKey: 'extra', lock: p.lock, minLegs: p.minLegs });
+      bets.push({ ...w, id: `f1h2h|${w.driverEn}|${r.driverEn}`, gameId: `f1h2h|${[w.driverEn, r.driverEn].sort().join('|')}`, kind: 'f1h2h', market: `f1h2h|${[w.driverEn, r.driverEn].sort().join('|')}`, rival: r.driverEn, settle: { rival: r.driverEn }, rivalLabel: r.shortLabel, label: `F1 ${w.shortLabel} ${t('f1H2HBeats')} ${r.shortLabel}`, shortLabel: `${w.shortLabel} > ${r.shortLabel}`, fairChance: p.fair, estOdds: p.odds, errKey: 'extra', lock: p.lock, minLegs: p.minLegs });
     }
     for (const p of more.teams) {
-      bets.push({ id: `f1team|${p.team}`, gameId: 'f1', kind: 'f1team', sport: 'f1', market: 'f1team', matchup: data.f1.title, start: data.f1.startUtc, team: p.team, label: `F1 ${t('f1TeamShort')} ${p.team}`, shortLabel: p.team, fairChance: p.fair, estOdds: p.odds, errKey: 'extra', lock: p.lock, minLegs: p.minLegs });
+      bets.push({ id: `f1team|${p.team}`, gameId: 'f1team', kind: 'f1team', sport: 'f1', market: 'f1team', matchup: data.f1.title, start: data.f1.startUtc, team: p.team, label: `F1 ${t('f1TeamShort')} ${p.team}`, shortLabel: p.team, fairChance: p.fair, estOdds: p.odds, errKey: 'extra', lock: p.lock, minLegs: p.minLegs });
     }
     // Safety car, virtual safety car, red flag: yes or no, priced like a
     // two-way game line.
@@ -394,7 +395,7 @@ function buildBets(data) {
       for (const pick of ['yes', 'no']) {
         const fair = pick === 'yes' ? flag.fair : 1 - flag.fair;
         const short = `${t(name)} ${t(pick === 'yes' ? 'f1FlagYes' : 'f1FlagNo')}`;
-        bets.push({ id: `f1${key}|${pick}`, gameId: 'f1', kind: `f1${key}`, sport: 'f1', market: `f1${key}`, matchup: data.f1.title, start: data.f1.startUtc, pick, settle: { pick }, flagSource: flag.source, label: `F1 ${short}`, shortLabel: short, fairChance: fair, estOdds: estimateLineOdds(fair, MLB_MARKET_OVERROUND), errKey: 'extra' });
+        bets.push({ id: `f1${key}|${pick}`, gameId: `f1${key}`, kind: `f1${key}`, sport: 'f1', market: `f1${key}`, matchup: data.f1.title, start: data.f1.startUtc, pick, settle: { pick }, flagSource: flag.source, label: `F1 ${short}`, shortLabel: short, fairChance: fair, estOdds: estimateLineOdds(fair, MLB_MARKET_OVERROUND), errKey: 'extra' });
       }
     }
   }
@@ -1195,7 +1196,7 @@ function entryRow(bet, i, picture, sub) {
   ]);
 }
 
-function board({ emblem, title, sub, bets, rows, id, notes = [], shown = Infinity }) {
+function board({ emblem, title, sub, bets, rows, id, notes = [], shown = Infinity, tabs = null, lead = null }) {
   const t = state.t;
   const entries = bets.map((b, i) => rows(b, i));
   const rest = entries.slice(shown);
@@ -1204,6 +1205,8 @@ function board({ emblem, title, sub, bets, rows, id, notes = [], shown = Infinit
       el('span', { class: 'board-emblem' }, leagueImg(emblem)),
       el('div', {}, [el('p', { class: 'board-title', text: title }), el('p', { class: 'board-sub', text: sub })])
     ]),
+    tabs ? el('div', { class: 'board-tabs' }, tabs) : null,
+    lead ? el('p', { class: 'board-lead', text: lead }) : null,
     el('div', { class: 'entries' }, entries.slice(0, shown)),
     rest.length ? el('details', { class: 'board-more' }, [el('summary', { text: t('futureMore', { n: rest.length }) }), el('div', { class: 'entries' }, rest)]) : null,
     notes.length ? el('div', { class: 'board-foot' }, [el('details', { class: 'info' }, [el('summary', { text: t('notesTitle') }), ...notes.map(text => el('p', { text }))])]) : null
@@ -1242,9 +1245,8 @@ function toggleLeg(bet) {
   if (state.parlay.includes(bet.id)) {
     state.parlay = state.parlay.filter(id => id !== bet.id);
   } else {
-    // One pick per game: a new pick from the same game replaces the old one.
-    const sameGame = slipCandidates().filter(b => b.gameId === bet.gameId).map(b => b.id);
-    state.parlay = state.parlay.filter(id => !sameGame.includes(id));
+    // Picks of one game can all be chosen: singles buy each, a parlay or
+    // system combination never holds two of the same game (odds.mjs).
     state.parlay.push(bet.id);
     if (state.parlay.length > SLIP_RULES.maxLegs) state.parlay.shift();
   }
@@ -1582,7 +1584,7 @@ function renderParlay() {
   const chosen = [...state.slipSizes].map(k => (k === 'all' ? n : k));
   const sizes = slipSizes(mode, n, chosen);
   const stake = state.slipStake;
-  const slip = legs.map(b => ({ gameId: b.gameId, odds: effectiveOdds(b), fairChance: b.fairChance, minLegs: b.minLegs ?? 1, lock: b.lock ?? null }));
+  const slip = legs.map(b => ({ gameId: b.gameId, market: b.market ?? b.kind, odds: effectiveOdds(b), fairChance: b.fairChance, minLegs: b.minLegs ?? 1, lock: b.lock ?? null }));
   const errors = slipErrors({ mode, legs: slip, sizes, stake });
   const rerender = () => renderParlay();
 
@@ -1643,7 +1645,8 @@ function renderParlay() {
     )
   ];
   if (mode === 'system' && n >= 3) {
-    const options = [...Array.from({ length: n - 2 }, (_, i) => i + 2), 'all'];
+    const bySize = combosBySize(slip);
+    const options = [...Array.from({ length: n - 2 }, (_, i) => i + 2), 'all'].filter(k => bySize[k === 'all' ? n : k] > 0 || state.slipSizes.has(k));
     ticket.push(
       el('div', { class: 'slip-field' }, [
         el('span', { text: t('slipSizes') }),
@@ -1654,7 +1657,7 @@ function renderParlay() {
             return chip({
               pressed: on,
               text: sizeName(size, n),
-              count: `×${fmtCount(choose(n, size))}`,
+              count: `×${fmtCount(bySize[size] ?? 0)}`,
               onclick: () => {
                 if (on) state.slipSizes.delete(k);
                 else state.slipSizes.add(k);
@@ -1697,13 +1700,13 @@ function renderParlay() {
   if (errors.length) {
     ticket.push(el('ul', { class: 'slip-errors' }, errors.map(e => el('li', { text: t(`slipError_${e}`, { max: SLIP_RULES.maxLegs, min: fmtMoney(SLIP_RULES.minTicket, { sign: false }), maxTicket: fmtMoney(SLIP_RULES.maxTicket, { sign: false }), unit: SLIP_RULES.unit, need: minLegsProblem(slip, sizes) }) }))));
   }
-  const cost = sizes.reduce((sum, k) => sum + choose(n, k), 0) * stake;
-  if (sizes.length && !errors.includes('stakeUnit')) ticket.push(payoutBox(slip, sizes, stake, mode));
+  const cost = comboCount(slip, sizes) * stake;
+  if (sizes.length && !errors.includes('stakeUnit') && cost > 0) ticket.push(payoutBox(slip, sizes, stake, mode));
   ticket.push(placeButton(legs, sizes, cost, errors));
   ticket.push(el('details', { class: 'info' }, [el('summary', { text: t('slipRulesTitle') }), el('p', { text: t('slipRulesNote') })]));
 
   let results = [];
-  if (sizes.length && !errors.includes('stakeUnit')) {
+  if (sizes.length && !errors.includes('stakeUnit') && cost > 0) {
     const a = analyzeSlip({ legs: slip, sizes, stake });
     results = slipAnalysisView(a, legs, {
       // A new ticket starts a new tally of draws.
@@ -1742,7 +1745,8 @@ function legMain(leg) {
 function payoutBox(legs, sizes, stake, mode) {
   const t = state.t;
   const n = legs.length;
-  const combos = sizes.reduce((sum, k) => sum + choose(n, k), 0);
+  const combos = comboCount(legs, sizes);
+  const bySize = combosBySize(legs);
   const cost = combos * stake;
   const { gross, net } = slipPayoutTable({ legs, sizes, stake });
   const all = (1 << n) - 1;
@@ -1759,7 +1763,7 @@ function payoutBox(legs, sizes, stake, mode) {
   } else if (mode === 'single') {
     legs.forEach((l, i) => rows.push(payLine(`${t('payEach', { i: i + 1 })} ${fmtMoney(stake, { sign: false })} × ${fmtOdds(l.odds)}`, fmtMoney(afterTax(stake * l.odds), { sign: false }))));
   } else {
-    for (const k of sizes) rows.push(payLine(t('paySize', { size: sizeName(k, n), c: fmtInt(choose(n, k)) }), fmtMoney(choose(n, k) * stake, { sign: false })));
+    for (const k of sizes) rows.push(payLine(t('paySize', { size: sizeName(k, n), c: fmtInt(bySize[k] ?? 0) }), fmtMoney((bySize[k] ?? 0) * stake, { sign: false })));
   }
   rows.push(payLine(t('payCost', { c: fmtInt(combos) }), fmtMoney(cost, { sign: false }), 'pay-cost'));
   const taxed = gross[all] - net[all] > 0.5;
@@ -2021,6 +2025,8 @@ function legIcon(leg) {
 function legRecord(bet) {
   return {
     id: bet.id,
+    gameId: bet.gameId ?? undefined,
+    market: bet.gameId ? bet.market ?? bet.kind : undefined,
     kind: bet.kind,
     sport: bet.sport,
     label: bet.label,
@@ -2213,7 +2219,7 @@ function legState(leg, now = Date.now()) {
 // What an open slip has locked in (every undecided pick lost) and the most it
 // can still pay (every undecided pick won).
 function slipRange(slip) {
-  const as = result => slip.legs.map(leg => ({ odds: leg.odds, result: leg.result ?? result }));
+  const as = result => slip.legs.map(leg => ({ gameId: leg.gameId, odds: leg.odds, result: leg.result ?? result }));
   return {
     locked: settleSlip({ legs: as('lost'), sizes: slip.sizes, stake: slip.stake }).net,
     most: settleSlip({ legs: as('won'), sizes: slip.sizes, stake: slip.stake }).net
@@ -2261,7 +2267,7 @@ function slipNowLine(slip, states) {
   const count = x => slip.legs.filter((leg, k) => states[k] === 'live' && now[k] === x).length;
   const parts = [t('slipNowCount', { win: count('won'), lose: count('lost') })];
   if (now.every(Boolean)) {
-    const pay = settleSlip({ legs: slip.legs.map((leg, k) => ({ odds: leg.odds, result: now[k] })), sizes: slip.sizes, stake: slip.stake }).net;
+    const pay = settleSlip({ legs: slip.legs.map((leg, k) => ({ gameId: leg.gameId, odds: leg.odds, result: now[k] })), sizes: slip.sizes, stake: slip.stake }).net;
     parts.push(pay > 0 ? t('slipNowPays', { v: fmtMoney(pay, { sign: false }) }) : t('slipNowNothing'));
   }
   return el('p', { class: 'slip-now' }, [el('span', { class: 'live-dot', text: t('tagLive') }), document.createTextNode(` ${parts.join(' · ')}`)]);
@@ -2898,74 +2904,70 @@ function numberField(input, { digits = 7, onEnter = null } = {}) {
   });
 }
 
+// F1: one card, a tab per market (the winner, places, head to heads, the
+// winning team, and safety car, VSC and red flag each on their own).
+const FLAG_ICON = { f1sc: '🚗', f1vsc: '🟨', f1red: '🟥' };
+const F1_TABS = [
+  { kind: 'f1', tab: 'f1WinnerTab', sub: null, notes: ['f1Intro', 'f1PhaseNote'] },
+  { kind: 'f1podium', tab: 'f1PodiumShort', sub: 'f1PodiumSub', notes: ['f1PodiumNote'], shown: 10 },
+  { kind: 'f1top6', tab: 'f1Top6Short', sub: 'f1Top6Sub', notes: ['f1PodiumNote'], shown: 10 },
+  { kind: 'f1top10', tab: 'f1Top10Short', sub: 'f1Top10Sub', notes: ['f1PodiumNote'], shown: 12 },
+  { kind: 'f1h2h', tab: 'f1H2HShort', sub: 'f1H2HSub', notes: ['f1PodiumNote'], shown: 10 },
+  { kind: 'f1team', tab: 'f1TeamShort', sub: 'f1TeamSub', notes: ['f1PodiumNote'] },
+  { kind: 'f1sc', tab: 'f1Sc', sub: 'f1ScSub', notes: ['f1FlagsNote'], flag: true },
+  { kind: 'f1vsc', tab: 'f1Vsc', sub: 'f1VscSub', notes: ['f1FlagsNote'], flag: true },
+  { kind: 'f1red', tab: 'f1Red', sub: 'f1RedSub', notes: ['f1FlagsNote'], flag: true }
+];
 function renderF1() {
   const t = state.t;
   const f1 = state.data.f1;
   $('f1').hidden = !inSport('f1') || !f1;
   if (!f1) return;
-  const drivers = state.bets.filter(b => b.kind === 'f1');
-  const podium = state.bets.filter(b => b.kind === 'f1podium');
+  const tabs = F1_TABS.filter(x => state.bets.some(b => b.kind === x.kind));
+  if (!tabs.length) return $('f1-body').replaceChildren();
+  const current = tabs.find(x => x.kind === state.f1Tab) ?? tabs[0];
+  const list = state.bets.filter(b => b.kind === current.kind);
+  // How many picks of each market are on the slip: a dot on its tab.
+  const picked = kind => state.parlay.some(id => state.bets.find(b => b.id === id)?.kind === kind);
+  const tabRow = el(
+    'div',
+    { class: 'segmented market-tabs', role: 'tablist', 'aria-label': t('moreMarkets') },
+    tabs.map(x =>
+      el('button', {
+        type: 'button',
+        role: 'tab',
+        class: picked(x.kind) ? 'has-pick' : '',
+        'aria-selected': String(x === current),
+        'aria-pressed': String(x === current),
+        text: t(x.tab),
+        onclick: () => {
+          state.f1Tab = x.kind;
+          renderF1();
+        }
+      })
+    )
+  );
+  requestAnimationFrame(() => {
+    const on = tabRow.querySelector('[aria-selected="true"]');
+    if (on && tabRow.scrollWidth > tabRow.clientWidth) tabRow.scrollLeft = Math.max(0, on.offsetLeft - (tabRow.clientWidth - on.offsetWidth) / 2);
+  });
+  const fromHistory = current.flag && list.some(b => b.flagSource === 'history');
+  const badge = b => (current.flag ? el('span', { class: 'flag-badge', 'aria-hidden': 'true', text: FLAG_ICON[b.kind] }) : b.kind === 'f1team' ? constructorBadge(b.team) : driverBadge(b));
+  const sub = b => (current.flag ? t(b.flagSource === 'history' ? 'f1FlagFromHistory' : 'f1FlagFromMarket') : b.kind === 'f1team' ? '' : b.kind === 'f1h2h' ? `vs ${b.rivalLabel}` : b.driver.team);
   $('f1-body').replaceChildren(
     board({
       emblem: 'f1',
       title: f1.title,
       sub: `${fmtTime(f1.startUtc)} · ${t(f1.phase === 'pre' ? 'f1PhasePre' : 'f1PhasePost')}`,
-      bets: drivers,
-      id: 'f1',
-      notes: [t('f1Intro'), t('f1PhaseNote')],
-      rows: (b, i) => entryRow(b, i, driverBadge(b), b.driver.team)
-    }),
-    podium.length
-      ? board({
-          emblem: 'f1',
-          title: `${f1.title} · ${t('f1Podium')}`,
-          sub: t('f1PodiumSub'),
-          bets: podium,
-          id: 'f1podium',
-          shown: 8,
-          notes: [t('f1PodiumNote')],
-          rows: (b, i) => entryRow(b, i, driverBadge(b), b.driver.team)
-        })
-      : null,
-    ...[
-      ['f1top6', 'f1Top6', 'f1Top6Sub'],
-      ['f1top10', 'f1Top10', 'f1Top10Sub'],
-      ['f1h2h', 'f1H2H', 'f1H2HSub'],
-      ['f1team', 'f1Team', 'f1TeamSub']
-    ].map(([kind, title, sub]) => {
-      const list = state.bets.filter(b => b.kind === kind);
-      if (!list.length) return null;
-      return board({
-        emblem: 'f1',
-        title: `${f1.title} · ${t(title)}`,
-        sub: t(sub),
-        bets: list,
-        id: kind,
-        shown: 8,
-        notes: [t('f1PodiumNote')],
-        rows: (b, i) => (kind === 'f1team' ? entryRow(b, i, constructorBadge(b.team), '') : entryRow(b, i, driverBadge(b), kind === 'f1h2h' ? `vs ${b.rivalLabel}` : b.driver.team))
-      });
-    }),
-    flagBoard(f1)
+      tabs: tabRow,
+      lead: current.sub ? t(current.sub) : null,
+      bets: list,
+      id: current.kind,
+      shown: current.shown ?? Infinity,
+      notes: [...current.notes.map(k => t(k)), fromHistory ? t('f1FlagsHistory') : null, t('f1CombineNote')].filter(Boolean),
+      rows: (b, i) => entryRow(b, i, badge(b), sub(b))
+    })
   );
-}
-
-// 安全車・虛擬安全車・紅旗: each yes and no, in one board.
-const FLAG_ICON = { f1sc: '🚗', f1vsc: '🟨', f1red: '🟥' };
-function flagBoard(f1) {
-  const t = state.t;
-  const list = state.bets.filter(b => b.kind in FLAG_ICON);
-  if (!list.length) return null;
-  const fromHistory = list.some(b => b.flagSource === 'history');
-  return board({
-    emblem: 'f1',
-    title: `${f1.title} · ${t('f1Flags')}`,
-    sub: t('f1FlagsSub'),
-    bets: list,
-    id: 'f1flags',
-    notes: [t('f1FlagsNote'), fromHistory ? t('f1FlagsHistory') : null].filter(Boolean),
-    rows: (b, i) => entryRow(b, i, el('span', { class: 'flag-badge', 'aria-hidden': 'true', text: FLAG_ICON[b.kind] }), t(b.flagSource === 'history' ? 'f1FlagFromHistory' : 'f1FlagFromMarket'))
-  });
 }
 
 // ============================================================================

@@ -1442,3 +1442,10 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .lotto-done, .lotto-day, .lotto-day .lotto-tickets { width: 100%; justify-items: stretch; }
 .lt-group { width: 100%; box-sizing: border-box; }
 .lotto-tickets > .lotto-ticket { width: 100%; box-sizing: border-box; justify-items: stretch; text-align: left; box-shadow: none; }
+
+/* F1: one card, its markets as tabs. */
+.board-tabs { padding: 10px 12px 0; }
+.board-tabs .market-tabs { margin-bottom: 0; }
+.board-lead { margin: 8px 14px 0; font-size: 0.8rem; color: var(--text-muted); }
+.market-tabs button.has-pick { position: relative; }
+.market-tabs button.has-pick::after { content: ''; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }

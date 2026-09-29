@@ -2,7 +2,7 @@
 // compares with what the odds said to expect (luck versus the lottery's cut),
 // how often picks came in against their chances, breakdowns, streaks and
 // records. Pure: the page and the tests both use it.
-import { slipOutlook, choose } from './odds.mjs';
+import { slipOutlook, comboCount } from './odds.mjs';
 
 // A pick's fair chance as saved; a pick saved without one counts at its odds.
 export const chanceOf = leg => (leg.fairChance >= 0 && leg.fairChance <= 1 ? leg.fairChance : Math.min(1, 1 / leg.odds));
@@ -10,7 +10,7 @@ export const chanceOf = leg => (leg.fairChance >= 0 && leg.fairChance <= 1 ? leg
 const outlooks = new Map();
 // A slip's outlook when bought, from the chances and odds saved with it.
 export function outlookOf(slip) {
-  if (!outlooks.has(slip.id)) outlooks.set(slip.id, slipOutlook({ legs: slip.legs.map(leg => ({ odds: leg.odds, fairChance: chanceOf(leg) })), sizes: slip.sizes, stake: slip.stake }));
+  if (!outlooks.has(slip.id)) outlooks.set(slip.id, slipOutlook({ legs: slip.legs.map(leg => ({ gameId: leg.gameId, market: leg.market, odds: leg.odds, fairChance: chanceOf(leg) })), sizes: slip.sizes, stake: slip.stake }));
   return outlooks.get(slip.id);
 }
 
@@ -200,7 +200,7 @@ export function historyStats(account) {
     records,
     timeline,
     avgCost: settled.length ? summary.staked / settled.length : 0,
-    combos: settled.reduce((s, x) => s + x.sizes.reduce((c, k) => c + choose(x.legs.length, k), 0), 0)
+    combos: settled.reduce((s, x) => s + comboCount(x.legs, x.sizes), 0)
   };
 }
 
