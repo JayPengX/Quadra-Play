@@ -2155,7 +2155,7 @@ function placeButton(legs, sizes, cost, errors) {
       class: 'primary-button place-button',
       type: 'button',
       disabled: blocked ? '' : null,
-      text: updating ? t('placeUpdating') : short ? t('placeShort', { v: fmtMoney(money, { sign: false }) }) : t('placeSlip', { v: fmtMoney(cost, { sign: false }) }),
+      text: updating ? t('placeUpdating') : short ? t('placeShort', { v: fmtMoney(money, { sign: money < 0 }) }) : t('placeSlip', { v: fmtMoney(cost, { sign: false }) }),
       onclick: () => {
         // 單場: each pick its own slip (its own bet, its own line in 紀錄),
         // the stake the same on each; the others, one slip.
@@ -2194,7 +2194,7 @@ function placeButton(legs, sizes, cost, errors) {
         showTab('history');
       }
     }),
-    el('small', { class: 'muted', text: t('placeNote', { v: fmtMoney(money, { sign: false }) }) })
+    el('small', { class: 'muted', text: t('placeNote', { v: fmtMoney(money, { sign: money < 0 }) }) })
   ]);
 }
 
@@ -2261,7 +2261,7 @@ function renderAccount() {
   $('account-body').replaceChildren(
     el('div', { class: 'card account-card' }, [
       el('div', { class: 'account-top' }, [
-        el('div', {}, [el('p', { class: 'muted', text: t('poolTotal') }), el('p', { class: 'account-balance stat-value', text: fmtMoney(money, { sign: false }) })]),
+        el('div', {}, [el('p', { class: 'muted', text: t('poolTotal') }), el('p', { class: `account-balance stat-value${money < 0 ? ' back-low' : ''}`, text: fmtMoney(money, { sign: money < 0 }) })]),
         el('div', { class: 'account-side' }, [
           el('p', {}, [el('span', { class: 'muted', text: `${t('accountAtStake')} ` }), el('strong', { text: fmtMoney(atStake, { sign: false }) })]),
           el('p', {}, [el('span', { class: 'muted', text: `${t('accountWon')} ` }), el('strong', { class: won > 0 ? 'back-high' : '', text: fmtMoney(won, { sign: false }) })])

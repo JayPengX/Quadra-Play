@@ -1648,3 +1648,6 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 .combo-pay small { font-size: 0.72rem; color: var(--text-muted); white-space: nowrap; }
 .combo-pay strong { font-size: 1.2rem; font-weight: 800; color: var(--good); white-space: nowrap; }
 .combo-go { flex: none; padding: 10px 14px; border: 0; border-radius: 12px; background: var(--accent); color: #fff; font: inherit; font-weight: 800; font-size: 0.88rem; cursor: pointer; }
+.wallet-balance.neg { color: var(--bad-strong); }
+.wallet-od { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 10px; padding: 10px 12px; border: 0; border-radius: 12px; background: var(--bad-wash); color: var(--bad-strong); font: inherit; font-size: 0.84rem; text-align: left; cursor: pointer; }
+.wallet-od strong { white-space: nowrap; }

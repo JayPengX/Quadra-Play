@@ -549,7 +549,7 @@ export const STRINGS = {
         ['限過關', '賠率偏低的選項只能串關：1.15 以下限 3 關以上，1.30 以下限 2 關以上。投注單的每個組合都要串夠場數。'],
         ['抽成看風險', '運彩在越沒把握的地方抽越多：從實測的抽成（MLB 兩項約 14%）開始，資料來源差距越大、聯賽越冷門、線離主線越遠，抽成越高，最多再多 8%。'],
         ['投注單與稅', '每張最多 12 場、同一場只能選一個結果、NT$100–100,000、彩金上限 NT$2,000 萬；每注獎金超過 NT$5,000 預扣 20.4%。'],
-        ['模擬帳戶', '下注的錢來自 Quadra 共用餘額（每月 1 日發薪 NT$7,000）。下注時照當下賠率扣款，比賽結束自動對獎；網球看 ESPN 的比分，日職、韓職、中職、籃球和羽桌排撞球看 Kambi 的即時比分，比賽打完就自動對獎；3 天都沒有結果（延賽、取消）就退款。模擬的 10 萬人照一樣的對獎規則（每週 NT$5,000）。'],
+        ['模擬帳戶', '下注的錢來自 Quadra 共用餘額（每月 1 日發津貼，依資產 NT$1,000–6,000）。下注時照當下賠率扣款，比賽結束自動對獎；網球看 ESPN 的比分，日職、韓職、中職、籃球和羽桌排撞球看 Kambi 的即時比分，比賽打完就自動對獎；3 天都沒有結果（延賽、取消）就退款。模擬的 10 萬人照一樣的對獎規則（每週 NT$5,000）。'],
         ['小遊戲', '在「紀錄」靠努力賺模擬帳戶的錢，不靠運氣、不用算數學，三種任選，風險不同但都是「工作」，不會太誇張：球隊測驗是穩定收入（答錯扣一點，換下一題）；全壘打大賽和罰球高風險高報酬（失手扣錢，打不好幾乎白做，打得好是一般的兩三倍）。一般玩法每分鐘約 NT$15，一天最多 NT$300（Quadra Rewards背單字每分鐘約 NT$20，才是最划算的努力），每局都算給你看等於做幾分鐘基本工資（時薪 NT$196）的工作，和在運彩多快會輸回去。不算在下注成績裡。'],
         ['年齡與合法性', '購買運彩須年滿 18 歲；在海外網站（包含 Polymarket）下注在台灣屬於違法賭博。本站只是教學工具。']
       ]],
@@ -1617,7 +1617,7 @@ export const STRINGS = {
         ['Parlay only', 'Short prices only in parlays: under 1.15 in 3+ games, under 1.30 in 2+. Every combination on the ticket must have enough games.'],
         ['A cut by risk', 'The lottery takes more where it knows less: from its measured cut (about 14% on MLB two-way markets), more when the sources disagree, the league is less known, or the line is far from the main one; at most 8% more.'],
         ['Tickets and tax', 'Up to 12 games, one pick per game, NT$100-100,000 a ticket, payouts capped at NT$20 million; 20.4% withheld from any combination paying over NT$5,000.'],
-        ['Practice account', 'Bets come from the shared Quadra balance (payday: NT$7,000 on the 1st of every month). Stakes come off at the odds of the moment and pay out automatically: tennis from ESPN\'s scores; Asian baseball, basketball, badminton and the other Kambi sports from Kambi\'s live score once the match is over; anything without a result after 3 days (postponed, called off) is refunded. The simulated 100,000 settle by the same rules (with NT$5,000 a week).'],
+        ['Practice account', 'Bets come from the shared Quadra balance (an allowance on the 1st of every month, NT$1,000-6,000 by what you’re worth). Stakes come off at the odds of the moment and pay out automatically: tennis from ESPN\'s scores; Asian baseball, basketball, badminton and the other Kambi sports from Kambi\'s live score once the match is over; anything without a result after 3 days (postponed, called off) is refunded. The simulated 100,000 settle by the same rules (with NT$5,000 a week).'],
         ['Mini games', 'History has three games that earn play money by effort, with no luck and no math. Their risk differs, but it\'s all work, nothing extreme: the team quiz is the steady earn (a wrong answer costs a little and moves on); the home run derby and free throws are high risk, high pay (misses cost money: a bad round pays about nothing, a good one two to three times typical). Ordinary play pays about NT$15 a minute. At most NT$300 a day (studying in Quadra Rewards pays about NT$20 a minute: the best effort to put in); every round shows how many minutes of a minimum-wage job (NT$196 an hour) it equals and how quickly betting loses it again. None of it counts towards your betting result.'],
         ['Age and the law', 'You must be 18 to buy lottery tickets; betting on overseas sites (Polymarket included) is illegal gambling in Taiwan. This site is a teaching tool only.']
       ]],

@@ -20,6 +20,7 @@ const TXT = {
     featured: '焦點賽事', featuredSub: '依你追蹤和常玩的聯盟排序', allGames: '全部賽事', following: '追蹤中', markets: '{n} 種玩法',
     mine: '你的投注', seeAll: '全部', legs: '{n} 場', cashOut: '兌現', paused: '兌現暫停',
     lottery: '彩券', drawIn: '{when} 開獎', none: '賽事載入中，或目前沒有開賣的比賽。', draw: '和',
+    overdrawn: '透支 · 月息 1%', cover: '賣出持股補足',
     combos: '精選串關', combosSub: '一鍵加入投注單，全中派彩含串關加成', comboSafe: '穩膽 3 串', comboBold: '高賠 3 串', comboTag: '{n} 串 1', comboTagBoost: '{n} 串 1 · 加成 +{b}%', comboStake: '投注 {v} · 賠率 ×{x}', comboGo: '加入投注單'
   },
   en: {
@@ -27,6 +28,7 @@ const TXT = {
     featured: 'Featured', featuredSub: 'By what you follow and play', allGames: 'All games', following: 'Following', markets: '{n} markets',
     mine: 'Your bets', seeAll: 'See all', legs: '{n} picks', cashOut: 'Cash out', paused: 'Suspended',
     lottery: 'Lottery', drawIn: 'Draw {when}', none: 'Games are loading, or none are on sale right now.', draw: 'Draw',
+    overdrawn: 'Overdrawn · 1% a month', cover: 'Sell to cover',
     combos: 'Parlays of the day', combosSub: 'On the slip in one tap; payouts include the parlay boost', comboSafe: 'Favourites treble', comboBold: 'Big-price treble', comboTag: '{n}-pick parlay', comboTagBoost: '{n}-pick · +{b}% boost', comboStake: 'Stake {v} · odds ×{x}', comboGo: 'Add to slip'
   }
 };
@@ -199,7 +201,10 @@ export function renderHome(ctx) {
   const member = plusMember(state.wallet);
   const header = el('section', { class: 'wallet-card' }, [
     el('div', { class: 'wallet-top' }, [el('span', { class: 'wallet-label', text: T.balance }), member ? el('span', { class: 'wallet-plus', text: '✦ PLUS' }) : null]),
-    el('strong', { class: 'wallet-balance num', text: money(ctx.funds()) }),
+    el('strong', { class: `wallet-balance num${ctx.funds() < 0 ? ' neg' : ''}`, text: fmtMoney(ctx.funds(), { sign: ctx.funds() < 0 }) }),
+    ctx.funds() < 0
+      ? el('button', { class: 'wallet-od', type: 'button', onclick: () => ctx.q.go('stock', 'portfolio') }, [el('span', { text: T.overdrawn }), el('strong', { text: `${T.cover} ›` })])
+      : null,
     open.length
       ? el('div', { class: 'wallet-stats' }, [
           el('div', {}, [el('small', { text: T.atStake }), el('strong', { class: 'num', text: `${money(atStake)} · ${f('slipsN', { n: open.length })}` })]),
