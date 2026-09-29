@@ -1511,3 +1511,12 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .wheel-label.flip b { transform: rotate(180deg); }
 .wheel-label.zero b { color: var(--lotto); text-shadow: none; }
 .sc-ticket.revealed .scratch-face.wheel.won .wheel-label.at b { font-size: 0.9rem; color: #fde047; }
+
+/* 電腦彩券: the pick box's hint, one row of actions; the prize table's odds. */
+.lc-hint { margin: 2px 0 0; font-size: 0.82rem; color: var(--text-muted); }
+.lotto-current .lc-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.lotto-current .lc-actions > * { min-width: 0; padding-inline: 6px; font-size: 0.8rem; white-space: nowrap; justify-content: center; }
+.lotto-prizes th { font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-align: left; padding: 2px 6px; }
+.lotto-prizes .lp-odds { color: var(--text-secondary); font-size: 0.8rem; white-space: nowrap; }
+.lotto-prizes td:nth-child(3) { text-align: right; font-variant-numeric: tabular-nums; }
+.lotto-prizes th:nth-child(3), .lotto-prizes th:last-child { text-align: right; }
