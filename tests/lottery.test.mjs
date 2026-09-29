@@ -111,7 +111,10 @@ test('fixed-prize tables pay back like a real lottery (40-80% of spend)', () => 
   for (const s of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) checks.push(['bingo', { stars: s }]);
   for (const [id, extra] of checks) {
     const r = expectedReturn(id, extra);
-    assert.ok(r > 0.4 && r < 0.8, `${id} ${JSON.stringify(extra || {})}: ${r.toFixed(3)}`);
+    // 大福彩's real table with its 頭獎 at the guaranteed NT$1億 (a rolling
+    // pool made it more in life, and Play has none): about 30%.
+    const low = id === 'lotto740' ? 0.25 : 0.4;
+    assert.ok(r > low && r < 0.8, `${id} ${JSON.stringify(extra || {})}: ${r.toFixed(3)}`);
   }
 });
 

@@ -378,7 +378,7 @@ export function moneySources(account) {
 // What each game pays back per NT$ spent, about (Taiwan Lottery's are 50-60%;
 // the fixed-prize ones exactly, the pool ones on average): the lottery's
 // "what the odds say", like a slip's.
-const LOTTO_RETURN = { super638: 0.55, lotto649: 0.55, daily539: 0.56, star3: 0.5, star4: 0.5, m38: 0.55, m39: 0.55, m49: 0.55, bingo: 0.6, lotto1224: 0.55, lotto740: 0.55 };
+const LOTTO_RETURN = { super638: 0.55, lotto649: 0.55, daily539: 0.56, star3: 0.5, star4: 0.5, m38: 0.55, m39: 0.53, m49: 0.55, bingo: 0.6, lotto1224: 0.54, lotto740: 0.3 };
 const ticketReturn = x => (x.card ? expectedReturn(x.card) : LOTTO_RETURN[x.game] ?? 0.55);
 
 export function lotteryStats(account) {

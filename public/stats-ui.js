@@ -8,7 +8,7 @@ import { gameName } from './lib/lottery.mjs';
 
 const T = {
   zh: {
-    all: '全部', d30: '30 天', d7: '7 天', total: '總輸贏', split: '運彩 {a} · 彩券 {b}', betting: '運彩', lottoLuck: '彩券：運氣 vs 抽成', lottoLuckNote: '彩券每 NT$100 平均只拿回約 50-60（刮刮樂約 58），剩下的是彩券公司的抽成與稅。', items: '各項目', drawGames: '電腦彩券', bigPrize: '彩券最大獎', net: '下注淨輸贏', lede: '{n} 張 · 下注 {staked} · 拿回 {paid}', hit: '中獎率', back: '每百拿回', open: '進行中', odds: '照賠率 {v}',
+    all: '全部', d30: '30 天', d7: '7 天', total: '總輸贏', split: '運彩 {a} · 彩券 {b}', betting: '運彩', lottoLuck: '彩券：運氣 vs 抽成', lottoLuckNote: '電腦彩券每 NT$100 平均只拿回約 50-60，刮刮樂約 63-75（越貴的越高），剩下的是彩券的抽成與稅。', items: '各項目', drawGames: '電腦彩券', bigPrize: '彩券最大獎', net: '下注淨輸贏', lede: '{n} 張 · 下注 {staked} · 拿回 {paid}', hit: '中獎率', back: '每百拿回', open: '進行中', odds: '照賠率 {v}',
     balance: '餘額走勢', balanceSub: 'Play 帳本（下注、派彩、彩券、補助）', low: '最低 {v}', high: '最高 {v}',
     weeks: '每週輸贏', weeksSub: '投注單和彩券，依開獎、結算那週', luck: '運氣 vs 抽成', luckExp: '照賠率應拿回', luckGot: '實際拿回', per100: '每 NT$100',
     luckGood: '比預期好：大約只有 {p}% 的人手氣這麼好。', luckBad: '比預期差：大約只有 {p}% 的人手氣這麼差。', luckNormal: '和預期差不多：這就是長期平均。', luckNote: '運氣會隨著張數越多越平均；抽成不會。',
@@ -19,7 +19,7 @@ const T = {
     more: '更多分析', empty: '這段時間沒有投注或彩券。', wait: '還沒有結算的投注單，比賽結束後這裡會有完整分析。'
   },
   en: {
-    all: 'All', d30: '30 days', d7: '7 days', total: 'Overall result', split: 'Betting {a} · Lottery {b}', betting: 'Betting', lottoLuck: 'Lottery: luck vs the cut', lottoLuckNote: 'The lottery pays back only about 50-60 per NT$100 (scratch cards about 58); the rest is the lottery’s cut and tax.', items: 'By game', drawGames: 'Draw games', bigPrize: 'Biggest lottery prize', net: 'Betting result', lede: '{n} slips · staked {staked} · back {paid}', hit: 'Hit rate', back: 'Back per 100', open: 'Open', odds: 'Odds say {v}',
+    all: 'All', d30: '30 days', d7: '7 days', total: 'Overall result', split: 'Betting {a} · Lottery {b}', betting: 'Betting', lottoLuck: 'Lottery: luck vs the cut', lottoLuckNote: 'Draw games pay back only about 50-60 per NT$100, scratch cards about 63-75 (dearer ones more); the rest is the lottery’s cut and tax.', items: 'By game', drawGames: 'Draw games', bigPrize: 'Biggest lottery prize', net: 'Betting result', lede: '{n} slips · staked {staked} · back {paid}', hit: 'Hit rate', back: 'Back per 100', open: 'Open', odds: 'Odds say {v}',
     balance: 'Balance', balanceSub: 'Play’s own books (bets, payouts, lottery, grants)', low: 'Low {v}', high: 'High {v}',
     weeks: 'Week by week', weeksSub: 'Slips and lottery tickets, by the week they settled', luck: 'Luck vs the cut', luckExp: 'The odds said', luckGot: 'You got back', per100: 'per NT$100',
     luckGood: 'Better than expected: only about {p}% get a run this good.', luckBad: 'Worse than expected: only about {p}% get a run this bad.', luckNormal: 'About as expected: this is the long-run average.', luckNote: 'Luck evens out over more slips; the cut doesn’t.',

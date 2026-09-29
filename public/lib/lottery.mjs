@@ -21,8 +21,9 @@
 // Prizes follow Taiwan Lottery's tables: fixed prizes as printed, pool
 // prizes (威力彩's first two tiers, 大樂透's first four) from what that draw
 // actually paid per winner, shared with the real winners (a pool tier nobody
-// won pays its whole pool). The 樂合彩, 雙贏彩 and 大福彩 tables pay about
-// what the real ones did per NT$ spent.
+// won pays its whole pool). The 樂合彩, 雙贏彩 and 大福彩 tables are Taiwan
+// Lottery's own (樂合彩 30/230/2,700/46,000 times the NT$25 on 38, 45/450/8,500
+// on 39, 50/500/8,000 on 49).
 
 export const API = 'https://api.taiwanlottery.com/TLCAPIWeB/Lottery';
 const TPE = 8 * 3_600_000;
@@ -98,11 +99,11 @@ export const GAMES = {
   },
   m38: {
     zh: '38樂合彩', en: '38 Combo', price: 25, days: [1, 4], color: '#be123c', of: 'super638',
-    combo: { max: 38, drawn: 6, sizes: { 2: 750, 3: 5_000, 4: 50_000, 5: 1_600_000 } }
+    combo: { max: 38, drawn: 6, sizes: { 2: 750, 3: 5_750, 4: 67_500, 5: 1_150_000 } }
   },
   m39: {
     zh: '39樂合彩', en: '39 Combo', price: 25, days: [1, 2, 3, 4, 5, 6], color: '#047857', of: 'daily539',
-    combo: { max: 39, drawn: 5, sizes: { 2: 1_125, 3: 11_250, 4: 210_000 } }
+    combo: { max: 39, drawn: 5, sizes: { 2: 1_125, 3: 11_250, 4: 212_500 } }
   },
   m49: {
     zh: '49樂合彩', en: '49 Combo', price: 25, days: [2, 5], color: '#b45309', of: 'lotto649',
@@ -130,18 +131,20 @@ export const GAMES = {
   lotto1224: {
     zh: '雙贏彩', en: 'Lotto 12/24', price: 50, days: [1, 2, 3, 4, 5, 6], color: '#4f46e5', house: true,
     zones: [{ n: 12, max: 24 }],
-    // Hitting all 12 or none pays the top prize, 11 or 1 the next, and so on.
-    mirror: { 12: 10_000_000, 11: 100_000, 10: 1_500, 9: 150, 8: 50 }
+    // Hitting all 12 or none pays the top prize, 11 or 1 the next, and so on
+    // (Taiwan Lottery's table: 1,500萬, 10萬, 500, 100; nothing for 8 or 4).
+    mirror: { 12: 15_000_000, 11: 100_000, 10: 500, 9: 100 }
   },
   lotto740: {
     zh: '大福彩', en: 'Lotto 7/40', price: 100, days: [3, 6], color: '#c2410c', house: true,
     zones: [{ n: 7, max: 40 }],
     tiers: [
-      { key: 'jackpot', zh: '頭獎', en: 'Jackpot', hits: 7, prize: 60_000_000 },
-      { key: 'second', zh: '貳獎', en: '2nd', hits: 6, prize: 500_000 },
-      { key: 'third', zh: '參獎', en: '3rd', hits: 5, prize: 10_000 },
-      { key: 'fourth', zh: '肆獎', en: '4th', hits: 4, prize: 1_000 },
-      { key: 'fifth', zh: '伍獎', en: '5th', hits: 3, prize: 300 }
+      // Taiwan Lottery's table (the 頭獎 its guaranteed NT$1億; there's no pool here).
+      { key: 'jackpot', zh: '頭獎', en: 'Jackpot', hits: 7, prize: 100_000_000 },
+      { key: 'second', zh: '貳獎', en: '2nd', hits: 6, prize: 250_000 },
+      { key: 'third', zh: '參獎', en: '3rd', hits: 5, prize: 4_000 },
+      { key: 'fourth', zh: '肆獎', en: '4th', hits: 4, prize: 400 },
+      { key: 'normal', zh: '普獎', en: 'Consolation', hits: 3, prize: 200 }
     ]
   }
 };

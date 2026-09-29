@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import { CARDS, CARD_ORDER, tiersOf, expectedReturn, face, facePays, drawPrize, buyScratch, revealScratch, topPrize } from '../public/lib/scratch.mjs';
 import { newAccount, balance } from '../public/lib/account.mjs';
 
-test('twelve scratch cards, two at each price, each paying back like a real one', () => {
+test('twelve scratch cards, two at each price, each paying back like a real one of its price', () => {
   assert.equal(CARD_ORDER.length, 12);
   for (const price of [100, 200, 300, 500, 1000, 2000]) assert.equal(CARD_ORDER.filter(id => CARDS[id].price === price).length, 2);
   for (const id of CARD_ORDER) {
+    // As Taiwan Lottery's 2026 cards: 63% back at NT$100 up to 75% at NT$2,000.
     const r = expectedReturn(id);
-    assert.ok(r > 0.55 && r < 0.7, `${id}: ${r}`);
-    assert.equal(topPrize(id), CARDS[id].price * 10_000);
+    assert.ok(r > 0.62 && r < 0.76, `${id}: ${r}`);
+    assert.ok(topPrize(id) >= CARDS[id].price * 5_000, `${id} top`);
   }
 });
 
@@ -33,7 +34,7 @@ test('the prize draw follows the table', () => {
   // The top prizes are too rare to show in 200,000 cards: the rest of the
   // table is what's measured.
   const r = won / n / CARDS.lucky7.price;
-  assert.ok(r > 0.4 && r < 0.75, `returned ${r}`);
+  assert.ok(r > 0.45 && r < 0.8, `returned ${r}`);
 });
 
 test('buying costs the price; scratching pays the prize once', () => {

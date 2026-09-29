@@ -4,21 +4,29 @@
 // run of tickets); scratching only reveals it. The card's face is then laid
 // out to show exactly that result, the way its game reads.
 //
-// Each table pays back about 58-65% of what's spent, like the real ones,
-// with the top prize at 10,000 times the price.
+// Each price has its own table, set to what Taiwan Lottery's cards on sale in
+// 2026 pay (今周刊's list of every card: payback, win rate, top prize): the
+// dearer the card, the more it pays back and the more often it wins.
+//
+//   price    pays back   wins   top prize
+//   100      63%         33%    NT$50萬
+//   200      65%         33%    NT$200萬
+//   300      66%         36%    NT$300萬
+//   500      70%         41%    NT$500萬
+//   1000     74%         70%    NT$1,200萬   (half the price back is a prize)
+//   2000     75%         69%    NT$2,000萬
 import { randomInt } from './lottery.mjs';
 
-// Prize tiers as multiples of the price and their odds (1 in N tickets).
-const TABLE = [
-  [1, 6],
-  [2, 12],
-  [5, 40],
-  [10, 150],
-  [20, 600],
-  [100, 10_000],
-  [1_000, 250_000],
-  [10_000, 2_000_000]
-];
+// Prize tiers by price: multiples of the price and their odds (1 in N tickets).
+const TABLES = {
+  100: [[1, 5.05], [2, 10.12], [5, 40], [10, 150], [20, 700], [100, 12_000], [1_000, 300_000], [5_000, 2_000_000]],
+  200: [[1, 5.57], [2, 8.53], [5, 40], [10, 150], [20, 700], [100, 12_000], [1_000, 300_000], [10_000, 2_500_000]],
+  300: [[1, 4.36], [2, 10.28], [5, 40], [10, 150], [20, 700], [100, 12_000], [1_000, 300_000], [10_000, 2_500_000]],
+  500: [[1, 3.12], [2, 19.55], [5, 35], [10, 120], [20, 600], [100, 10_000], [1_000, 250_000], [10_000, 2_500_000]],
+  1000: [[0.5, 2.85], [1, 3.93], [2, 14], [5, 60], [10, 200], [20, 900], [100, 20_000], [1_000, 400_000], [12_000, 3_000_000]],
+  2000: [[0.5, 3.23], [1, 3.5], [2, 14], [5, 60], [10, 200], [20, 900], [100, 20_000], [1_000, 400_000], [10_000, 3_000_000]]
+};
+const tableOf = id => TABLES[CARDS[id].price];
 
 export const CARDS = {
   lucky7: { icon: '7️⃣', zh: '幸運7', en: 'Lucky 7', price: 100, color: '#dc2626', layout: 'symbol', symbol: '7', spots: 6, how: { zh: '刮出「7」就贏得它下面的獎金。', en: 'Uncover a 7 to win the prize under it.' } },
@@ -37,10 +45,11 @@ export const CARDS = {
 // By price, the classic card first.
 export const CARD_ORDER = ['lucky7', 'fruit', 'triple', 'beat', 'numbers', 'treasure', 'bingo', 'dice', 'gold', 'wheel', 'million', 'palace'];
 // Treasures on the map's key, cheapest tier first.
-const TREASURES = ['🐚', '🪙', '🗝️', '🏺', '💍', '👑', '💎', '🏆'];
+const TREASURES = ['🐚', '🪙', '🗝️', '🏺', '📿', '💍', '👑', '💎', '🏆'];
 
-export const tiersOf = id => TABLE.map(([mult, odds]) => ({ prize: mult * CARDS[id].price, odds }));
-export const topPrize = id => TABLE.at(-1)[0] * CARDS[id].price;
+export const tiersOf = id => tableOf(id).map(([mult, odds]) => ({ prize: mult * CARDS[id].price, odds }));
+export const topPrize = id => tableOf(id).at(-1)[0] * CARDS[id].price;
+export const winRate = id => tableOf(id).reduce((s, [, odds]) => s + 1 / odds, 0);
 export const expectedReturn = id => tiersOf(id).reduce((s, t) => s + t.prize / t.odds, 0) / CARDS[id].price;
 
 // The prize a new card holds: one uniform draw against the table.
