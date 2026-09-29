@@ -87,6 +87,7 @@ import { pack, unpack } from './lib/codec.mjs';
 import { historyStats, outlookOf, chanceOf, funFacts, crowdPercentile } from './lib/history.mjs';
 import { detectLocale, makeT } from './lib/i18n.mjs';
 import { f1Driver, f1Constructor, findTeamLogo, countryFlag, leagueLogo, teamLogo, teamZh, LEAGUES, familyOf, isSoccer, isSets, isNeutral, normalizeTeamName } from './lib/teams.mjs';
+import { logoPicture } from './lib/logos.mjs';
 import { houseRule, minLegsProblem } from './lib/rules.mjs';
 import { gameOptions, crowdPool, f1Podium, f1Markets } from './lib/board.mjs';
 import { auditPools, auditCrowd } from './lib/audit.mjs';
@@ -606,27 +607,6 @@ function backClass(back) {
   return '';
 }
 
-// A logo with its dark-background version, or `fallback()` if it fails.
-function logoPicture(light, dark, cls, fallback) {
-  if (!light) return fallback();
-  const img = el('img', { class: cls, src: light, alt: '', loading: 'lazy', decoding: 'async' });
-  const picture = el('picture', { class: 'logo-wrap' }, [dark ? el('source', { srcset: dark, media: '(prefers-color-scheme: dark)' }) : null, img]);
-  // A logo that fails is tried once more (a slow or dropped connection),
-  // then gives way to the fallback.
-  let retried = false;
-  img.addEventListener('error', () => {
-    if (retried || !navigator.onLine) return picture.replaceWith(fallback());
-    retried = true;
-    // The same address again (TheSportsDB refuses any extra ?query).
-    setTimeout(() => {
-      const source = picture.querySelector('source');
-      if (source) source.srcset = dark;
-      img.removeAttribute('src');
-      img.setAttribute('src', light);
-    }, 1500);
-  });
-  return picture;
-}
 
 // A team logo, or its initials in a circle when there's no logo (or it fails).
 function logoImg(sport, enName, label, size = '') {
