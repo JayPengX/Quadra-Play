@@ -91,7 +91,7 @@ import { pack, unpack } from './lib/codec.mjs';
 import { historyStats, outlookOf, chanceOf, funFacts, crowdPercentile } from './lib/history.mjs';
 import { detectLocale, makeT } from './lib/i18n.mjs';
 import { f1Driver, f1Constructor, findTeamLogo, countryFlag, leagueLogo, teamLogo, teamZh, LEAGUES, familyOf, isSoccer, isSets, isNeutral, normalizeTeamName } from './lib/teams.mjs';
-import { logoPicture } from './lib/logos.mjs';
+import { logoPicture, raceName } from './lib/logos.mjs';
 import { houseRule, minLegsProblem } from './lib/rules.mjs';
 import { gameOptions, crowdPool, f1Podium, f1Markets } from './lib/board.mjs';
 import { auditPools, auditCrowd } from './lib/audit.mjs';
@@ -354,7 +354,7 @@ function buildBets(data) {
         gameId: 'f1',
         kind: 'f1',
         sport: 'f1',
-        matchup: data.f1.title,
+        matchup: raceName(data.f1.title, state.locale),
         start: data.f1.startUtc,
         label: `F1 ${name}`,
         shortLabel: name,
@@ -385,7 +385,7 @@ function buildBets(data) {
       bets.push({ ...w, id: `f1h2h|${w.driverEn}|${r.driverEn}`, gameId: `f1h2h|${[w.driverEn, r.driverEn].sort().join('|')}`, kind: 'f1h2h', market: `f1h2h|${[w.driverEn, r.driverEn].sort().join('|')}`, rival: r.driverEn, settle: { rival: r.driverEn }, rivalLabel: r.shortLabel, label: `F1 ${w.shortLabel} ${t('f1H2HBeats')} ${r.shortLabel}`, shortLabel: `${w.shortLabel} > ${r.shortLabel}`, fairChance: p.fair, estOdds: p.odds, errKey: 'extra', lock: p.lock, minLegs: p.minLegs });
     }
     for (const p of more.teams) {
-      bets.push({ id: `f1team|${p.team}`, gameId: 'f1team', kind: 'f1team', sport: 'f1', market: 'f1team', matchup: data.f1.title, start: data.f1.startUtc, team: p.team, label: `F1 ${t('f1TeamShort')} ${p.team}`, shortLabel: p.team, fairChance: p.fair, estOdds: p.odds, errKey: 'extra', lock: p.lock, minLegs: p.minLegs });
+      bets.push({ id: `f1team|${p.team}`, gameId: 'f1team', kind: 'f1team', sport: 'f1', market: 'f1team', matchup: raceName(data.f1.title, state.locale), start: data.f1.startUtc, team: p.team, label: `F1 ${t('f1TeamShort')} ${p.team}`, shortLabel: p.team, fairChance: p.fair, estOdds: p.odds, errKey: 'extra', lock: p.lock, minLegs: p.minLegs });
     }
     // Safety car, virtual safety car, red flag: yes or no, priced like a
     // two-way game line.
@@ -395,7 +395,7 @@ function buildBets(data) {
       for (const pick of ['yes', 'no']) {
         const fair = pick === 'yes' ? flag.fair : 1 - flag.fair;
         const short = `${t(name)} ${t(pick === 'yes' ? 'f1FlagYes' : 'f1FlagNo')}`;
-        bets.push({ id: `f1${key}|${pick}`, gameId: `f1${key}`, kind: `f1${key}`, sport: 'f1', market: `f1${key}`, matchup: data.f1.title, start: data.f1.startUtc, pick, settle: { pick }, flagSource: flag.source, label: `F1 ${short}`, shortLabel: short, fairChance: fair, estOdds: estimateLineOdds(fair, MLB_MARKET_OVERROUND), errKey: 'extra' });
+        bets.push({ id: `f1${key}|${pick}`, gameId: `f1${key}`, kind: `f1${key}`, sport: 'f1', market: `f1${key}`, matchup: raceName(data.f1.title, state.locale), start: data.f1.startUtc, pick, settle: { pick }, flagSource: flag.source, label: `F1 ${short}`, shortLabel: short, fairChance: fair, estOdds: estimateLineOdds(fair, MLB_MARKET_OVERROUND), errKey: 'extra' });
       }
     }
   }
@@ -2958,7 +2958,7 @@ function renderF1() {
   $('f1-body').replaceChildren(
     board({
       emblem: 'f1',
-      title: f1.title,
+      title: raceName(f1.title, state.locale),
       sub: `${fmtTime(f1.startUtc)} · ${t(f1.phase === 'pre' ? 'f1PhasePre' : 'f1PhasePost')}`,
       tabs: tabRow,
       lead: current.sub ? t(current.sub) : null,
@@ -3317,20 +3317,25 @@ $('tabs').addEventListener('keydown', event => {
   const fromHash = location.hash.slice(1);
   if (TABS.includes(fromHash)) state.tab = state.wantedTab = fromHash;
   if (fromHash === 'tickets') ((state.tab = state.wantedTab = 'history'), (state.historyView = 'tickets'));
-  // #game=<id>: Quadra Fixtures' "bet on this" opens that game.
-  const wanted = /^game=(.+)$/.exec(fromHash);
-  if (wanted) state.wantedGame = decodeURIComponent(wanted[1]);
+  // #game=<id>: Quadra Fixtures' "bet on this" opens that game (the address
+  // can also carry Fixtures' sign-in, "&qh=…", taken out by the kit).
+  const wanted = hashGame(fromHash);
+  if (wanted) state.wantedGame = wanted;
 }
 window.addEventListener('hashchange', () => {
   const hash = location.hash.slice(1);
   // A notice's tap: its tab, or 紀錄's tickets.
   if (hash === 'tickets') return showTickets();
   if (TABS.includes(hash)) return showTab(hash);
-  const wanted = /^game=(.+)$/.exec(hash);
+  const wanted = hashGame(hash);
   if (!wanted) return;
-  state.wantedGame = decodeURIComponent(wanted[1]);
+  state.wantedGame = wanted;
   openWantedGame();
 });
+function hashGame(hash) {
+  const part = String(hash || '').split('&').find(p => p.startsWith('game='));
+  return part ? decodeURIComponent(part.slice(5)) : null;
+}
 
 // Opens the game asked for in the address: its day and sport, its card
 // open with every market, scrolled into view.
