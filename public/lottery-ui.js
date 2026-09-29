@@ -17,7 +17,7 @@ const T = {
     drawAt: '{when} 開獎', noTickets: '還沒有彩券。', buyCard: '購買 {price}', scratchAll: '一次刮開', scratchHint: '用手指刮開銀色區域', youWon: '恭喜中獎！', noWin: '沒有中獎',
     top: '最高 {v}', winRateShort: '中獎率 {p}%', bought: '已購買', funds: '餘額不足', fundsBody: '這張刮刮樂要 {v}。到 Quadra Securities 賣出一些持股就能馬上加碼。', closed: '本期已截止', house: 'Quadra 開獎', perBet: '{v} / 注', how: '玩法', winNumbers: '中獎號碼', yourNumbers: '你的號碼', dealer: '莊家', you: '你', prizeCol: '獎金',
     called: '開出號碼', prizes: '獎項', unscratched: '未刮開', every5: '每 5 分鐘開獎', mult: '倍數 ×{m}', settled: '已開獎',
-    quick1: '快選 1 注', quickN: '快選 {n} 注', addLine: '加入這注', lines: '已選 {n} 注', remove: '移除', buyAll: '購買 {n} 注 · {v}', boughtN: '已買 {n} 注，共 {v}', seeTickets: '看我的彩券', again: '再買', inMin: '{n} 分鐘後開獎', inHour: '{h} 小時 {m} 分後開獎', picked: '已選 {k}/{n}', starsN: '{n} 星', pickHint: '點下面的號碼，或用快選', anyPrize: '任一獎 1/{n}', odds: '機率', oneIn: '1/{n}', yourPick: '你的號碼', waiting: '等待開獎', drawnList: '已開獎', openSum: '{n} 張待開獎', wonSum: '累計中獎 {v}', basketHint: '選好號碼按「加入這注」，可以一次買好幾注。', sureTitle: '確定購買？', sureBody: '{what}，共 {v}。買了之後不能退。', sureOk: '購買 {v}'
+    quick1: '快選 1 注', quickN: '快選 {n} 注', addLine: '加入這注', lines: '已選 {n} 注', remove: '移除', buyAll: '購買 {n} 注 · {v}', boughtN: '已買 {n} 注，共 {v}', seeTickets: '看我的彩券', again: '再買', inMin: '{n} 分鐘後開獎', inHour: '{h} 小時 {m} 分後開獎', picked: '已選 {k}/{n}', starsN: '{n} 星', pickHint: '點下面的號碼，或用快選', slipN: '第 {n} 注', topPrize: '最高獎金', fillRest: '隨機補滿', addNext: '加入，選下一注', quickLines: '快選整注', clearAll: '全部清除', zone1: '第一區', bingoHint: '點 1–10 個號碼，或下面選大小單雙', lastLegend: '上期開出', anyPrize: '任一獎 1/{n}', odds: '機率', oneIn: '1/{n}', yourPick: '你的號碼', waiting: '等待開獎', drawnList: '已開獎', openSum: '{n} 張待開獎', wonSum: '累計中獎 {v}', basketHint: '選好號碼按「加入這注」，可以一次買好幾注。', sureTitle: '確定購買？', sureBody: '{what}，共 {v}。買了之後不能退。', sureOk: '購買 {v}'
   },
   en: {
     draws: 'Draw games', scratch: 'Scratch cards', mine: 'My tickets', nextDraw: 'Next draw', closes: 'Closes', jackpot: 'Jackpot', price: 'A bet', buy: 'Buy', cost: 'Total', bets: 'bets', multiple: 'Multiple',
@@ -27,7 +27,7 @@ const T = {
     drawAt: 'Draw {when}', noTickets: 'No tickets yet.', buyCard: 'Buy {price}', scratchAll: 'Scratch all', scratchHint: 'Scratch the silver with your finger', youWon: 'You won!', noWin: 'No win this time',
     top: 'Top {v}', winRateShort: 'Wins {p}%', bought: 'Bought', funds: 'Not enough money', fundsBody: 'This card costs {v}. Sell a little in Quadra Securities to top up right away.', closed: 'Sales closed', house: 'Quadra draw', perBet: '{v} a bet', how: 'How to play', winNumbers: 'Winning numbers', yourNumbers: 'Your numbers', dealer: 'Dealer', you: 'You', prizeCol: 'Prize',
     called: 'Called', prizes: 'Prizes', unscratched: 'Not scratched', every5: 'A draw every 5 minutes', mult: 'Multiplier ×{m}', settled: 'Drawn',
-    quick1: 'Quick pick 1', quickN: 'Quick pick {n}', addLine: 'Add this bet', lines: '{n} bets chosen', remove: 'Remove', buyAll: 'Buy {n} · {v}', boughtN: 'Bought {n} bets, {v}', seeTickets: 'My tickets', again: 'Buy more', inMin: 'Draw in {n} min', inHour: 'Draw in {h}h {m}m', picked: '{k}/{n} picked', starsN: '{n} stars', pickHint: 'Tap numbers below, or quick pick', anyPrize: 'Any prize 1 in {n}', odds: 'Odds', oneIn: '1 in {n}', yourPick: 'Your numbers', waiting: 'Awaiting the draw', drawnList: 'Drawn', openSum: '{n} awaiting a draw', wonSum: 'Won so far {v}', basketHint: 'Pick your numbers and tap “Add this bet”: you can buy several at once.', sureTitle: 'Buy this?', sureBody: '{what}, {v} in all. A ticket bought can’t be returned.', sureOk: 'Buy for {v}'
+    quick1: 'Quick pick 1', quickN: 'Quick pick {n}', addLine: 'Add this bet', lines: '{n} bets chosen', remove: 'Remove', buyAll: 'Buy {n} · {v}', boughtN: 'Bought {n} bets, {v}', seeTickets: 'My tickets', again: 'Buy more', inMin: 'Draw in {n} min', inHour: 'Draw in {h}h {m}m', picked: '{k}/{n} picked', starsN: '{n} stars', pickHint: 'Tap numbers below, or quick pick', slipN: 'Bet {n}', topPrize: 'Top prize', fillRest: 'Fill the rest', addNext: 'Add, next bet', quickLines: 'Quick-pick bets', clearAll: 'Clear all', zone1: 'Zone 1', bingoHint: 'Tap 1–10 numbers, or pick big/small/odd/even below', lastLegend: 'In the last draw', anyPrize: 'Any prize 1 in {n}', odds: 'Odds', oneIn: '1 in {n}', yourPick: 'Your numbers', waiting: 'Awaiting the draw', drawnList: 'Drawn', openSum: '{n} awaiting a draw', wonSum: 'Won so far {v}', basketHint: 'Pick your numbers and tap “Add this bet”: you can buy several at once.', sureTitle: 'Buy this?', sureBody: '{what}, {v} in all. A ticket bought can’t be returned.', sureOk: 'Buy for {v}'
   }
 };
 const COMBO_NAME = { zh: { 2: '二合', 3: '三合', 4: '四合', 5: '五合' }, en: { 2: '2 numbers', 3: '3 numbers', 4: '4 numbers', 5: '5 numbers' } };
@@ -193,7 +193,8 @@ export function mountLottery(ctx) {
     const paint = () => {
       const check = checkSelection(id, st.sel);
       const d = nextDraw(id);
-      const lines = st.lines.length ? st.lines : check.ok ? [st.sel] : [];
+      // What 購買 buys: every pick added, and the one on the slip once it's complete.
+      const lines = [...st.lines, ...(check.ok ? [st.sel] : [])];
       const bets = lines.reduce((s, x) => s + betCount(id, x), 0);
       const cost = bets * g.price * st.multiple;
       if (st.done)
@@ -209,42 +210,55 @@ export function mountLottery(ctx) {
             ])
           ])
         );
+      // The slip being filled: its slots, what's left, and the ways to finish it.
+      const complete = check.ok;
+      const addNow = () => ((st.lines = [...st.lines, structuredClone(st.sel)]), (st.sel = blankSel(id)), paint());
+      const status = pickStatus(id, st.sel);
+      const latest = ui.latest?.[g.of || id];
+      const jackpot = latest?.jackpot;
       fill(
-        el('div', { class: 'q-sheet-head' }, [el('h2', { text: gameName(id, lang) }), el('button', { class: 'q-close', type: 'button', text: '×', 'aria-label': 'close', onclick: close })]),
-        el('p', { class: 'lotto-sub', text: [t('perBet', { v: money(g.price) }), d ? untilText(d.at) : t('closed')].filter(Boolean).join(' · ') }),
-        latestLine(id),
-        el('div', { class: 'lotto-current' }, [
-          el('div', { class: 'lc-head' }, [el('span', { text: t('yourPick') }), el('small', { class: 'num', text: st.sel.side ? '' : id === 'bingo' ? t('starsN', { n: have() }) : t('picked', { k: have(), n: need() }) })]),
-          selBalls(id, st.sel).length ? el('div', { class: 'balls' }, selBalls(id, st.sel)) : el('p', { class: 'lc-hint', text: t('pickHint') }),
-          el('div', { class: 'lc-actions' }, [
-            el('button', { class: 'q-btn small', type: 'button', text: `＋ ${t('addLine')}`, disabled: check.ok ? null : '', onclick: () => ((st.lines = [...st.lines, structuredClone(st.sel)]), (st.sel = blankSel(id)), paint()) }),
-            // Quick picks only fill the list: nothing is bought until 購買.
-            ...[1, 5].map(n => el('button', { class: 'q-chip', type: 'button', text: `⚡ ${t(n === 1 ? 'quick1' : 'quickN', { n })}`, onclick: () => ((st.lines = [...st.lines, ...Array.from({ length: n }, () => randomSel(id, st.sel))]), paint()) }))
+        el('div', { class: 'q-sheet-head' }, [
+          el('div', { class: 'ls-title' }, [el('span', { class: 'lotto-emblem', 'aria-hidden': 'true', text: gameName(id, lang).slice(0, 1) }), el('h2', { text: gameName(id, lang) })]),
+          el('button', { class: 'q-close', type: 'button', text: '×', 'aria-label': 'close', onclick: close })
+        ]),
+        el('div', { class: 'ls-hero' }, [
+          el('div', {}, [el('small', { text: jackpot ? t('jackpot') : t('topPrize') }), el('strong', { class: 'num', text: jackpot ? compactMoney(jackpot, lang) : topPrizeText(id) })]),
+          el('div', {}, [el('small', { text: `${t('nextDraw')} · ${t('perBet', { v: money(g.price) })}` }), el('strong', { text: d ? untilText(d.at) : t('closed') })])
+        ]),
+        el('section', { class: `ls-slip${complete ? ' done' : ''}` }, [
+          el('div', { class: 'ls-slip-head' }, [el('strong', { text: t('slipN', { n: st.lines.length + 1 }) }), el('span', { class: 'ls-status', text: status })]),
+          // 3/4星彩: the steppers below are the slip's digits already.
+          g.digits ? null : el('div', { class: 'ls-slots' }, slots(id, st.sel, paint)),
+          el('div', { class: 'ls-actions' }, [
+            el('button', { class: 'q-chip', type: 'button', text: `⚡ ${t('fillRest')}`, onclick: () => ((st.sel = fillRest(id, st.sel)), paint()) }),
+            el('button', { class: 'q-chip', type: 'button', text: t('clear'), disabled: pickCount(id, st.sel) ? null : '', onclick: () => ((st.sel = blankSel(id)), paint()) }),
+            complete ? el('button', { class: 'ls-add', type: 'button', text: `✓ ${t('addNext')}`, onclick: addNow }) : null
           ])
         ]),
         picker(id, st, paint),
+        el('div', { class: 'ls-quick' }, [
+          el('span', { text: t('quickLines') }),
+          ...[1, 5, 10].map(n => el('button', { class: 'q-chip', type: 'button', text: `+${n}`, onclick: () => ((st.lines = [...st.lines, ...Array.from({ length: n }, () => randomSel(id, st.sel))]), paint()) }))
+        ]),
         st.lines.length
           ? el('div', { class: 'lotto-lines' }, [
-              el('p', { class: 'lotto-h', text: t('lines', { n: st.lines.length }) }),
+              el('div', { class: 'ls-lines-head' }, [el('p', { class: 'lotto-h', text: t('lines', { n: st.lines.length }) }), el('button', { class: 'ls-clear-all', type: 'button', text: t('clearAll'), onclick: () => ((st.lines = []), paint()) })]),
               ...st.lines.map((x, i) => el('div', { class: 'lotto-line' }, [el('span', { class: 'num line-n', text: String(i + 1) }), el('div', { class: 'balls' }, selBalls(id, x)), el('button', { class: 'icon-x', type: 'button', 'aria-label': t('remove'), text: '×', onclick: () => ((st.lines = st.lines.filter((_, j) => j !== i)), paint()) })]))
             ])
-          : el('p', { class: 'muted small lotto-hint', text: t('basketHint') }),
-        el('div', { class: 'lotto-mult' }, [
-          el('span', { text: t('multiple') }),
-          el('div', { class: 'stepper' }, [
-            el('button', { type: 'button', text: '−', onclick: () => ((st.multiple = Math.max(1, st.multiple - 1)), paint()) }),
-            el('strong', { class: 'num', text: `×${st.multiple}` }),
-            el('button', { type: 'button', text: '+', onclick: () => ((st.multiple = Math.min(50, st.multiple + 1)), paint()) })
-          ])
-        ]),
+          : null,
         prizeTable(id, st.sel),
         st.msg ? el('p', { class: 'lotto-msg', role: 'status', text: st.msg }) : null,
-        el('div', { class: 'lotto-buybar sticky' }, [
-          el('div', {}, [el('span', { class: 'muted', text: `${bets} ${t('bets')}` }), el('strong', { class: 'num', text: money(cost) })]),
+        el('div', { class: 'lotto-buybar sticky ls-buybar' }, [
+          el('div', { class: 'stepper small', 'aria-label': t('multiple') }, [
+            el('button', { type: 'button', text: '−', 'aria-label': '−', onclick: () => ((st.multiple = Math.max(1, st.multiple - 1)), paint()) }),
+            el('span', { class: 'ls-mult' }, [el('small', { text: t('multiple') }), el('strong', { class: 'num', text: `×${st.multiple}` })]),
+            el('button', { type: 'button', text: '+', 'aria-label': '+', onclick: () => ((st.multiple = Math.min(50, st.multiple + 1)), paint()) })
+          ]),
+          el('div', { class: 'ls-total' }, [el('small', { text: `${bets} ${t('bets')}` }), el('strong', { class: 'num', text: money(cost) })]),
           el('button', {
             class: 'q-btn primary',
             type: 'button',
-            text: bets ? t('buyAll', { n: bets, v: money(cost) }) : t('buy'),
+            text: t('buy'),
             disabled: bets && d ? null : '',
             onclick: async () => {
               const r = buyLines(id, lines, st.multiple);
@@ -264,6 +278,60 @@ export function mountLottery(ctx) {
     dialog.showModal();
   }
 
+  // A game's biggest fixed prize, for the sheet's header when there's no jackpot.
+  function topPrizeText(id) {
+    const g = GAMES[id];
+    const prizes = [...(g.tiers || []).map(x => x.prize || 0), ...Object.values(g.mirror || {}), ...Object.values(g.combo?.sizes || {}), ...Object.values(g.plays || {}).flatMap(p => (p.prize ? [p.prize] : Object.values(p.prizes || {})))];
+    // BINGO pays multiples of its stake (10 stars all hit: ×200,000).
+    const stars = Object.values(g.stars || {}).flatMap(s => Object.values(s)).map(x => x * g.price);
+    const top = Math.max(0, ...prizes, ...stars);
+    return top ? compactMoney(top, lang) : money(g.price);
+  }
+  // How many numbers the selection holds (every zone), and what's left.
+  function pickCount(id, sel) {
+    const g = GAMES[id];
+    if (g.digits) return g.digits;
+    if (sel.side) return 1;
+    return (sel.zones ? sel.zones.flat() : sel.numbers).length;
+  }
+  function pickStatus(id, sel) {
+    const g = GAMES[id];
+    if (g.digits) return t(sel.play);
+    if (g.combo) return `${COMBO_NAME[lang][sel.size]} · ${t('picked', { k: sel.numbers.length, n: `${sel.size}–12` })} · ${t('combos', { n: sel.numbers.length >= sel.size ? choose(sel.numbers.length, sel.size) : 0 })}`;
+    if (id === 'bingo') return sel.side ? t(sel.side) : t('starsN', { n: sel.numbers.length });
+    return g.zones.map((z, i) => `${i ? `${t('zone2')} ` : ''}${sel.zones[i].length}/${z.n}`).join(' · ');
+  }
+  // The rest of the selection at random, keeping what's picked.
+  const topUp = (have, n, max) => {
+    const out = new Set(have);
+    while (out.size < n) out.add(1 + Math.floor(Math.random() * max));
+    return [...out].sort((a, b) => a - b);
+  };
+  function fillRest(id, sel) {
+    const g = GAMES[id];
+    if (g.digits) return { ...sel, digits: sel.digits.map(() => Math.floor(Math.random() * 10)) };
+    if (g.combo) return { ...sel, numbers: topUp(sel.numbers, Math.max(sel.size, sel.numbers.length), g.combo.max) };
+    if (id === 'bingo') return { numbers: topUp(sel.side ? [] : sel.numbers, Math.max(5, sel.side ? 0 : sel.numbers.length), 80) };
+    return { zones: g.zones.map((z, i) => topUp(sel.zones[i], z.n, z.max)) };
+  }
+  // The slip's slots: each number picked (tap to take it back) and each still
+  // to pick as an empty circle; the second zone in the game's colour.
+  function slots(id, sel, paint) {
+    const g = GAMES[id];
+    const take = (list, n) => () => (list.splice(list.indexOf(n), 1), paint());
+    const filled = (n, list, cls = '') => el('button', { class: `ls-slot on ${cls}`, type: 'button', 'aria-label': `${t('remove')} ${n}`, text: String(n).padStart(2, '0'), onclick: take(list, n) });
+    const empty = (cls = '') => el('span', { class: `ls-slot ${cls}`, 'aria-hidden': 'true' });
+    if (g.digits) return sel.digits.map(dg => el('span', { class: 'ls-slot on digit', text: String(dg) }));
+    if (sel.side) return [el('span', { class: 'ls-slot on wide', text: t(sel.side) })];
+    if (g.combo) return [...sel.numbers.map(n => filled(n, sel.numbers)), ...Array.from({ length: Math.max(0, sel.size - sel.numbers.length) }, () => empty())];
+    if (id === 'bingo') return sel.numbers.length ? sel.numbers.map(n => filled(n, sel.numbers)) : [el('span', { class: 'ls-hint', text: t('bingoHint') })];
+    return g.zones.flatMap((z, i) => [
+      ...(i ? [el('span', { class: 'ls-plus', 'aria-hidden': 'true', text: '+' })] : []),
+      ...sel.zones[i].map(n => filled(n, sel.zones[i], i ? 'special' : '')),
+      ...Array.from({ length: Math.max(0, z.n - sel.zones[i].length) }, () => empty(i ? 'special' : ''))
+    ]);
+  }
+
   function latestLine(id) {
     const g = GAMES[id];
     const r = ui.latest?.[g.of || id];
@@ -273,21 +341,27 @@ export function mountLottery(ctx) {
   }
   const ball = (n, cls = '') => el('span', { class: `ball ${cls}`, text: String(n).padStart(2, '0') });
 
-  function numberGrid(max, chosen, limit, onPick, { hits = [] } = {}) {
+  // A slip's grid: ten numbers a row like the real slip (eight for a second
+  // zone), the last draw's numbers marked with a dot. A full zone replaces
+  // its oldest pick when another is tapped.
+  function numberGrid(max, chosen, limit, onPick, { hits = [], last = [], cols = 10 } = {}) {
     return el(
       'div',
-      { class: 'num-grid' },
+      { class: 'num-grid', style: `--cols:${cols}` },
       Array.from({ length: max }, (_, i) => {
         const n = i + 1;
         const on = chosen.includes(n);
         return el('button', {
           type: 'button',
-          class: `num-cell${on ? ' on' : ''}${hits.includes(n) ? ' hit' : ''}`,
+          class: `num-cell${on ? ' on' : ''}${hits.includes(n) ? ' hit' : ''}${last.includes(n) ? ' last' : ''}`,
           'aria-pressed': String(on),
           text: String(n).padStart(2, '0'),
           onclick: () => {
             if (on) chosen.splice(chosen.indexOf(n), 1);
-            else if (chosen.length < limit) chosen.push(n);
+            else {
+              if (chosen.length >= limit) chosen.shift();
+              chosen.push(n);
+            }
             chosen.sort((a, b) => a - b);
             onPick();
           }
@@ -295,8 +369,12 @@ export function mountLottery(ctx) {
       })
     );
   }
-  const tools = (quick, clear) =>
-    el('div', { class: 'lotto-tools' }, [el('button', { class: 'q-chip', type: 'button', text: t('quick'), onclick: quick }), el('button', { class: 'q-chip', type: 'button', text: t('clear'), onclick: clear })]);
+  // The last draw's numbers (by zone, or all together), to mark on the grid.
+  function lastOf(id, byZone = false) {
+    const r = ui.latest?.[GAMES[id].of || id];
+    if (!r?.numbers) return [];
+    return byZone ? [r.numbers, r.special != null ? [r.special] : r.zone2 != null ? [r.zone2] : []] : r.numbers;
+  }
 
   function picker(id, st, paint) {
     const g = GAMES[id];
@@ -315,25 +393,20 @@ export function mountLottery(ctx) {
               el('button', { type: 'button', text: '▼', 'aria-label': '−', onclick: () => ((sel.digits[i] = (d + 9) % 10), paint()) })
             ])
           )
-        ),
-        tools(() => ((sel.digits = sel.digits.map(() => Math.floor(Math.random() * 10))), paint()), () => ((sel.digits = sel.digits.map(() => 0)), paint()))
+        )
       ]);
     }
     if (g.combo) {
       const sizes = Object.keys(g.combo.sizes).map(Number);
       return el('div', { class: 'lotto-pick' }, [
         el('div', { class: 'segmented small', role: 'group' }, sizes.map(z => el('button', { type: 'button', 'aria-pressed': String(sel.size === z), text: COMBO_NAME[lang][z], onclick: () => ((sel.size = z), paint()) }))),
-        el('p', { class: 'muted', text: `${t('pickN', { n: `${sel.size}-12` })} · ${t('combos', { n: sel.numbers.length >= sel.size ? choose(sel.numbers.length, sel.size) : 0 })}` }),
-        numberGrid(g.combo.max, sel.numbers, 12, paint),
-        tools(() => ((sel.numbers = quickPick(sel.size, g.combo.max)), paint()), () => ((sel.numbers = []), paint()))
+        numberGrid(g.combo.max, sel.numbers, 12, paint, { last: lastOf(id) })
       ]);
     }
     if (id === 'bingo') {
       const sides = [['big', 'big'], ['small', 'small'], ['odd', 'odd'], ['even', 'even']];
       return el('div', { class: 'lotto-pick' }, [
-        el('p', { class: 'muted', text: `${t('stars')}: ${sel.side ? '—' : sel.numbers.length || 0} / 10` }),
-        numberGrid(80, sel.numbers, 10, () => ((sel.side = undefined), paint())),
-        tools(() => ((sel.side = undefined), (sel.numbers = quickPick(Math.max(1, sel.numbers.length || 5), 80)), paint()), () => ((sel.numbers = []), (sel.side = undefined), paint())),
+        numberGrid(80, sel.numbers, 10, () => ((sel.side = undefined), paint()), { last: lastOf(id) }),
         el('p', { class: 'lotto-h', text: t('sideTitle') }),
         el(
           'div',
@@ -342,12 +415,13 @@ export function mountLottery(ctx) {
         )
       ]);
     }
+    const last = lastOf(id, true);
     return el('div', { class: 'lotto-pick' }, [
       ...g.zones.flatMap((z, i) => [
-        el('p', { class: 'muted', text: `${i ? `${t('zone2')} · ` : ''}${t('pickN', { n: z.n })} (${sel.zones[i].length}/${z.n})` }),
-        numberGrid(z.max, sel.zones[i], z.n, paint)
+        el('p', { class: `ls-zone${sel.zones[i].length === z.n ? ' full' : ''}` }, [el('strong', { text: i ? t('zone2') : t('zone1') }), el('span', { text: `${t('pickN', { n: z.n })} · ${sel.zones[i].length}/${z.n}` })]),
+        numberGrid(z.max, sel.zones[i], z.n, paint, { last: last[i] || [], cols: z.max <= 8 ? z.max : 10 })
       ]),
-      tools(() => ((sel.zones = g.zones.map(z => quickPick(z.n, z.max))), paint()), () => ((sel.zones = g.zones.map(() => [])), paint()))
+      last.length ? el('p', { class: 'ls-legend' }, [el('span', { class: 'ls-dot', 'aria-hidden': 'true' }), document.createTextNode(t('lastLegend'))]) : null
     ]);
   }
 
@@ -368,7 +442,7 @@ export function mountLottery(ctx) {
       rows = Object.entries(g.stars[n] || {}).sort((a, b) => b[0] - a[0]).map(([h, m]) => [`${n}${lang === 'en' ? ' stars' : '星'}`, `${h}`, money(m * g.price)]);
     }
     if (!rows.length) return null;
-    return el('details', { class: 'lotto-prizes', open: '' }, [
+    return el('details', { class: 'lotto-prizes' }, [
       el('summary', { text: t('prizes') }),
       el('table', {}, [el('tr', { class: 'lp-head' }, [el('th', { text: '' }), el('th', { text: '' }), el('th', { text: t('prizes') })]), ...rows.map(r => el('tr', {}, r.map(c => el('td', { text: c }))))])
     ]);
