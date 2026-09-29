@@ -20,12 +20,14 @@ import { GAMES, nextDraw, latestResults, gameName } from './lib/lottery.mjs';
 
 const TXT = {
   zh: {
+    hot: '🔥 熱門串關', hotSub: '一鍵下注，小錢搏大獎', hotTag: '{n} 串 1', hotPay: 'NT$100 → {v}', hotGo: '一鍵下注 ›',
     forYou: '為你推薦', forYouSub: '依你在 Fixtures 追蹤的，以及你下注和瀏覽的球隊聯盟', follows: '你追蹤的比賽', followsSub: '來自 Quadra Fixtures 的追蹤', soon: '即將開賽', lottery: '彩券頭獎', openSlips: '進行中的投注單',
     why: { follow: '你追蹤的', team: '你常下注的球隊', league: '你常玩的聯盟', sport: '你常玩的運動', market: '你常玩的玩法', driver: '你關注的車手', value: '划算', steady: '穩', shot: '值博', soon: '快開賽了', new: '試試看' },
     add: '加入投注單', added: '已加入', none: '賽事還在載入，或暫時沒有可以下注的比賽。', seeAll: '全部', dismiss: '不感興趣',
     balance: 'Quadra 餘額', atStake: '投注中', most: '最多可拿', slipsN: '{n} 張', games: '賽事', lotto: '彩券', scratch: '刮刮樂', history: '紀錄', legs: '{n} 場', noFollows: '在 Quadra Fixtures 追蹤運動和球隊，這裡會先列出它們的比賽。', toFixtures: '到 Fixtures 追蹤', drawIn: '{when} 開獎'
   },
   en: {
+    hot: '🔥 Hot parlays', hotSub: 'One tap, a small stake, a big win', hotTag: '{n}-leg parlay', hotPay: 'NT$100 → {v}', hotGo: 'Bet in one tap ›',
     forYou: 'For you', forYouSub: 'From what you follow in Fixtures and the teams and leagues you bet on and open', follows: 'Games you follow', followsSub: 'From your follows in Quadra Fixtures', soon: 'Starting soon', lottery: 'Lottery jackpots', openSlips: 'Open slips',
     why: { follow: 'You follow this', team: 'A team you bet on', league: 'A league you play', sport: 'A sport you play', market: 'A play you like', driver: 'A driver you follow', value: 'Value', steady: 'Steady', shot: 'Worth a shot', soon: 'Starting soon', new: 'Something new' },
     add: 'Add to slip', added: 'On slip', none: 'The games are still loading, or there’s nothing to bet on right now.', seeAll: 'See all', dismiss: 'Not interested',
@@ -210,6 +212,24 @@ export function renderHome(ctx) {
     el('div', { class: 'hero-actions' }, [action('games', 'games'), action('lotto', 'lottery', 'draws'), action('scratch', 'lottery', 'scratch'), action('history', 'history')])
   ]);
 
+  // 熱門串關: three favourites from three games starting soonest, ready to buy.
+  const favs = bets
+    .filter(b => b.kind === 'ml' && b.estOdds >= 1.35 && b.estOdds <= 2.3 && !(b.minLegs > 3))
+    .sort((a, b) => a.start.localeCompare(b.start) || a.estOdds - b.estOdds);
+  const byGame = [];
+  for (const b of favs) if (!byGame.some(x => x.gameId === b.gameId)) byGame.push(b);
+  const parlays = [];
+  for (let i = 0; i + 3 <= byGame.length && parlays.length < 4; i += 2) parlays.push(byGame.slice(i, i + 3));
+  const parlayCard = legs => {
+    const odds = legs.reduce((m, b) => m * b.estOdds, 1);
+    return el('button', { class: 'q-rec hot-parlay', type: 'button', onclick: () => ctx.takeParlay(legs.map(b => b.id)) }, [
+      el('span', { class: 'q-rec-why', text: f('hotTag', { n: legs.length }) }),
+      el('ul', { class: 'hot-legs' }, legs.map(b => el('li', {}, [el('span', { text: b.shortLabel || b.label }), el('b', { class: 'num', text: fmtOdds(b.estOdds) })]))),
+      el('p', { class: 'hot-pay num', text: f('hotPay', { v: fmtMoney(Math.floor(100 * odds), { sign: false }) }) }),
+      el('span', { class: 'hot-go', text: T.hotGo })
+    ]);
+  };
+
   const section = (title, cards, { sub = '', tab = '', cls = '' } = {}) =>
     cards.length
       ? el('section', { class: `q-section ${cls}` }, [
@@ -227,6 +247,7 @@ export function renderHome(ctx) {
         : !follow
           ? el('a', { class: 'home-nudge', href: ctx.q.appUrl('match', 'following'), onclick: e => (e.preventDefault(), ctx.q.go('match', 'following')) }, [el('span', { text: T.noFollows }), el('strong', { text: `${T.toFixtures} ›` })])
           : null,
+      parlays.length ? section(T.hot, parlays.map(parlayCard), { sub: T.hotSub }) : null,
       forYou.length ? section(T.forYou, forYou.map(pickCard), { sub: T.forYouSub, tab: 'games' }) : el('p', { class: 'empty', text: T.none }),
       open.length
         ? el('section', { class: 'q-section' }, [

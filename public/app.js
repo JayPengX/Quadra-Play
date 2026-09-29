@@ -1675,6 +1675,24 @@ function renderParlay() {
   }
   const cost = comboCount(slip, sizes) * stake;
   if (sizes.length && !errors.includes('stakeUnit') && cost > 0) ticket.push(payoutBox(slip, sizes, stake, mode));
+  // 再加一場: the soonest favourite from a game not on the slip, and what the
+  // whole parlay would pay with it.
+  if (mode === 'parlay' && n < SLIP_RULES.maxLegs && cost > 0 && !errors.length) {
+    const onSlip = new Set(legs.map(b => b.gameId));
+    const extra = (state.bets || [])
+      .filter(b => b.kind === 'ml' && !b.lock && !onSlip.has(b.gameId) && b.estOdds >= 1.3 && b.estOdds <= 2.2 && Date.parse(b.start) > Date.now())
+      .sort((a, b) => a.start.localeCompare(b.start))[0];
+    if (extra) {
+      const now = legs.reduce((m, b) => m * effectiveOdds(b), 1) * stake;
+      const more = now * effectiveOdds(extra);
+      ticket.push(
+        el('button', { class: 'upsell', type: 'button', onclick: () => toggleLeg(extra) }, [
+          el('span', { class: 'upsell-plus', text: '＋' }),
+          el('span', { class: 'upsell-text' }, [el('strong', { text: t('upsellTitle', { pick: extra.shortLabel || extra.label, odds: fmtOdds(effectiveOdds(extra)) }) }), el('small', { text: t('upsellSub', { from: fmtMoney(now, { sign: false }), to: fmtMoney(more, { sign: false }) }) })])
+        ])
+      );
+    }
+  }
   ticket.push(placeButton(legs, sizes, cost, errors));
   ticket.push(el('details', { class: 'info' }, [el('summary', { text: t('slipRulesTitle') }), el('p', { text: t('slipRulesNote') })]));
 
@@ -3447,7 +3465,15 @@ q.on('active', live => {
 
 // What the home tab and the lottery need from here.
 function homeCtx() {
-  return { state, q, el, fmtMoney, fmtOdds, fmtTime, pickTitle, gameSeries, matchupText, logoImg, leagueImg, toggleLeg, showTab, openGame: id => ((state.wantedGame = id), openWantedGame()), betKeys, track, funds, slipRange };
+  // A ready-made parlay onto the slip in one tap (replacing what's there).
+  const takeParlay = ids => {
+    state.parlay = [...ids];
+    state.slipMode = 'parlay';
+    renderGames();
+    renderParlay();
+    showTab('slip');
+  };
+  return { state, q, el, fmtMoney, fmtOdds, fmtTime, pickTitle, gameSeries, matchupText, logoImg, leagueImg, toggleLeg, takeParlay, showTab, openGame: id => ((state.wantedGame = id), openWantedGame()), betKeys, track, funds, slipRange };
 }
 statsUi = mountStats({ state, el, svgEl, fmtMoney, fmtInt, fmtPctShort, fmtOdds, fmtTime, sportName: key => (key === 'mixed' ? state.t('sportMixed') : state.t(`sport_${key}`) === `sport_${key}` ? String(key).toUpperCase() : state.t(`sport_${key}`)), youCard, crowdCard, funCard, picksCard, breakdownCard });
 lotteryUi = mountLottery({ state, q, el, fmtMoney, funds, commitAccount, track, getAccount: () => state.account, syncNow, showTickets });
