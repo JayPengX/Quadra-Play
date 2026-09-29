@@ -138,6 +138,8 @@ export const ODDS_ERROR = {
   // Live (場中): one lottery snapshot, 6 prices (see tests/fixtures/lottery-live-2026-09-26.json).
   live: { rel: 0.08, checked: true },
   liveSoccer: { rel: 0.1, checked: false },
+  // Hockey, football and basketball (model), Kambi's sports (its own live prices).
+  liveOther: { rel: 0.1, checked: false },
   liveNextRun: { rel: 0.07, checked: true }, // 第N分: 6 prices, one snapshot
   // Leagues and markets never compared with the lottery: DraftKings' lines at
   // the lottery's usual cut (see markets.mjs).

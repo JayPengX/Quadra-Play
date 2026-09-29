@@ -89,7 +89,8 @@ export function pointsMarkets(m, { spreadLine, totalLine }) {
   const out = [];
   const step = m.spec.step;
   // Spreads: DraftKings' line (as a half point) and 1 and 2 steps either side.
-  const main = spreadLine != null ? (spreadLine % 1 ? spreadLine : spreadLine + 0.5) : half(-m.margin);
+  // No line posted: the half point nearest the expected margin (away covers below it).
+  const main = spreadLine != null ? (spreadLine % 1 ? spreadLine : spreadLine + 0.5) : half(m.margin);
   for (const d of [-2, -1, 0, 1, 2]) {
     const awayLine = round2(main + d * step);
     if (Math.abs(awayLine) < 0.5) continue;

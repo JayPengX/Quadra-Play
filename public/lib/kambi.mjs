@@ -80,6 +80,64 @@ export async function fetchKambiLeague(key, now = new Date(), getJson) {
   return parseKambiEvents(await getJson(kambiUrl(league.kambi), 'kambi-events'), key, now, league.cap ?? Infinity);
 }
 
+// ---- In play -------------------------------------------------------------------
+
+// Only prices open to bet (a suspended outcome has no odds, or its old ones).
+const open = o => o && (o.status == null || o.status === 'OPEN') && odds(o);
+// Whole-game lines only: not a set's, a quarter's, an inning's, a team's or the next point's.
+const PART = /\b(\d(st|nd|rd|th)|set|frame|game \d|quarter|half|inning|period|by|next|race|odd|even)\b/i;
+
+// A league's matches in play (listView …/in-play.json): each with Kambi's
+// live prices, the margin taken out (winner; for baseball and basketball the
+// main handicap and total), and the score: runs or points, or for matches in
+// sets the sets each has won and the set being played. Neither side priced
+// (between points, a review): `ml` null, shown without bets.
+export function parseKambiInPlay(data, sport) {
+  const league = LEAGUES[sport];
+  const team = league?.family === 'baseball' || league?.family === 'basketball';
+  const games = [];
+  for (const item of data?.events || []) {
+    const e = item.event;
+    if (!e || e.state !== 'STARTED' || !e.homeName || !e.awayName) continue;
+    const offers = item.betOffers || [];
+    const match = offers.find(o => o.betOfferType?.englishName === 'Match' || /match odds|moneyline/i.test(o.criterion?.englishLabel || ''));
+    const one = outcome(match || { outcomes: [] }, 'OT_ONE');
+    const two = outcome(match || { outcomes: [] }, 'OT_TWO');
+    const win = open(one) && open(two) ? fairPair(one, two) : null;
+    const game = {
+      kambiId: e.id,
+      sport,
+      startUtc: new Date(e.start).toISOString(),
+      away: e.awayName,
+      home: e.homeName,
+      ml: win ? { home: win[0], away: win[1] } : null,
+      spread: null,
+      total: null
+    };
+    if (team) {
+      const handicap = offers.find(o => o.betOfferType?.englishName === 'Handicap' && !PART.test(o.criterion?.englishLabel || ''));
+      const home = handicap && outcome(handicap, 'OT_ONE');
+      const away = handicap && outcome(handicap, 'OT_TWO');
+      if (open(home) && open(away) && away.line != null) game.spread = { awayLine: away.line / 1000, awayFair: fairPair(away, home)[0] };
+      const total = offers.find(o => o.betOfferType?.englishName === 'Over/Under' && !PART.test(o.criterion?.englishLabel || ''));
+      const over = total && outcome(total, 'OT_OVER');
+      const under = total && outcome(total, 'OT_UNDER');
+      if (open(over) && open(under) && over.line != null) game.total = { line: over.line / 1000, overFair: fairPair(over, under)[0] };
+    }
+    const live = item.liveData || {};
+    const score = { home: Number(live.score?.home) || 0, away: Number(live.score?.away) || 0 };
+    const sets = live.statistics?.sets ? { home: live.statistics.sets.home.filter(x => x >= 0), away: live.statistics.sets.away.filter(x => x >= 0) } : null;
+    if (league?.sets && sets) {
+      const won = setsWon(sets, league.sets);
+      Object.assign(game, { homeScore: won.home, awayScore: won.away, setNo: won.home + won.away + 1 });
+    } else Object.assign(game, { homeScore: score.home, awayScore: score.away });
+    if (league?.family === 'baseball') game.inningNo = kambiPeriods(live.score?.info).home.length || null;
+    if (league?.family === 'basketball') game.quarter = Number(/(\d)/.exec(live.matchClock?.periodId || '')?.[1]) || null;
+    games.push(game);
+  }
+  return games.sort((a, b) => a.startUtc.localeCompare(b.startUtc)).slice(0, league?.cap ?? Infinity);
+}
+
 // ---- Live scores ---------------------------------------------------------------
 
 // Every match Kambi has in play: kambiId -> { sport, home, away, score, sets }

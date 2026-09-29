@@ -5,8 +5,8 @@
 import { proxyJson } from './quadra.mjs';
 import { americanToProbability, devigProportional, devigPower } from './odds.mjs';
 import { normalizeTeamName, teamZh, LEAGUES, familyOf, isSoccer, rememberLogo, rememberTeams, hasTeams } from './teams.mjs';
-import { runOrder } from './live.mjs';
-import { KAMBI, useKambiToken, fetchKambiLeague, decidedFromLive, decidedTeamGame, parseKambiLiveData, kambiLiveDataUrl, setsWon, watchKambiMatches, fetchKeptKambi } from './kambi.mjs';
+import { runOrder, shareLeft } from './live.mjs';
+import { KAMBI, kambiUrl, parseKambiInPlay, useKambiToken, fetchKambiLeague, decidedFromLive, decidedTeamGame, parseKambiLiveData, kambiLiveDataUrl, setsWon, watchKambiMatches, fetchKeptKambi } from './kambi.mjs';
 import { KAMBI_LEAGUES } from './teams.mjs';
 
 export const PROXY_URL = 'https://sports-proxy.pengzjay.workers.dev';
@@ -119,10 +119,11 @@ export function useSourcesSession(s) {
 // Through the kit's proxyJson: the dozens of lists the page asks for at
 // start-up go in batches (one Worker request per 12), and each answer is
 // kept (memory, and on the device when it lasts) for as long as that data
-// stays useful: live scores and odds 20 seconds, Kambi's pre-match lists 2
-// minutes, championship markets 10 minutes, a game's pre-game line an hour.
+// stays useful: live scores and odds 20 seconds (Kambi's in-play lists too),
+// Kambi's pre-match lists 2 minutes, championship markets 10 minutes, a game's pre-game line an hour.
 function ttlFor(url) {
   if (url.includes('/public-search')) return 10 * 60_000;
+  if (url.includes('/in-play.json')) return 20_000;
   if (url.includes('/listView/')) return 2 * 60_000;
   if (url.includes('/summary?event=')) return 60 * 60_000;
   if (/scoreboard\?dates=/.test(url)) return 60_000;
@@ -158,10 +159,20 @@ function closeProbability(side) {
   return americanToProbability(side?.close?.odds);
 }
 
+// Every league's game starts seen on its scoreboards (which leagues may have
+// a game on now, for the live board), and each game's pregame line by ESPN
+// id (its live odds' starting point, without asking for the game's summary).
+const seenStarts = new Map();
+const espnPregame = new Map();
+
 export function parseEspnScoreboard(data, sport) {
   const games = [];
   for (const event of data.events || []) {
     const comp = event.competitions?.[0];
+    if (comp && Number.isFinite(Date.parse(event.date))) {
+      if (!seenStarts.has(sport)) seenStarts.set(sport, new Set());
+      seenStarts.get(sport).add(Date.parse(event.date));
+    }
     if (!comp || comp.status?.type?.state !== 'pre') continue;
     const teams = Object.fromEntries(comp.competitors.map(c => [c.homeAway, c.team.displayName]));
     for (const c of comp.competitors) rememberLogo(sport, c.team.displayName, c.team.logo);
@@ -195,6 +206,7 @@ export function parseEspnScoreboard(data, sport) {
       const whole = ['football', 'basketball'].includes(familyOf(sport));
       if (Number.isFinite(awayLine) && (whole || awayLine % 1 !== 0) && fair) spread = { awayLine, awayFair: fair[0] };
     }
+    if (outcomes) espnPregame.set(`${sport}|${event.id}`, { homeWin: outcomes.home, awayWin: outcomes.away, draw: outcomes.draw ?? 0, totalLine: total?.line ?? null, overFair: total?.overFair ?? 0.5 });
     games.push({ sport, startUtc: new Date(event.date).toISOString(), away: teams.away, home: teams.home, outcomes, total, spread });
   }
   return games;
@@ -803,10 +815,17 @@ export function parseEspnLive(data, sport) {
       detail: comp.status.type.shortDetail || '',
       delayed: /delay|suspend/i.test(comp.status.type.shortDetail || '')
     };
-    if (sport === 'mlb') {
+    const family = familyOf(sport);
+    if (family === 'baseball') {
       const inning = parseInning(game.detail, comp.status.period);
       if (!inning) continue;
       Object.assign(game, inning, { outs: Number(comp.situation?.outs) || 0 });
+    } else if (family !== 'soccer') {
+      // Hockey, football, basketball: the period and the seconds left in it.
+      const period = Number(comp.status.period) || 0;
+      const left = shareLeft(sport, period, comp.status.clock);
+      if (left == null) continue;
+      Object.assign(game, { period, clock: comp.status.displayClock || '', left, halves: sport === 'ncaam' });
     } else {
       // "67'" or "45'+2'"; half time counts as 45 played.
       const minute = /^(\d+)/.exec(comp.status.displayClock || '')?.[1];
@@ -854,35 +873,61 @@ export function parsePolymarketLive(event, game, minLiquidity) {
 
 const pregameCache = new Map();
 
-// Every game in progress (MLB, Premier League) with its state, pregame lines
-// and Polymarket's live prices. Pregame lines are fetched once per game.
+// How long a game can run, by kind of sport: a league whose scoreboard showed
+// a start within this long before now may have a game on.
+const LIVE_HOURS = { baseball: 5, soccer: 2.5, football: 4.5, basketball: 3, hockey: 3.5 };
+
+// The ESPN leagues that may have a game on now: MLB and the Premier League
+// always, every other one whose scoreboard (read for the board) had a game
+// starting within its sport's length.
+export function liveLeagues(now = new Date()) {
+  const t = now.getTime();
+  const out = new Set(['mlb', 'epl']);
+  for (const [sport, starts] of seenStarts) {
+    const hours = LIVE_HOURS[familyOf(sport)];
+    if (!hours || !ESPN_PATH[sport]) continue;
+    for (const start of starts) {
+      if (start <= t + 60_000 && start >= t - hours * 3_600_000) {
+        out.add(sport);
+        break;
+      }
+    }
+  }
+  return [...out];
+}
+
+// Every game in progress with its state and pregame lines: the ESPN leagues
+// (MLB with Polymarket's live price too) and Kambi's, with Kambi's own live
+// prices (`kambi`). Pregame lines come from the board's scoreboards or, for a
+// game that had started before the page opened, its summary (once per game).
 export async function loadLive(now = new Date(), minLiquidity = 5000) {
-  const [mlb, epl, pmMlb, pmEpl] = await Promise.all([
-    getJson(`${ESPN}/baseball/mlb/scoreboard`).then(d => parseEspnLive(d, 'mlb')).catch(() => []),
-    getJson(`${ESPN}/soccer/eng.1/scoreboard`).then(d => parseEspnLive(d, 'epl')).catch(() => []),
-    fetchPolymarketLiveEvents(POLYMARKET_TAG.mlb, now).catch(() => []),
-    fetchPolymarketLiveEvents(POLYMARKET_TAG.epl, now).catch(() => [])
+  const [espn, kambi] = await Promise.all([
+    Promise.all(liveLeagues(now).map(key => getJson(`${ESPN}/${ESPN_PATH[key]}/scoreboard`).then(d => parseEspnLive(d, key)).catch(() => []))),
+    Promise.all(KAMBI_LEAGUES.map(key => getJson(kambiUrl(LEAGUES[key].kambi, 'in-play'), 'kambi-events').then(d => parseKambiInPlay(d, key)).catch(() => [])))
   ]);
-  const games = [...mlb, ...epl];
+  const games = espn.flat();
+  const pmMlb = games.some(g => g.sport === 'mlb') ? await fetchPolymarketLiveEvents(POLYMARKET_TAG.mlb, now).catch(() => []) : [];
   await Promise.all(
     games.map(async game => {
       const key = `${game.sport}|${game.espnId}`;
-      if (!pregameCache.has(key)) {
-        const path = ESPN_PATH[game.sport];
-        pregameCache.set(key, getJson(`${ESPN}/${path}/summary?event=${game.espnId}`).then(parsePregameLines).catch(() => null));
+      game.pregame = espnPregame.get(key) ?? null;
+      if (!game.pregame) {
+        if (!pregameCache.has(key)) pregameCache.set(key, getJson(`${ESPN}/${ESPN_PATH[game.sport]}/summary?event=${game.espnId}`).then(parsePregameLines).catch(() => null));
+        game.pregame = await pregameCache.get(key);
+        // Not read this time: asked again on the next refresh.
+        if (!game.pregame) pregameCache.delete(key);
       }
-      game.pregame = await pregameCache.get(key);
-      const events = game.sport === 'mlb' ? pmMlb : pmEpl;
+      if (game.sport !== 'mlb') return;
       // The game's own event, not its side events ("… - 1st Inning Winner").
-      const event = events.find(e => {
+      const event = pmMlb.find(e => {
         if (/ - /.test(e.title || '')) return false;
         const teams = eventTeams(e);
         return teams && sameGame({ sport: game.sport, away: teams.away, home: teams.home, startUtc: new Date(e.startTime).toISOString() }, game);
       });
-      game.pm = event && game.sport === 'mlb' ? parsePolymarketLive(event, game, minLiquidity) : null;
+      game.pm = event ? parsePolymarketLive(event, game, minLiquidity) : null;
     })
   );
-  return { loadedAt: now.toISOString(), games: games.filter(g => g.pregame) };
+  return { loadedAt: now.toISOString(), games: games.filter(g => g.pregame), kambi: kambi.flat() };
 }
 
 // Polymarket events that started in the last six hours (games in progress).

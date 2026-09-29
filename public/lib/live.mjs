@@ -10,7 +10,14 @@
 // 2026-09-26): the lottery posts the lines closest to 50/50, as the model
 // picks them (total 11.5, run line 2.5), and its live markets add up to
 // 1.143-1.166 in implied chance, the same cut as before the game.
+//
+// Every other league the same way: soccer by the minute, hockey's goals and
+// football's and basketball's points by the share of the clock left
+// (livePoints, liveGoals). Kambi's sports use Kambi's own live prices
+// (kambi.mjs, parseKambiInPlay), the margin taken out.
 import { fitTeamRuns, TEAM_RUNS_DISPERSION, GOALS_DISPERSION, estimateLineOdds, round2 } from './odds.mjs';
+import { pointsModel, pointsMarkets, normalCdf, normalQuantile, SCORE_SPREAD } from './markets.mjs';
+import { isSoccer } from './teams.mjs';
 
 export const LIVE_OVERROUND = 1.16;
 // Polymarket's live winner price counts only with this much money behind it.
@@ -142,7 +149,7 @@ export function liveMarkets(dist, { sport, awayScore, homeScore, pm = null }) {
     for (const pick of picks) bets.push({ kind, market, ...extra, ...pick });
   };
   // Winner.
-  if (sport === 'epl') {
+  if (isSoccer(sport)) {
     const home = chance(dist, (a, h) => h > a);
     const away = chance(dist, (a, h) => a > h);
     add('ml', 'ml', [
@@ -208,6 +215,86 @@ export function liveMarkets(dist, { sport, awayScore, homeScore, pm = null }) {
         { side: 'under', fair: 1 - over }
       ], { team, line, posted: line === tm.line });
     }
+  }
+  return bets;
+}
+
+// ---- Hockey, football, basketball ------------------------------------------------
+
+// Regulation periods and their minutes, by league.
+export const PERIODS = { nfl: [4, 15], ncaaf: [4, 15], nba: [4, 12], wnba: [4, 10], ncaam: [2, 20], ncaaw: [4, 10], nhl: [3, 20] };
+
+// The share of regulation still to play, from ESPN's period and the seconds
+// left in it; in overtime, what's left of the extra period against a whole game.
+export function shareLeft(sport, period, clock) {
+  const spec = PERIODS[sport];
+  if (!spec || !period) return null;
+  const [n, minutes] = spec;
+  const whole = n * minutes * 60;
+  const inPeriod = Math.max(0, Number(clock) || 0);
+  if (period > n) return Math.min(1, inPeriod / whole);
+  return Math.min(1, ((n - period) * minutes * 60 + inPeriod) / whole);
+}
+
+// Hockey: each team's goals still to come, a share of its game mean; a tie at
+// the end goes to overtime, split by the teams' strength.
+export function liveGoals({ means, awayScore, homeScore, share }) {
+  const A = nbPmf(means.away * share, GOALS_DISPERSION, 15);
+  const H = nbPmf(means.home * share, GOALS_DISPERSION, 15);
+  const homeExtra = means.home / (means.home + means.away);
+  const out = [];
+  for (let a = 0; a < A.length; a++) {
+    for (let h = 0; h < H.length; h++) {
+      const p = A[a] * H[h];
+      if (p < 1e-10) continue;
+      const fa = awayScore + a;
+      const fh = homeScore + h;
+      if (fa !== fh) out.push({ away: fa, home: fh, p });
+      else {
+        out.push({ away: fa, home: fh + 1, p: p * homeExtra });
+        out.push({ away: fa + 1, home: fh, p: p * (1 - homeExtra) });
+      }
+    }
+  }
+  return out;
+}
+
+// College basketball has no spread of its own in markets.mjs: close to the WNBA's.
+const POINTS_SPREAD = { ncaam: { margin: 11, total: 15, bands: [], step: 3.5 }, ncaaw: { margin: 11, total: 14, bands: [], step: 3.5 } };
+
+// Football and basketball in progress: the pregame model of the final margin
+// and total (normal, markets.mjs), the part still to play scaled to the
+// share of the clock left, added to the score. The winner, the handicaps and
+// totals nearest 50/50 and a step either side, and each team's points.
+// Nothing once under 2% of the game is left (the last minute of an NBA game).
+export function livePoints({ sport, pre, awayScore, homeScore, left }) {
+  if (!(left >= 0.02)) return [];
+  const spec = SCORE_SPREAD[sport] ?? POINTS_SPREAD[sport];
+  if (!spec) return [];
+  const total = pre.totalLine ? { line: pre.totalLine, overFair: pre.overFair ?? 0.5 } : null;
+  const full = pointsModel(sport, { homeWin: pre.homeWin, spread: null, total }) ?? { margin: spec.margin * normalQuantile(pre.homeWin), total: total ? total.line + spec.total * normalQuantile(total.overFair) : null };
+  const root = Math.sqrt(left);
+  const m = {
+    league: sport,
+    margin: homeScore - awayScore + full.margin * left,
+    marginSd: spec.margin * root,
+    total: full.total == null ? null : awayScore + homeScore + full.total * left,
+    totalSd: spec.total * root,
+    spec: { ...spec, step: Math.max(1, round2(spec.step * root)) }
+  };
+  // A level score at the end goes to overtime: even.
+  const below = normalCdf((-0.5 - m.margin) / m.marginSd);
+  const above = 1 - normalCdf((0.5 - m.margin) / m.marginSd);
+  const home = above + (1 - above - below) / 2;
+  const bets = [
+    { kind: 'ml', market: 'ml', side: 'away', fair: 1 - home, posted: true },
+    { kind: 'ml', market: 'ml', side: 'home', fair: home, posted: true }
+  ];
+  for (const x of pointsMarkets(m, { spreadLine: null, totalLine: null })) {
+    if (!['runline', 'total', 'teamtotal'].includes(x.kind) || (x.steps ?? 0) > 1) continue;
+    if (x.kind === 'total' && x.line < awayScore + homeScore) continue;
+    if (x.kind === 'teamtotal' && x.line < (x.team === 'away' ? awayScore : homeScore)) continue;
+    for (const pick of x.picks) bets.push({ kind: x.kind, market: x.market, line: x.line, main: x.main, awayLine: x.awayLine, giver: x.giver, team: x.team, posted: x.posted, ...pick });
   }
   return bets;
 }

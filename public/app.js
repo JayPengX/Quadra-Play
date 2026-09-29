@@ -6,7 +6,8 @@ import {
 } from './lib/sim.mjs';
 import { ticketProfile, accountTickets } from './lib/profile.mjs';
 import { useSourcesSession, loadOdds, loadExtraLeagues, loadExtraFutures, taipeiDayKey, fetchOutcomes, loadLive, parseInning, loadFutureTeams, futureTeamLeagues } from './lib/sources.mjs';
-import { inningsLeft, liveBaseball, liveSoccer, fitGoals, liveMarkets, liveOdds, pregameRuns, nextRunChances, nextRunOdds, LIVE_MIN_LIQUIDITY, LIVE_THREE_WAY } from './lib/live.mjs';
+import { inningsLeft, liveBaseball, liveSoccer, liveGoals, livePoints, fitGoals, liveMarkets, liveOdds, pregameRuns, nextRunChances, nextRunOdds, LIVE_MIN_LIQUIDITY, LIVE_THREE_WAY, PERIODS } from './lib/live.mjs';
+import { fitHockey } from './lib/markets.mjs';
 import {
   WEEKLY_GRANT, newAccount, balance, canClaim, claimGrant, newSlipId, placeSlip, placeFreeSlip, legResult, applyResults, mergeAccounts, recoverFromWallet, refundLost, mergeDistinct, poolEntries, compactAccount, cashOut, isAccount
 } from './lib/account.mjs';
@@ -22,7 +23,7 @@ import { historyStats, funFacts, crowdPercentile } from './lib/history.mjs';
 import { detectLocale, makeT } from './lib/i18n.mjs';
 import { f1Driver, f1Constructor, findTeamLogo, countryFlag, leagueLogo, teamLogo, teamZh, LEAGUES, familyOf, isSoccer, isNeutral, normalizeTeamName } from './lib/teams.mjs';
 import { logoPicture, raceName } from './lib/logos.mjs';
-import { houseRule, minLegsProblem, leagueTier } from './lib/rules.mjs';
+import { houseRule, houseCut, minLegsProblem, leagueTier } from './lib/rules.mjs';
 import { gameOptions, crowdPool, f1Podium, f1Markets } from './lib/board.mjs';
 import { auditPools } from './lib/audit.mjs';
 import { recommend } from './lib/recommend.mjs';
@@ -912,13 +913,59 @@ function groupBy(items, key) {
 
 // ---- Live (場中) --------------------------------------------------------------------
 
-// "4局下 1出局", "中場", "67'".
+// "4局下 1出局", "中場", "67'", "第3節 5:32", "第 2 局" (a set), "延長".
 function liveStateText(live) {
   const t = state.t;
   if (live.delayed) return `${live.detail} · ${t('livePaused')}`;
-  if (live.sport !== 'mlb') return live.minute >= 45 && /half/i.test(live.detail) ? t('liveHalfTime') : `${live.minute}'`;
+  if (live.book === 'kambi') {
+    if (live.setNo) return t('liveSetN', { n: live.setNo });
+    if (live.inningNo) return t('liveInningN', { n: live.inningNo });
+    if (live.quarter) return t('livePeriodN', { n: live.quarter, clock: '' }).trim();
+    return t('liveInPlay');
+  }
+  if (isSoccer(live.sport)) return live.minute >= 45 && /half/i.test(live.detail) ? t('liveHalfTime') : `${live.minute}'`;
+  if (live.period != null) {
+    if (/^half/i.test(live.detail)) return t('liveHalfTime');
+    const regulation = live.halves ? 2 : (PERIODS[live.sport]?.[0] ?? 4);
+    if (live.period > regulation) return t('liveOT', { clock: live.clock }).trim();
+    if (live.halves) return t(live.period === 1 ? 'liveFirstHalf' : 'liveSecondHalf', { clock: live.clock }).trim();
+    return t('livePeriodN', { n: live.period, clock: live.clock }).trim();
+  }
   const text = t(`liveHalf_${live.half}`, { n: live.inning });
   return live.half === 'top' || live.half === 'bottom' ? `${text} ${t('liveOuts', { n: live.outs })}` : text;
+}
+
+// Kambi's live prices for one match (its sports: Asian baseball, EuroLeague
+// and B.League, tennis, badminton, table tennis, volleyball, snooker), at the
+// house's live cut.
+function kambiLiveBets(game, g, base) {
+  const t = state.t;
+  const bets = [];
+  const k = houseCut({ base: 'live', sport: g.sport });
+  const common = { ...base, fairMargin: null, errKey: 'liveOther', cut: k };
+  if (g.ml) {
+    for (const side of ['away', 'home']) {
+      const name = teamName(game[side]);
+      bets.push({ ...common, id: `${game.id}|ml|${side}`, kind: 'ml', side, market: 'ml', posted: true, fairChance: g.ml[side], estOdds: liveOdds(g.ml[side], k), chip: name, label: `${name} ${t('win')}`, shortLabel: name });
+    }
+  }
+  if (g.spread) {
+    const { awayLine, awayFair } = g.spread;
+    for (const side of ['away', 'home']) {
+      const line = side === 'away' ? awayLine : -awayLine;
+      const p = side === 'away' ? awayFair : 1 - awayFair;
+      const text = `${teamName(game[side])} ${fmtLine(line)}`;
+      bets.push({ ...common, id: `${game.id}|rl|${line}|${side}`, kind: 'runline', side, market: `rl|${awayLine}`, posted: true, runLine: line, awayLine, giver: awayLine < 0 ? 'away' : 'home', fairChance: p, estOdds: liveOdds(p, k), chip: text, label: text, shortLabel: `${t('runLine')} ${text}` });
+    }
+  }
+  if (g.total) {
+    const { line, overFair } = g.total;
+    for (const side of ['over', 'under']) {
+      const p = side === 'over' ? overFair : 1 - overFair;
+      bets.push({ ...common, id: `${game.id}|tot|${line}|${side}`, kind: 'total', side, market: `total|${line}`, posted: true, totalLine: line, mainLine: true, fairChance: p, estOdds: liveOdds(p, k), chip: t(side), label: `${base.matchup} ${t(side)} ${line}`, shortLabel: `${t(side)} ${line}` });
+    }
+  }
+  return bets;
 }
 
 // Every live game as a game card's data, and its bets at live odds.
@@ -926,18 +973,36 @@ function buildLiveBets(data) {
   const t = state.t;
   const games = [];
   const bets = [];
+  for (const g of data?.kambi ?? []) {
+    const game = {
+      id: `live|${g.sport}|k${g.kambiId}`,
+      kambiId: g.kambiId,
+      sport: g.sport,
+      startUtc: g.startUtc,
+      away: { en: g.away, zh: teamZh(g.sport, g.away) },
+      home: { en: g.home, zh: teamZh(g.sport, g.home) },
+      live: { ...g, book: 'kambi' }
+    };
+    games.push(game);
+    bets.push(...kambiLiveBets(game, g, { gameId: game.id, game, sport: g.sport, matchup: matchupText(game), start: g.startUtc, live: true }));
+  }
   for (const g of data?.games ?? []) {
     const pre = g.pregame;
-    let dist;
-    if (g.sport === 'mlb') {
+    const family = familyOf(g.sport);
+    let dist = null;
+    let markets = null;
+    if (family === 'baseball') {
       if (!pre.totalLine) continue;
       const means = pregameRuns({ homeWin: pre.homeWin, totalLine: pre.totalLine, overFair: pre.overFair });
       const left = inningsLeft(g);
       dist = liveBaseball({ means, awayScore: g.awayScore, homeScore: g.homeScore, awayLeft: left.away, homeLeft: left.home });
-    } else {
+    } else if (family === 'soccer') {
       if (!(pre.draw > 0)) continue;
       dist = liveSoccer({ means: fitGoals(pre.homeWin, pre.awayWin), awayScore: g.awayScore, homeScore: g.homeScore, minutesLeft: 90 - g.minute });
-    }
+    } else if (family === 'hockey') {
+      const total = pre.totalLine ? { line: pre.totalLine, overFair: pre.overFair } : null;
+      dist = g.left > 0.01 ? liveGoals({ means: fitHockey(pre.homeWin, total), awayScore: g.awayScore, homeScore: g.homeScore, share: g.left }) : null;
+    } else markets = livePoints({ sport: g.sport, pre, awayScore: g.awayScore, homeScore: g.homeScore, left: g.left });
     const game = {
       id: `live|${g.sport}|${g.espnId}`,
       espnId: g.espnId,
@@ -951,9 +1016,12 @@ function buildLiveBets(data) {
     // Rain delay or suspended: no live odds until play resumes.
     if (g.delayed) continue;
     const matchup = matchupText(game);
-    const base = { gameId: game.id, game, sport: g.sport, matchup, start: g.startUtc, live: true, fairMargin: null, errKey: g.sport === 'mlb' ? 'live' : 'liveSoccer' };
-    for (const m of liveMarkets(dist, { sport: g.sport, awayScore: g.awayScore, homeScore: g.homeScore, pm: g.pm })) {
-      const common = { ...base, kind: m.kind, side: m.side, market: m.market, posted: m.posted, fairChance: m.fair, estOdds: liveOdds(m.fair, m.kind === 'ml' && isSoccer(g.sport) ? LIVE_THREE_WAY : undefined) };
+    const base = { gameId: game.id, game, sport: g.sport, matchup, start: g.startUtc, live: true, fairMargin: null, errKey: g.sport === 'mlb' ? 'live' : family === 'soccer' ? 'liveSoccer' : 'liveOther' };
+    // The live cut (soccer's winner at its three-way one), more for the leagues the house knows less.
+    const cut = { ml: houseCut({ base: family === 'soccer' ? LIVE_THREE_WAY : 'live', sport: g.sport }), other: houseCut({ base: 'live', sport: g.sport }) };
+    for (const m of markets ?? (dist ? liveMarkets(dist, { sport: g.sport, awayScore: g.awayScore, homeScore: g.homeScore, pm: g.pm }) : [])) {
+      const k = m.kind === 'ml' ? cut.ml : cut.other;
+      const common = { ...base, kind: m.kind, side: m.side, market: m.market, posted: m.posted, fairChance: m.fair, cut: k, estOdds: liveOdds(m.fair, k) };
       if (m.kind === 'ml') {
         const name = m.side === 'draw' ? t('draw') : teamName(game[m.side]);
         bets.push({ ...common, id: `${game.id}|ml|${m.side}`, chip: name, label: m.side === 'draw' ? `${matchup} ${name}` : `${name} ${t('win')}`, shortLabel: name });
@@ -986,7 +1054,9 @@ function buildLiveBets(data) {
 
 function renderLive() {
   const t = state.t;
-  const games = state.liveGames.filter(g => inSport(g.sport));
+  // The big leagues first, then by start.
+  const TIER = { major: 0, minor: 1, thin: 2 };
+  const games = state.liveGames.filter(g => inSport(g.sport)).sort((a, b) => TIER[leagueTier(a.sport)] - TIER[leagueTier(b.sport)] || a.startUtc.localeCompare(b.startUtc));
   $('live').hidden = !games.length;
   if (!games.length) return;
   const byGame = groupBy(state.liveBets, b => b.gameId);
@@ -997,8 +1067,10 @@ function renderLive() {
 // Live games refresh every 30 seconds while the games tab is on screen.
 const LIVE_REFRESH_MS = 30_000;
 let liveBusy = false;
+let liveAgain = false;
 async function refreshLive() {
-  if (liveBusy) return;
+  // Asked again while reading (the other leagues just came in): once more after.
+  if (liveBusy) return void (liveAgain = true);
   liveBusy = true;
   try {
     const data = await loadLive(new Date(), LIVE_MIN_LIQUIDITY);
@@ -1017,6 +1089,10 @@ async function refreshLive() {
     console.error(error);
   } finally {
     liveBusy = false;
+    if (liveAgain) {
+      liveAgain = false;
+      refreshLive();
+    }
   }
 }
 
@@ -2834,6 +2910,8 @@ async function load() {
     const now = new Date();
     const fresh = await loadOdds(now, saved ? undefined : onProgress);
     const extraGames = loadExtraLeagues(now).catch(error => (console.error(error), []));
+    // Their scoreboards tell which leagues have a game on: the live board again.
+    extraGames.then(() => refreshLive());
     const extraFutures = loadExtraFutures().catch(error => (console.error(error), []));
     if (saved) {
       // Swapped in whole (every league's games at once), so the list doesn't
