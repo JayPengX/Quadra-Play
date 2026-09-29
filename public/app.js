@@ -64,7 +64,6 @@ import {
   compactAccount,
   isAccount
 } from './lib/account.mjs';
-import { restoreDodgersSlip } from './lib/repairs.mjs';
 import { renderHome } from './home.js';
 import { mountLottery } from './lottery-ui.js';
 import { mountStats } from './stats-ui.js';
@@ -1927,7 +1926,7 @@ async function mergeRemote(remote) {
     if (isAccount(other)) merged = mergeDistinct(merged, compactAccount(other));
   }
   const wallet = remote.wallet || state.wallet;
-  merged = restoreDodgersSlip(refundLost(recoverFromWallet(merged, wallet)), storedAccount());
+  merged = refundLost(recoverFromWallet(merged, wallet));
   const have = new Set((wallet?.entries || []).map(e => e.id));
   const entries = poolEntries(merged).filter(e => !have.has(e.id));
   const open = merged.slips.filter(x => x.status === 'open').reduce((sum, x) => sum + x.cost, 0);
@@ -2302,7 +2301,7 @@ function recoveredSlipCard(slip) {
 }
 
 function savedSlipCard(slip) {
-  if (slip.recovered) return recoveredSlipCard(slip);
+  if (slip.recovered || !slip.legs.length) return recoveredSlipCard(slip);
   const t = state.t;
   const n = slip.legs.length;
   const now = Date.now();
@@ -2398,7 +2397,7 @@ function slipEndedAt(slip) {
 // (a parlay with a lost pick, waiting for its other games), then settled
 // slips by the Taiwan day they were settled.
 function slipGroupKey(slip, now) {
-  if (slip.recovered) return 'recovered';
+  if (slip.recovered || !slip.legs.length) return 'recovered';
   if (slip.status === 'settled') return `day|${taipeiDayKey(slipEndedAt(slip))}`;
   if (slipRange(slip).most <= 0) return 'dead';
   return slip.legs.some(leg => legState(leg, now) === 'live') ? 'live' : 'waiting';

@@ -85,9 +85,9 @@ export function historyStats(account) {
     if (slip.payout > 0) paidSlips++;
     const profit = slip.payout - slip.cost;
     if (profit > 0) profitSlips++;
-    // A slip recovered from the money records has no picks: it counts in the
+    // A slip with no picks (recovered from the money records, or lost) counts in the
     // totals, not in the per-play tables.
-    if (!slip.recovered) {
+    if (!slip.recovered && slip.legs.length) {
       for (const [map, key] of [
         [byMode, modeKey(slip)],
         [byLegs, legsGroup(slip.legs.length)]
