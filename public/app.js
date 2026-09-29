@@ -46,7 +46,7 @@ import {
 } from './lib/sim.mjs';
 import { ticketProfile, accountTickets } from './lib/profile.mjs';
 import { useSourcesSession, loadOdds, loadExtraLeagues, loadExtraFutures, taipeiDayKey, fetchOutcomes, loadLive, loadLeagueTeams, parseInning, loadFutureTeams, futureTeamLeagues, FUTURES, EXTRA_FUTURES } from './lib/sources.mjs';
-import { inningsLeft, liveBaseball, liveSoccer, fitGoals, liveMarkets, liveOdds, pregameRuns, nextRunChances, nextRunOdds, LIVE_MIN_LIQUIDITY } from './lib/live.mjs';
+import { inningsLeft, liveBaseball, liveSoccer, fitGoals, liveMarkets, liveOdds, pregameRuns, nextRunChances, nextRunOdds, LIVE_MIN_LIQUIDITY, LIVE_THREE_WAY } from './lib/live.mjs';
 import {
   WEEKLY_GRANT,
   newAccount,
@@ -1091,7 +1091,7 @@ function buildLiveBets(data) {
     const matchup = matchupText(game);
     const base = { gameId: game.id, game, sport: g.sport, matchup, start: g.startUtc, live: true, fairMargin: null, errKey: g.sport === 'mlb' ? 'live' : 'liveSoccer' };
     for (const m of liveMarkets(dist, { sport: g.sport, awayScore: g.awayScore, homeScore: g.homeScore, pm: g.pm })) {
-      const common = { ...base, kind: m.kind, side: m.side, market: m.market, posted: m.posted, fairChance: m.fair, estOdds: liveOdds(m.fair) };
+      const common = { ...base, kind: m.kind, side: m.side, market: m.market, posted: m.posted, fairChance: m.fair, estOdds: liveOdds(m.fair, m.kind === 'ml' && isSoccer(g.sport) ? LIVE_THREE_WAY : undefined) };
       if (m.kind === 'ml') {
         const name = m.side === 'draw' ? t('draw') : teamName(game[m.side]);
         bets.push({ ...common, id: `${game.id}|ml|${m.side}`, chip: name, label: m.side === 'draw' ? `${matchup} ${name}` : `${name} ${t('win')}`, shortLabel: name });

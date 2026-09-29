@@ -212,9 +212,11 @@ export function liveMarkets(dist, { sport, awayScore, homeScore, pm = null }) {
   return bets;
 }
 
-// Live odds at the lottery's usual cut.
-export function liveOdds(fair) {
-  return estimateLineOdds(fair, LIVE_OVERROUND);
+// Live odds at the lottery's usual cut; soccer's 不讓分 (win, draw, win) at
+// its three-way one.
+export const LIVE_THREE_WAY = 1.2;
+export function liveOdds(fair, k = LIVE_OVERROUND) {
+  return estimateLineOdds(fair, k);
 }
 
 // Pregame team means for a baseball game from its DraftKings lines.

@@ -326,7 +326,9 @@ export function gameOptions(game) {
   // house knows less or sources that disagree.
   const both = game.draftKings && game.polymarket;
   const gap = both ? Math.max(...sides.map(side => Math.abs(game.draftKings[side] - game.polymarket[side]) / 2)) : null;
-  const mlCut = houseCut({ base: blend.k, sport: game.sport, fairMargin: gap });
+  // Soccer's 不讓分 has three outcomes: the lottery's three-way cut (its 1X2
+  // odds add up to about 120%), not the two-way one.
+  const mlCut = houseCut({ base: isSoccer(game.sport) ? 'threeWay' : blend.k, sport: game.sport, fairMargin: gap });
   const out = sides.map(side => ({
     ...base,
     id: `${game.id}|ml|${side}`,
