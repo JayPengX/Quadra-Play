@@ -1651,3 +1651,13 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 .wallet-balance.neg { color: var(--bad-strong); }
 .wallet-od { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 10px; padding: 10px 12px; border: 0; border-radius: 12px; background: var(--bad-wash); color: var(--bad-strong); font: inherit; font-size: 0.84rem; text-align: left; cursor: pointer; }
 .wallet-od strong { white-space: nowrap; }
+
+/* Free bets from Rewards, above the stake. */
+.free-bets { display: grid; gap: 8px; margin: 10px 0; padding: 12px; border-radius: 12px; border: 1px solid var(--q-border); background: var(--q-surface); }
+.free-bets-head { display: grid; gap: 2px; }
+.free-bets-head small { font-size: 12px; }
+.free-bets-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.free-bet { display: grid; gap: 1px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--q-border); background: var(--q-bg); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.free-bet small { font-size: 11px; color: var(--q-muted); }
+.free-bet[aria-pressed='true'] { border-color: var(--q-accent); background: color-mix(in srgb, var(--q-accent) 12%, transparent); }
+.free-bets .note { margin: 0; font-size: 12.5px; }

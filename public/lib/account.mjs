@@ -97,6 +97,21 @@ export function placeSlip(account, slip, now = new Date(), { extra = 0 } = {}) {
   return { account: touched({ ...account, ledger: [...account.ledger, entry], slips: [saved, ...account.slips] }, now) };
 }
 
+// Buys a slip with a free bet (a Rewards token, kit freeBets): the token's
+// value is the stake, nothing comes off the balance, and the token is marked
+// spent ('fb-<token id>', so the same token is never staked twice). Winning
+// pays the winnings only (applyResults), never the stake back.
+export function placeFreeSlip(account, slip, token, now = new Date()) {
+  if (!token?.id || !(token.value > 0) || account.ledger.some(e => e.id === `fb-${token.id}`)) return { error: 'token' };
+  const t = now.toISOString();
+  const saved = { ...slip, stake: token.value, cost: 0, free: token.id, t, status: 'open', legs: slip.legs.map(leg => compactLeg({ ...leg, result: null })) };
+  const entries = [
+    { id: `stake-${slip.id}`, t, kind: 'stake', amount: 0, slipId: slip.id },
+    { id: `fb-${token.id}`, t, kind: 'freebet', amount: 0, slipId: slip.id }
+  ];
+  return { account: touched({ ...account, ledger: [...account.ledger, ...entries], slips: [saved, ...account.slips] }, now) };
+}
+
 const norm = name =>
   String(name || '')
     .normalize('NFKD')
@@ -278,7 +293,8 @@ export function applyResults(account, slipId, results, now = new Date(), finals 
   let ledger = account.ledger;
   if (legs.every(leg => leg.result)) {
     const { gross, net } = settleSlip({ legs, sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0 });
-    const payout = Math.round(net);
+    // A free bet pays what it won, less the stake it never cost.
+    const payout = slip.free ? Math.max(0, Math.round(net) - slip.stake) : Math.round(net);
     updated = { ...updated, status: 'settled', settledAt: now.toISOString(), gross: Math.round(gross), payout };
     // (A slip refunded while it was lost, then found on another device, has
     // had its cost back already.)
@@ -294,7 +310,7 @@ export function applyResults(account, slipId, results, now = new Date(), finals 
 // undecided.
 export function cashOut(account, slipId, amount, now = new Date()) {
   const slip = account.slips.find(s => s.id === slipId);
-  if (!slip || slip.status !== 'open' || slip.recovered || !(amount > 0)) return account;
+  if (!slip || slip.status !== 'open' || slip.recovered || slip.free || !(amount > 0)) return account;
   if (account.ledger.some(e => e.id === `payout-${slip.id}`)) return account;
   const t = now.toISOString();
   const payout = Math.floor(amount);

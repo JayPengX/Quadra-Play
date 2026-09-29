@@ -404,6 +404,8 @@ export function mountLottery(ctx) {
     if (r.error) return void tell({ lang, icon: '💸', title: t('funds'), body: t('fundsBody', { v: money(CARDS[id].price) }) });
     ctx.commitAccount(r.account);
     ctx.track('lottery', [`scratch:${id}`], 1);
+    // Rewards' mission: a scratch card bought.
+    ctx.track('scratch');
     openScratch(r.ticket.id);
   }
 

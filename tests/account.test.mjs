@@ -12,7 +12,9 @@ import {
   legResult,
   applyResults,
   mergeAccounts,
-  topInning
+  topInning,
+  placeFreeSlip,
+  cashOut
 } from '../public/lib/account.mjs';
 import { settleSlip, SLIP_RULES } from '../public/lib/odds.mjs';
 import { parseEspnResults, parseEspnRace, parseFutureResult } from '../public/lib/sources.mjs';
@@ -99,6 +101,23 @@ test('a slip settles once every leg is decided, and pays in once', () => {
   assert.equal(account.slips[0].payout, 300);
   assert.equal(balance(account), START_BALANCE - 100 + 300);
   assert.equal(applyResults(account, 's', ['won', 'won']), account);
+});
+
+test('a free bet: no cost, the token spent once, only the winnings paid, no cash out', () => {
+  let account = newAccount(at('2026-09-25T00:00:00Z'));
+  const token = { id: 'vocab:fb:2026-09-25:parlay3', value: 100 };
+  ({ account } = placeFreeSlip(account, slip('f', 0, [{ id: 'a', odds: 2 }, { id: 'b', odds: 1.5 }]), token));
+  assert.equal(balance(account), START_BALANCE);
+  assert.equal(account.slips[0].stake, 100);
+  assert.equal(account.slips[0].free, token.id);
+  assert.ok(account.ledger.some(e => e.id === `fb-${token.id}`));
+  assert.equal(placeFreeSlip(account, slip('g', 0, [{ id: 'c', odds: 2 }]), token).error, 'token');
+  assert.equal(cashOut(account, 'f', 150), account);
+  const won = applyResults(account, 'f', ['won', 'won']);
+  assert.equal(won.slips[0].payout, 200);
+  assert.equal(balance(won), START_BALANCE + 200);
+  const lost = applyResults(account, 'f', ['won', 'lost']);
+  assert.equal(balance(lost), START_BALANCE);
 });
 
 test('two devices merge without counting anything twice', () => {

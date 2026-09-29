@@ -105,7 +105,7 @@ export function historyStats(account) {
 
     if (!records.best || profit > records.best.profit) records.best = { slip, profit };
     if (!records.worst || profit < records.worst.profit) records.worst = { slip, profit };
-    if (profit > 0) {
+    if (profit > 0 && slip.cost > 0) {
       const odds = slip.payout / slip.cost;
       if (!records.longest || odds > records.longest.odds) records.longest = { slip, odds };
     }
@@ -263,7 +263,7 @@ export function funFacts(account) {
   const live = legs.filter(l => l.live).length;
   if (live) facts.live = { picks: live, share: live / legs.length };
   // Biggest ticket bought, by what all correct would pay against its cost.
-  const dream = slips.map(s => ({ slip: s, times: outlookTop(s) / s.cost })).sort((a, b) => b.times - a.times)[0];
+  const dream = slips.filter(s => s.cost > 0).map(s => ({ slip: s, times: outlookTop(s) / s.cost })).sort((a, b) => b.times - a.times)[0];
   if (dream && dream.times >= 5) facts.dream = dream;
   return facts;
 }
