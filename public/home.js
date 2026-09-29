@@ -19,13 +19,15 @@ const TXT = {
     balance: 'Quadra 餘額', atStake: '投注中', slipsN: '{n} 張', cashNow: '可兌現', most: '全中最多',
     featured: '焦點賽事', featuredSub: '依你追蹤和常玩的聯盟排序', allGames: '全部賽事', following: '追蹤中', markets: '{n} 種玩法',
     mine: '你的投注', seeAll: '全部', legs: '{n} 場', cashOut: '兌現', paused: '兌現暫停',
-    lottery: '彩券', drawIn: '{when} 開獎', none: '賽事載入中，或目前沒有開賣的比賽。', draw: '和'
+    lottery: '彩券', drawIn: '{when} 開獎', none: '賽事載入中，或目前沒有開賣的比賽。', draw: '和',
+    combos: '精選串關', combosSub: '一鍵加入投注單，全中派彩含串關加成', comboSafe: '穩膽 3 串', comboBold: '高賠 3 串', comboTag: '{n} 串 1', comboTagBoost: '{n} 串 1 · 加成 +{b}%', comboStake: '投注 {v} · 賠率 ×{x}', comboGo: '加入投注單'
   },
   en: {
     balance: 'Quadra balance', atStake: 'In play', slipsN: '{n} slips', cashNow: 'Cash out now', most: 'Most to win',
     featured: 'Featured', featuredSub: 'By what you follow and play', allGames: 'All games', following: 'Following', markets: '{n} markets',
     mine: 'Your bets', seeAll: 'See all', legs: '{n} picks', cashOut: 'Cash out', paused: 'Suspended',
-    lottery: 'Lottery', drawIn: 'Draw {when}', none: 'Games are loading, or none are on sale right now.', draw: 'Draw'
+    lottery: 'Lottery', drawIn: 'Draw {when}', none: 'Games are loading, or none are on sale right now.', draw: 'Draw',
+    combos: 'Parlays of the day', combosSub: 'On the slip in one tap; payouts include the parlay boost', comboSafe: 'Favourites treble', comboBold: 'Big-price treble', comboTag: '{n}-pick parlay', comboTagBoost: '{n}-pick · +{b}% boost', comboStake: 'Stake {v} · odds ×{x}', comboGo: 'Add to slip'
   }
 };
 let latest = null;
@@ -121,6 +123,40 @@ export function renderHome(ctx) {
     ]);
   };
 
+  // ---- 精選串關: two ready-made parlays from the big leagues' win prices,
+  // one of favourites, one of longer prices; one pick a game, games in the
+  // next two days, none that must be bought with more picks.
+  const soonest = (a, b) => a.start.localeCompare(b.start);
+  const winPicks = (state.bets || []).filter(b => b.kind === 'ml' && b.side !== 'draw' && !b.lock && !(b.minLegs > 3) && ctx.leagueTier(b.sport) !== 'thin' && Date.parse(b.start) > now && Date.parse(b.start) - now < 48 * 3_600_000);
+  const onePerGame = list => {
+    const seen = new Set();
+    return list.filter(b => !seen.has(b.gameId) && seen.add(b.gameId));
+  };
+  const build = (lo, hi) => onePerGame(winPicks.filter(b => b.estOdds >= lo && b.estOdds <= hi).sort((a, b) => (ctx.leagueTier(a.sport) === 'major' ? 0 : 1) - (ctx.leagueTier(b.sport) === 'major' ? 0 : 1) || soonest(a, b))).slice(0, 3);
+  const safe = build(1.3, 1.8);
+  const bold = build(1.9, 4).filter(b => !safe.some(x => x.gameId === b.gameId));
+  const PARLAY_STAKE = 500;
+  const parlayCard = (legs, title, tone) => {
+    const odds = legs.reduce((m, b) => m * b.estOdds, 1);
+    const boost = ctx.boostPct(legs.length);
+    return el('article', { class: `combo ${tone}` }, [
+      el('div', { class: 'combo-head' }, [el('strong', { text: title }), el('span', { class: 'combo-tag', text: boost ? f('comboTagBoost', { n: legs.length, b: boost }) : f('comboTag', { n: legs.length }) })]),
+      el('ul', { class: 'combo-legs' }, legs.map(b => {
+        const g = (state.data?.games || []).find(x => x.id === b.gameId);
+        return el('li', {}, [
+          g ? ctx.logoImg(g.sport, g[b.side].en, ctx.teamName(g[b.side]), 'logo-sm') : null,
+          el('span', { class: 'combo-pick' }, [el('strong', { text: b.shortLabel || b.label }), el('small', { text: [g ? ctx.gameSeries(g) : '', fmtTime(b.start)].filter(Boolean).join(' · ') })]),
+          el('b', { class: 'num', text: ctx.fmtOdds(b.estOdds) })
+        ]);
+      })),
+      el('div', { class: 'combo-foot' }, [
+        el('span', { class: 'combo-pay' }, [el('small', { text: f('comboStake', { v: money(PARLAY_STAKE), x: ctx.fmtOdds(odds) }) }), el('strong', { class: 'num', text: money(ctx.parlayPays(legs, PARLAY_STAKE)) })]),
+        el('button', { class: 'combo-go', type: 'button', text: T.comboGo, onclick: () => (ctx.track(null, [...new Set(legs.flatMap(b => ctx.betKeys(b)))], 1), ctx.takeParlay(legs.map(b => b.id))) })
+      ])
+    ]);
+  };
+  const combos = [safe.length === 3 ? parlayCard(safe, T.comboSafe, 'safe') : null, bold.length === 3 ? parlayCard(bold, T.comboBold, 'bold') : null].filter(Boolean);
+
   // ---- 你的投注: open slips and their cash-out prices
   const open = (state.account?.slips || []).filter(s => s.status === 'open' && !s.recovered && s.legs?.length);
   const atStake = open.reduce((s, x) => s + x.cost, 0);
@@ -182,6 +218,7 @@ export function renderHome(ctx) {
         head(T.featured, { sub: follow || Object.keys(habits).length ? T.featuredSub : '', action: el('button', { class: 'home-link', type: 'button', text: `${T.allGames} ›`, onclick: () => ctx.showTab('games') }) }),
         featured.length ? el('div', { class: 'features' }, featured.map(featureCard)) : el('p', { class: 'empty', text: T.none })
       ]),
+      combos.length ? el('section', { class: 'home-block' }, [head(T.combos, { sub: T.combosSub }), el('div', { class: 'combos' }, combos)]) : null,
       open.length
         ? el('section', { class: 'home-block' }, [
             head(`${T.mine} · ${open.length}`, { action: el('button', { class: 'home-link', type: 'button', text: `${T.seeAll} ›`, onclick: () => ctx.showTab('history') }) }),

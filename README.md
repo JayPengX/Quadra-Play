@@ -46,6 +46,26 @@ Calm on purpose: no banners, no one-tap "hot" parlays, no nags.
 - **The lottery:** the next draws and their jackpots.
 - **Quadra Plus**, once, for someone who isn't a member.
 
+- **精選串關:** two ready-made trebles from the big leagues' win prices
+  (favourites 1.30-1.80, bigger prices 1.90-4.00; games in the next two
+  days, one pick a game), with the boosted payout on NT$500; one tap puts
+  them on the slip.
+
+### Built to keep people betting
+
+- **The slip bar:** while the slip has picks, a bar above the tab bar on
+  every tab shows how many, the stake and the most it pays, and opens the
+  slip.
+- **Parlay by default:** a second pick turns the slip into a parlay unless
+  another way was chosen. **Quick stakes** (NT$100 to 5,000), and the stake
+  is remembered on the device (NT$500 to start).
+- **After a bet:** "投注成功" with a way straight back to the board.
+- **Nothing that talks people out of it:** 紀錄's 戰績 shows only wins
+  (total won, biggest wins, longest run, top multiple, best sports); slips
+  show what they paid, never a net or an expected return; the lottery
+  shows prizes, not odds, and no purchase confirmation; groups and the
+  account show 累計中獎, not 輸贏.
+
 ### Making money the way a real book does
 
 - **The board** opens on the big leagues; with every sport shown, thinly

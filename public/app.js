@@ -139,7 +139,15 @@ const state = {
   slipMode: 'single',
   // Chosen 過關組合 sizes; 'all' stands for 全過, whatever the leg count.
   slipSizes: new Set([2, 'all']),
-  slipStake: 100,
+  // The stake per combination: the last one used on this device.
+  slipStake: (() => {
+    try {
+      const v = Number(localStorage.getItem('play.stake'));
+      return v >= 10 && v % 10 === 0 ? v : 500;
+    } catch {
+      return 500;
+    }
+  })(),
   day: null,
   dayPicked: false,
   // True until the first simulation is ready: the loading screen covers the page.
@@ -1248,6 +1256,8 @@ function toggleLeg(bet) {
     // system combination never holds two of the same game (odds.mjs).
     state.parlay.push(bet.id);
     if (state.parlay.length > SLIP_RULES.maxLegs) state.parlay.shift();
+    // Two picks or more make a parlay unless another way was chosen.
+    if (!state.modeChosen && state.parlay.length >= 2) state.slipMode = 'parlay';
   }
   renderGames();
   renderLive();
@@ -1575,6 +1585,7 @@ function heartbreakCard(a, legs) {
 }
 
 function renderParlay() {
+  renderSlipBar();
   const t = state.t;
   const body = $('parlay-body');
   const { legs, dropped } = slipLegs();
@@ -1626,6 +1637,7 @@ function renderParlay() {
           text: t(`slipMode_${m}`),
           onclick: () => {
             state.slipMode = m;
+            state.modeChosen = true;
             rerender();
           }
         })
@@ -1680,7 +1692,7 @@ function renderParlay() {
       const units = Math.max(0, Math.round(Number(event.target.value) || 0));
       const value = units * SLIP_RULES.unit;
       if (value === state.slipStake) return;
-      state.slipStake = value;
+      setStake(value);
       // Redraw after the event: redrawing removes this input, and removing a
       // focused input fires another change while the first is still running.
       setTimeout(rerender);
@@ -1697,6 +1709,12 @@ function renderParlay() {
       ])
     ])
   );
+  // Quick stakes: one tap to the usual amounts.
+  ticket.push(
+    el('div', { class: 'stake-quick', role: 'group', 'aria-label': t('slipStake') }, QUICK_STAKES.map(v =>
+      el('button', { type: 'button', 'aria-pressed': String(stake === v), text: fmtMoney(v, { sign: false }).replace('NT$', ''), onclick: () => (setStake(v), rerender()) })
+    ))
+  );
   if (errors.length) {
     ticket.push(el('ul', { class: 'slip-errors' }, errors.map(e => el('li', { text: t(`slipError_${e}`, { max: SLIP_RULES.maxLegs, min: fmtMoney(SLIP_RULES.minTicket, { sign: false }), maxTicket: fmtMoney(SLIP_RULES.maxTicket, { sign: false }), unit: SLIP_RULES.unit, need: minLegsProblem(slip, sizes) }) }))));
   }
@@ -1708,6 +1726,43 @@ function renderParlay() {
 
   // The ticket and what it pays: no analysis beside it.
   body.replaceChildren(el('div', { class: 'slip has-legs' }, [el('div', { class: 'card ticket' }, ticket)]));
+}
+
+// The stake per combination, kept on the device for next time.
+const QUICK_STAKES = [100, 500, 1000, 2000, 5000];
+function setStake(v) {
+  state.slipStake = v;
+  try {
+    localStorage.setItem('play.stake', String(v));
+  } catch {}
+}
+
+// The slip, always at hand: a bar above the tab bar while it has picks
+// (not on the slip itself): how many, what they pay together, and the way in.
+function renderSlipBar() {
+  let bar = $('slip-bar');
+  if (!bar) {
+    bar = el('button', { id: 'slip-bar', class: 'slip-bar', type: 'button', hidden: '', onclick: () => showTab('slip') });
+    document.body.append(bar);
+  }
+  const { legs } = slipLegs();
+  const n = legs.length;
+  if (!n || state.tab === 'slip' || !state.accountReady) return void (bar.hidden = true);
+  const t = state.t;
+  const slip = legs.map(b => ({ gameId: b.gameId, market: b.market ?? b.kind, odds: effectiveOdds(b), fairChance: b.fairChance }));
+  const mode = n >= 2 && state.slipMode !== 'single' ? 'parlay' : 'single';
+  const sizes = slipSizes(mode, n, [n]);
+  const pay = sizes.length ? slipPayoutTable({ legs: slip, sizes, stake: state.slipStake, boost: mode === 'single' ? 0 : boostX() }) : null;
+  const all = pay ? pay.net[(1 << n) - 1] : 0;
+  bar.hidden = false;
+  bar.replaceChildren(
+    el('span', { class: 'slip-bar-count num', text: String(n) }),
+    el('span', { class: 'slip-bar-main' }, [
+      el('strong', { text: mode === 'parlay' ? t('barParlay', { n }) : t('barSingles', { n }) }),
+      el('small', { class: 'num', text: t('barPays', { stake: fmtMoney(comboCount(slip, sizes) * state.slipStake, { sign: false }), v: fmtMoney(all, { sign: false }) }) })
+    ]),
+    el('span', { class: 'slip-bar-go', text: `${t('barGo')} ›` })
+  );
 }
 
 // ---- Slip: what each pick is, what the ticket pays ------------------------------
@@ -2122,6 +2177,8 @@ function placeButton(legs, sizes, cost, errors) {
         }
         const slip = { legs: records };
         state.parlay = [];
+        state.modeChosen = false;
+        state.justPlaced = { at: Date.now(), n: slips.length, cost };
         for (const one of slips) state.freshSlips.add(one.id);
         commitAccount(account);
         // Synced at once, not in a moment: going straight back to Quadra
@@ -2197,18 +2254,17 @@ function renderAccount() {
   const now = new Date();
   const own = balance(account);
   const money = funds();
-  // Money that didn't come from betting: the start and the weekly grants.
-  const grants = account.ledger.filter(e => e.kind === 'grant' || e.kind === 'game' || e.kind === 'start').reduce((sum, e) => sum + e.amount, 0);
   const open = account.slips.filter(x => x.status === 'open');
   const atStake = open.reduce((sum, x) => sum + x.cost, 0);
-  const net = own + atStake - grants;
+  // Everything won: slips paid (cashed out too) and lottery prizes.
+  const won = account.ledger.filter(e => e.kind === 'payout' || e.kind === 'cashout' || e.kind === 'prize').reduce((sum, e) => sum + Math.max(0, e.amount), 0);
   $('account-body').replaceChildren(
     el('div', { class: 'card account-card' }, [
       el('div', { class: 'account-top' }, [
         el('div', {}, [el('p', { class: 'muted', text: t('poolTotal') }), el('p', { class: 'account-balance stat-value', text: fmtMoney(money, { sign: false }) })]),
         el('div', { class: 'account-side' }, [
           el('p', {}, [el('span', { class: 'muted', text: `${t('accountAtStake')} ` }), el('strong', { text: fmtMoney(atStake, { sign: false }) })]),
-          el('p', {}, [el('span', { class: 'muted', text: `${t('accountNet')} ` }), el('strong', { class: net < -0.5 ? 'back-low' : net > 0.5 ? 'back-high' : '', text: fmtMoney(net) })])
+          el('p', {}, [el('span', { class: 'muted', text: `${t('accountWon')} ` }), el('strong', { class: won > 0 ? 'back-high' : '', text: fmtMoney(won, { sign: false }) })])
         ])
       ]),
       canClaim(account, now) || state.grantNote ? el('p', { class: 'muted', text: state.grantNote ? t('grantAdded', { v: fmtMoney(WEEKLY_GRANT, { sign: false }) }) : '' }) : null
@@ -2479,7 +2535,7 @@ function savedSlipCard(slip) {
       ? [
           payCell(t('slipCost'), fmtMoney(slip.cost, { sign: false })),
           payCell(t('slipPaidLabel'), fmtMoney(slip.payout, { sign: false })),
-          payCell(t('slipResult'), fmtMoney(profit), profit > 0 ? 'back-high' : profit < 0 ? 'back-low' : '')
+          profit > 0 ? payCell(t('slipResult'), fmtMoney(profit), 'back-high') : null
         ]
       : [
           payCell(t('slipCost'), fmtMoney(slip.cost, { sign: false })),
@@ -2489,7 +2545,6 @@ function savedSlipCard(slip) {
         ]),
     slip.boost && boostRate(Math.max(...slip.sizes), slip.boost) > 0 ? el('p', { class: 'saved-boost', text: t('slipBoosted', { v: `+${Math.round(boostRate(Math.max(...slip.sizes), slip.boost) * 100)}%` }) }) : null,
     settled || dead ? null : cashOutRow(slip),
-    slipInsight(slip)
   ]);
 }
 
@@ -2512,8 +2567,7 @@ function slipInsight(slip) {
 const HISTORY_FILTERS = {
   all: () => true,
   open: s => s.status === 'open',
-  won: s => s.status === 'settled' && s.payout > s.cost,
-  lost: s => s.status === 'settled' && s.payout <= s.cost
+  won: s => s.status === 'settled' && s.payout > 0
 };
 
 // When a settled slip's last game was played: its day is the day to file it
@@ -2552,14 +2606,12 @@ function groupTitle(key) {
 function groupSummary(key, slips) {
   const t = state.t;
   const cost = slips.reduce((s, x) => s + x.cost, 0);
+  // Settled days: what they paid, never a net.
   if (key.startsWith('day|') || key === 'recovered') {
-    const net = slips.reduce((s, x) => s + x.payout - x.cost, 0);
-    return el('span', { class: 'group-sum' }, [
-      document.createTextNode(t('groupCountCost', { n: slips.length, cost: fmtMoney(cost, { sign: false }) })),
-      el('strong', { class: net > 0.5 ? 'back-high' : net < -0.5 ? 'back-low' : '', text: fmtMoney(net) })
-    ]);
+    const paid = slips.reduce((s, x) => s + (x.payout || 0), 0);
+    return el('span', { class: 'group-sum' }, [document.createTextNode(t('groupSlips', { n: slips.length })), paid > 0 ? el('strong', { class: 'back-high', text: t('groupPaid', { v: fmtMoney(paid, { sign: false }) }) }) : null]);
   }
-  if (key === 'dead') return el('span', { class: 'group-sum' }, [document.createTextNode(t('groupCountCost', { n: slips.length, cost: fmtMoney(cost, { sign: false }) })), el('strong', { class: 'back-low', text: fmtMoney(-cost) })]);
+  if (key === 'dead') return el('span', { class: 'group-sum' }, [document.createTextNode(t('groupSlips', { n: slips.length }))]);
   const most = slips.reduce((s, x) => s + slipRange(x).most, 0);
   return el('span', { class: 'group-sum' }, [document.createTextNode(t('groupCountCost', { n: slips.length, cost: fmtMoney(cost, { sign: false }) })), el('strong', { text: t('groupMost', { v: fmtMoney(most, { sign: false }) }) })]);
 }
@@ -2613,7 +2665,7 @@ function renderSaved() {
   applyHistoryView();
   if (!slips.length) return;
   const now = Date.now();
-  const filtered = slips.filter(HISTORY_FILTERS[state.historyFilter]);
+  const filtered = slips.filter(HISTORY_FILTERS[state.historyFilter] ?? HISTORY_FILTERS.all);
   // Open slips all show; settled ones fold after SAVED_SHOWN.
   let settledShown = 0;
   const groups = new Map();
@@ -2628,13 +2680,22 @@ function renderSaved() {
   const hidden = filtered.filter(s => s.status === 'settled').length - Math.min(settledShown, SAVED_SHOWN);
   const openCost = open.reduce((s, x) => s + x.cost, 0);
   const openMost = open.reduce((s, x) => s + slipRange(x).most, 0);
-  const settledNet = slips.filter(s => s.status === 'settled').reduce((s, x) => s + x.payout - x.cost, 0);
+  const totalWon = slips.filter(s => s.status === 'settled').reduce((s, x) => s + (x.payout || 0), 0);
+  // Right after a bet: the way straight back to the board.
+  const placed = state.justPlaced && Date.now() - state.justPlaced.at < 5 * 60_000 ? state.justPlaced : null;
   $('saved-body').replaceChildren(
+    placed
+      ? el('div', { class: 'placed-card' }, [
+          el('span', { class: 'placed-check', 'aria-hidden': 'true', text: '✓' }),
+          el('span', { class: 'placed-main' }, [el('strong', { text: t('placedTitle') }), el('small', { text: t('placedSub', { n: placed.n, v: fmtMoney(placed.cost, { sign: false }) }) })]),
+          el('button', { class: 'placed-go', type: 'button', text: `${t('placedMore')} ›`, onclick: () => ((state.justPlaced = null), showTab('games')) })
+        ])
+      : '',
     el('div', { class: 'saved-summary' }, [
       payCell(t('sumOpen'), t('sumSlips', { n: open.length })),
       payCell(t('sumAtStake'), fmtMoney(openCost, { sign: false })),
       payCell(t('sumMost'), fmtMoney(openMost, { sign: false })),
-      payCell(t('sumSettledNet'), fmtMoney(settledNet), settledNet > 0.5 ? 'back-high' : settledNet < -0.5 ? 'back-low' : '')
+      payCell(t('sumWon'), fmtMoney(totalWon, { sign: false }), totalWon > 0 ? 'back-high' : '')
     ]),
     el('div', { class: 'saved-toolbar' }, [
       el('div', { class: 'chips history-filter', role: 'group', 'aria-label': t('savedTitle') },
@@ -3389,6 +3450,7 @@ function showTab(tab) {
     history.replaceState(null, '', `#${tab}`);
   } catch {}
   renderTabs();
+  renderSlipBar();
   window.scrollTo({ top: 0 });
   if (tab === 'home') renderHome(homeCtx());
   if (tab === 'lottery') lotteryUi?.render();
@@ -3550,19 +3612,26 @@ q.on('active', live => {
   if (state.data) checkResults(true);
 });
 
+// What a parlay of these picks pays if all win (after tax, boost included).
+function parlayPays(bets, stake) {
+  const legs = bets.map(b => ({ gameId: b.gameId, market: b.market ?? b.kind, odds: effectiveOdds(b) }));
+  return slipPayoutTable({ legs, sizes: [legs.length], stake, boost: boostX() }).net[(1 << legs.length) - 1];
+}
+
 // What the home tab and the lottery need from here.
 function homeCtx() {
   // A ready-made parlay onto the slip in one tap (replacing what's there).
   const takeParlay = ids => {
     state.parlay = [...ids];
     state.slipMode = 'parlay';
+    state.modeChosen = false;
     renderGames();
     renderParlay();
     showTab('slip');
   };
-  return { state, q, el, fmtMoney, fmtOdds, fmtTime, pickTitle, pickButton, teamName, gameSeries, matchupText, logoImg, leagueImg, toggleLeg, takeParlay, showTab, openGame: id => ((state.wantedGame = id), openWantedGame()), betKeys, track, funds, slipRange, cashOutPrice, doCashOut, leagueTier, isSoccer, isNeutral };
+  return { state, q, el, fmtMoney, fmtOdds, fmtTime, pickTitle, pickButton, teamName, gameSeries, matchupText, logoImg, leagueImg, toggleLeg, takeParlay, showTab, openGame: id => ((state.wantedGame = id), openWantedGame()), betKeys, track, funds, slipRange, cashOutPrice, doCashOut, leagueTier, isSoccer, isNeutral, parlayPays, boostPct: n => Math.round(boostRate(n, boostX()) * 100) };
 }
-statsUi = mountStats({ state, el, svgEl, fmtMoney, fmtInt, fmtPctShort, fmtOdds, fmtTime, sportName: key => (key === 'mixed' ? state.t('sportMixed') : state.t(`sport_${key}`) === `sport_${key}` ? String(key).toUpperCase() : state.t(`sport_${key}`)), youCard, crowdCard, funCard, picksCard, breakdownCard });
+statsUi = mountStats({ state, el, svgEl, fmtMoney, fmtInt, fmtPctShort, fmtOdds, fmtTime, showTab, sportName: key => (key === 'mixed' ? state.t('sportMixed') : state.t(`sport_${key}`) === `sport_${key}` ? String(key).toUpperCase() : state.t(`sport_${key}`)), youCard, crowdCard, funCard, picksCard, breakdownCard });
 lotteryUi = mountLottery({ state, q, el, fmtMoney, funds, commitAccount, track, getAccount: () => state.account, syncNow, showTickets });
 
 // The saved board, drawn while signing in (a network round trip).
