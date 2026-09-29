@@ -1000,8 +1000,11 @@ body.searching #live, body.searching #f1, body.searching #futures, body.searchin
 /* Locked by the house; sold only in parlays of 2 or 3+. */
 .pick.locked { opacity: 0.55; cursor: not-allowed; background: var(--surface-sunken); }
 .pick .lock { font-size: 0.8em; margin-right: 2px; }
-.pick .min-legs { display: inline-block; margin-left: 4px; padding: 0 4px; border-radius: 4px; background: var(--surface-sunken); color: var(--text-secondary); font-size: 0.6rem; font-weight: 700; vertical-align: middle; }
-.pick.in-slip .min-legs { background: rgba(255, 255, 255, 0.2); color: #fff; }
+/* 限x關: a tag on the button's top-left corner (the 推薦 one is top-right), so
+   the button keeps its width and its odds line up with the others. */
+.pick .min-legs, .entry-odds .min-legs { position: absolute; top: -8px; left: 6px; margin: 0; padding: 0 5px; border-radius: 999px; background: var(--surface-sunken); color: var(--text-secondary); font-size: 0.6rem; font-weight: 800; line-height: 1.5; white-space: nowrap; box-shadow: 0 0 0 2px var(--surface); pointer-events: none; }
+.entry-odds { position: relative; }
+.pick.in-slip .min-legs, .entry-odds.in-slip .min-legs { background: var(--accent, #2563eb); color: #fff; }
 /* Leagues of the picked kind of sport. */
 .league-chips { margin-top: 6px; }
 .league-chips .chip { font-size: 0.8rem; padding: 4px 10px; }
@@ -1520,3 +1523,5 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .lotto-prizes .lp-odds { color: var(--text-secondary); font-size: 0.8rem; white-space: nowrap; }
 .lotto-prizes td:nth-child(3) { text-align: right; font-variant-numeric: tabular-nums; }
 .lotto-prizes th:nth-child(3), .lotto-prizes th:last-child { text-align: right; }
+/* A row with a 限x關 tag: every button the same extra room above its name. */
+.market-picks:has(.min-legs) .pick { padding-top: 11px; }
