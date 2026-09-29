@@ -1525,3 +1525,18 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .lotto-prizes th:nth-child(3), .lotto-prizes th:last-child { text-align: right; }
 /* A row with a 限x關 tag: every button the same extra room above its name. */
 .market-picks:has(.min-legs) .pick { padding-top: 11px; }
+
+/* 我的彩券: won or lost by the net. Green only when more came back than was
+   paid; amber when some came back but less; red when nothing did. */
+.lt-group.out-up, .lotto-ticket.out-up { background: color-mix(in srgb, var(--good) 8%, var(--surface)); border-color: color-mix(in srgb, var(--good) 45%, var(--border)); }
+.lt-group.out-part, .lotto-ticket.out-part { background: color-mix(in srgb, #d97706 7%, var(--surface)); }
+.lt-group.out-none, .lotto-ticket.out-none { background: var(--surface); }
+.lt-state.out-up, .lotto-day-head .out-up { color: var(--good); font-weight: 800; }
+.lt-state.out-part, .lotto-day-head .out-part { color: #b45309; font-weight: 800; }
+.lt-state.out-none, .lotto-day-head .out-none { color: var(--bad-strong); font-weight: 700; }
+.lt-line.out-part > .num { color: #b45309; }
+.lt-card.out-part { background: color-mix(in srgb, #d97706 14%, var(--surface)); color: #b45309; }
+@media (prefers-color-scheme: dark) { .lt-state.out-part, .lotto-day-head .out-part, .lt-line.out-part > .num, .lt-card.out-part { color: #fbbf24; } }
+:root[data-theme='dark'] :is(.lt-state.out-part, .lotto-day-head .out-part, .lt-line.out-part > .num, .lt-card.out-part) { color: #fbbf24; }
+.lt-state.out-even, .lotto-day-head .out-even { color: var(--text-secondary); font-weight: 800; }
+.lotto-summary .out-up { color: var(--good); } .lotto-summary .out-part { color: #b45309; } .lotto-summary .out-none { color: var(--bad-strong); } .lotto-summary .out-even { color: var(--text-secondary); }
