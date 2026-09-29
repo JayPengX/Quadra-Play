@@ -60,8 +60,22 @@ Calm on purpose: no banners, no one-tap "hot" parlays, no nags.
   another way was chosen. **Quick stakes** (NT$100 to 5,000), and the stake
   is remembered on the device (NT$500 to start).
 - **After a bet:** "投注成功" with a way straight back to the board.
-- **Nothing that talks people out of it:** 紀錄's 戰績 shows only wins
-  (total won, biggest wins, longest run, top multiple, best sports); slips
+- **戰績** (`stats-ui.js`): only wins, over all time, 30 or 7 days. A gold
+  hero with the total won and its rhythm (weekly bars, or 3-day/daily for
+  the shorter periods); tiles (this month, wins, longest run, top multiple,
+  cashed out, biggest lottery prize); 11 achievements (first win, 3 and 5
+  in a row, 3+ and 5+ pick parlays all right, a 10× slip, NT$10,000 in one
+  win, a lottery or scratch prize, a profitable cash out, NT$100K and 1M
+  won in all), unlocked ones first and the rest with their progress; the
+  six biggest moments with their multiple; the sports that paid most; and
+  buttons back to the games and the lottery.
+- **電腦彩券's slip** (`lottery-ui.js`): the jackpot on top, then a slip:
+  slots fill as numbers are picked (tap one to take it back), a full zone
+  swaps out its oldest pick, a dot marks last draw's numbers, 快選 fills
+  the rest (keeping the picks), and a finished line is counted and can be
+  added to start the next. +1/+5/+10 random lines; the prize table folds
+  away; a bar at the bottom holds the multiple, total and 購買.
+- **Nothing that talks people out of it:** 紀錄's 戰績 shows only wins; slips
   show what they paid, never a net or an expected return; the lottery
   shows prizes, not odds, and no purchase confirmation; groups and the
   account show 累計中獎, not 輸贏.
