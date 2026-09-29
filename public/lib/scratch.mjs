@@ -1,4 +1,4 @@
-// 刮刮樂: six instant scratch cards in the style of Taiwan Lottery's, played
+// 刮刮樂: twelve instant scratch cards (two at each price) in the style of Taiwan Lottery's, played
 // with Quadra money. What a card wins is fixed the moment it's bought (the
 // device's crypto random number, by the card's prize table, like a printed
 // run of tickets); scratching only reveals it. The card's face is then laid
@@ -21,14 +21,23 @@ const TABLE = [
 ];
 
 export const CARDS = {
-  lucky7: { zh: '幸運7', en: 'Lucky 7', price: 100, color: '#dc2626', layout: 'symbol', symbol: '7', spots: 6, how: { zh: '刮出「7」就贏得它下面的獎金。', en: 'Uncover a 7 to win the prize under it.' } },
-  triple: { zh: '三個一樣', en: 'Match 3', price: 200, color: '#d97706', layout: 'match3', how: { zh: '刮出三個相同金額，就贏得該金額。', en: 'Uncover three of the same amount to win it.' } },
-  numbers: { zh: '對中發財', en: 'Lucky Numbers', price: 300, color: '#059669', layout: 'numbers', winning: 3, yours: 10, how: { zh: '「你的號碼」和「中獎號碼」任一相同，就贏得旁邊的獎金。', en: 'Any of your numbers matching a winning number wins the prize beside it.' } },
-  bingo: { zh: '賓果連線', en: 'Bingo Line', price: 500, color: '#7c3aed', layout: 'bingo', how: { zh: '開出的號碼在卡上連成一線（橫、直、斜），就贏得該線的獎金。', en: 'Called numbers making a line (across, down or diagonal) win that line’s prize.' } },
-  gold: { zh: '金幣翻倍', en: 'Golden Coins', price: 1000, color: '#ca8a04', layout: 'symbol', symbol: '💰', spots: 10, multiplier: true, how: { zh: '刮出💰贏得它的獎金，再乘上左上角的倍數。', en: 'Each 💰 wins its prize, times the multiplier in the corner.' } },
-  million: { zh: '億萬富翁', en: 'Millionaire', price: 2000, color: '#0f172a', layout: 'numbers', winning: 5, yours: 20, how: { zh: '「你的號碼」和「中獎號碼」任一相同，就贏得旁邊的獎金。頭獎 2,000 萬。', en: 'Match any winning number to win the prize beside it. Top prize NT$20 million.' } }
+  lucky7: { icon: '7️⃣', zh: '幸運7', en: 'Lucky 7', price: 100, color: '#dc2626', layout: 'symbol', symbol: '7', spots: 6, how: { zh: '刮出「7」就贏得它下面的獎金。', en: 'Uncover a 7 to win the prize under it.' } },
+  triple: { icon: '🎯', zh: '三個一樣', en: 'Match 3', price: 200, color: '#d97706', layout: 'match3', how: { zh: '刮出三個相同金額，就贏得該金額。', en: 'Uncover three of the same amount to win it.' } },
+  numbers: { icon: '🔢', zh: '對中發財', en: 'Lucky Numbers', price: 300, color: '#059669', layout: 'numbers', winning: 3, yours: 10, how: { zh: '「你的號碼」和「中獎號碼」任一相同，就贏得旁邊的獎金。', en: 'Any of your numbers matching a winning number wins the prize beside it.' } },
+  bingo: { icon: '🎱', zh: '賓果連線', en: 'Bingo Line', price: 500, color: '#7c3aed', layout: 'bingo', how: { zh: '開出的號碼在卡上連成一線（橫、直、斜），就贏得該線的獎金。', en: 'Called numbers making a line (across, down or diagonal) win that line’s prize.' } },
+  gold: { icon: '💰', zh: '金幣翻倍', en: 'Golden Coins', price: 1000, color: '#ca8a04', layout: 'symbol', symbol: '💰', spots: 10, multiplier: true, how: { zh: '刮出💰贏得它的獎金，再乘上左上角的倍數。', en: 'Each 💰 wins its prize, times the multiplier in the corner.' } },
+  million: { icon: '💵', zh: '億萬富翁', en: 'Millionaire', price: 2000, color: '#1d4ed8', layout: 'numbers', winning: 5, yours: 20, how: { zh: '「你的號碼」和「中獎號碼」任一相同，就贏得旁邊的獎金。頭獎 2,000 萬。', en: 'Match any winning number to win the prize beside it. Top prize NT$20 million.' } },
+  fruit: { icon: '🍒', zh: '水果盤', en: 'Fruit Slots', price: 100, color: '#e11d48', layout: 'slots', lines: 4, symbols: ['🍒', '🍋', '🍇', '🍉', '🍊', '🔔'], how: { zh: '任一橫排出現三個相同圖案，就贏得該排右邊的獎金。', en: 'Three of the same picture across a row wins that row’s prize.' } },
+  beat: { icon: '🃏', zh: '比大小', en: 'Beat It', price: 200, color: '#0284c7', layout: 'beat', rows: 6, how: { zh: '你的號碼比「莊家號碼」大，就贏得旁邊的獎金（一樣大不算）。', en: 'Any of your numbers bigger than the dealer’s wins the prize beside it (a tie doesn’t).' } },
+  treasure: { icon: '🗺️', zh: '尋寶地圖', en: 'Treasure Map', price: 300, color: '#b45309', layout: 'treasure', how: { zh: '挖出三個相同的寶物，就贏得圖例上它的獎金。', en: 'Dig up three of the same treasure to win its prize on the key.' } },
+  dice: { icon: '🎲', zh: '骰子對決', en: 'Dice Duel', price: 500, color: '#16a34a', layout: 'dice', rounds: 5, how: { zh: '每一局你的兩顆骰子點數加起來比莊家大，就贏得該局的獎金。', en: 'In each round, if your two dice add up to more than the dealer’s, you win that round’s prize.' } },
+  wheel: { icon: '🎡', zh: '幸運轉盤', en: 'Lucky Wheel', price: 1000, color: '#9333ea', layout: 'wheel', how: { zh: '刮開看指針停在哪一格，就贏得那一格的獎金。', en: 'See where the pointer stops: you win that slice.' } },
+  palace: { icon: '🏯', zh: '金殿老虎機', en: 'Palace Slots', price: 2000, color: '#a16207', layout: 'slots', lines: 5, symbols: ['7️⃣', '💎', '👑', '🔔', '⭐', '🍀'], how: { zh: '任一橫排出現三個相同圖案，就贏得該排右邊的獎金。頭獎 2,000 萬。', en: 'Three of the same picture across a row wins that row’s prize. Top prize NT$20 million.' } }
 };
-export const CARD_ORDER = ['lucky7', 'triple', 'numbers', 'bingo', 'gold', 'million'];
+// By price, the classic card first.
+export const CARD_ORDER = ['lucky7', 'fruit', 'triple', 'beat', 'numbers', 'treasure', 'bingo', 'dice', 'gold', 'wheel', 'million', 'palace'];
+// Treasures on the map's key, cheapest tier first.
+const TREASURES = ['🐚', '🪙', '🗝️', '🏺', '💍', '👑', '💎', '🏆'];
 
 export const tiersOf = id => TABLE.map(([mult, odds]) => ({ prize: mult * CARDS[id].price, odds }));
 export const topPrize = id => TABLE.at(-1)[0] * CARDS[id].price;
@@ -152,6 +161,63 @@ export function face(id, prize, seed) {
     }
     return { kind: 'bingo', grid, called: [], line: null, prize };
   }
+  if (c.layout === 'slots') {
+    // Rows of three pictures and a prize each: the prize's rows three alike,
+    // no other row.
+    const wins = prize ? split(rand, prize, list, 3) : [];
+    const rows = wins.map(a => ({ s: Array(3).fill(pickOf(rand, c.symbols)), a, win: true }));
+    while (rows.length < c.lines) {
+      const s = [pickOf(rand, c.symbols), pickOf(rand, c.symbols), pickOf(rand, c.symbols)];
+      if (s[0] === s[1] && s[1] === s[2]) continue;
+      rows.push({ s, a: pickOf(rand, list), win: false });
+    }
+    return { kind: 'slots', rows: shuffle(rand, rows) };
+  }
+  if (c.layout === 'beat') {
+    // The dealer's number (6-17 of 1-20); winning rows above it, the rest at or under.
+    const dealer = 6 + Math.floor(rand() * 12);
+    const wins = prize ? split(rand, prize, list, 3) : [];
+    const rows = wins.map(a => ({ n: dealer + 1 + Math.floor(rand() * (20 - dealer)), a }));
+    while (rows.length < c.rows) rows.push({ n: 1 + Math.floor(rand() * dealer), a: pickOf(rand, list) });
+    return { kind: 'beat', dealer, rows: shuffle(rand, rows) };
+  }
+  if (c.layout === 'treasure') {
+    // Twelve digs; the prize's treasure three times, every other at most twice.
+    const key = tiersOf(id).map((t, i) => ({ s: TREASURES[i], a: t.prize }));
+    const hit = key.find(k => k.a === prize);
+    const cells = hit ? [hit.s, hit.s, hit.s] : [];
+    const counts = new Map(hit ? [[hit.s, 3]] : []);
+    const pool = [...TREASURES, '🪨', '🦴'];
+    while (cells.length < 12) {
+      const s = pickOf(rand, pool);
+      if ((counts.get(s) || 0) >= 2) continue;
+      counts.set(s, (counts.get(s) || 0) + 1);
+      cells.push(s);
+    }
+    return { kind: 'treasure', key, cells: shuffle(rand, cells) };
+  }
+  if (c.layout === 'dice') {
+    const pair = total => {
+      const a = Math.max(1, total - 6) + Math.floor(rand() * (Math.min(6, total - 1) - Math.max(1, total - 6) + 1));
+      return [a, total - a];
+    };
+    const wins = prize ? split(rand, prize, list, 3) : [];
+    const rounds = wins.map(a => {
+      const them = 2 + Math.floor(rand() * 10);
+      return { you: pair(them + 1 + Math.floor(rand() * (12 - them))), them: pair(them), a };
+    });
+    while (rounds.length < c.rounds) {
+      const you = 2 + Math.floor(rand() * 11);
+      rounds.push({ you: pair(you), them: pair(you + Math.floor(rand() * (13 - you))), a: pickOf(rand, list) });
+    }
+    return { kind: 'dice', rounds: shuffle(rand, rounds) };
+  }
+  if (c.layout === 'wheel') {
+    // Twelve slices: every prize once and four 0s; the pointer on the prize's.
+    const slices = shuffle(rand, [...list, 0, 0, 0, 0]);
+    const at = prize ? slices.indexOf(prize) : pickOf(rand, slices.map((v, i) => (v ? -1 : i)).filter(i => i >= 0));
+    return { kind: 'wheel', slices, at };
+  }
   return null;
 }
 
@@ -166,6 +232,15 @@ export function facePays(id, f) {
   }
   if (f.kind === 'numbers') return f.yours.filter(y => f.winning.includes(y.n)).reduce((s, y) => s + y.a, 0);
   if (f.kind === 'bingo') return f.line ? f.prize : 0;
+  if (f.kind === 'slots') return f.rows.filter(r => r.s[0] === r.s[1] && r.s[1] === r.s[2]).reduce((s, r) => s + r.a, 0);
+  if (f.kind === 'beat') return f.rows.filter(r => r.n > f.dealer).reduce((s, r) => s + r.a, 0);
+  if (f.kind === 'treasure') {
+    const counts = new Map();
+    for (const s of f.cells) counts.set(s, (counts.get(s) || 0) + 1);
+    return f.key.filter(k => (counts.get(k.s) || 0) >= 3).reduce((s, k) => s + k.a, 0);
+  }
+  if (f.kind === 'dice') return f.rounds.filter(r => r.you[0] + r.you[1] > r.them[0] + r.them[1]).reduce((s, r) => s + r.a, 0);
+  if (f.kind === 'wheel') return f.slices[f.at] || 0;
   return 0;
 }
 

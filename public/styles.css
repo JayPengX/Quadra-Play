@@ -1186,6 +1186,7 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .sc-band-text, .sc-band-prize { display: grid; gap: 1px; min-width: 0; }
 .sc-band-prize { text-align: right; }
 .sc-band small { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; opacity: 0.85; }
+.sc-band small { white-space: nowrap; }
 .sc-band strong { font-size: 1.15rem; font-weight: 900; white-space: nowrap; }
 .sc-play { position: relative; margin: 12px; border-radius: 14px; background: color-mix(in srgb, var(--lotto) 8%, var(--q-surface)); border: 1.5px dashed color-mix(in srgb, var(--lotto) 45%, transparent); }
 .sc-how { margin: 0; padding: 0 16px 14px; font-size: 0.78rem; color: var(--text-muted); line-height: 1.45; }
@@ -1203,8 +1204,8 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .sc-ticket.revealed .spot.win, .sc-ticket.revealed .spot.win small, .sc-ticket.revealed .spot.win .spot-sym { color: #fff; }
 @keyframes sc-win { 50% { transform: scale(1.08); } }
 .sc-h { margin: 2px 0 0; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; color: var(--text-secondary); }
-.sc-winning { display: flex; gap: 8px; }
-.sc-win-num { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--lotto); color: #fff; font-weight: 900; }
+.sc-winning { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 8px; justify-items: center; }
+.sc-win-num { display: grid; place-items: center; width: 100%; max-width: 44px; aspect-ratio: 1; border-radius: 50%; background: var(--lotto); color: #fff; font-weight: 900; }
 .bingo-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
 .bcell { display: grid; place-items: center; aspect-ratio: 1; border-radius: 8px; background: var(--q-surface); box-shadow: inset 0 0 0 1px var(--q-border); font-weight: 700; font-size: 0.84rem; }
 .bcell.hit { background: var(--lotto); color: #fff; box-shadow: none; }
@@ -1449,3 +1450,64 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .board-lead { margin: 8px 14px 0; font-size: 0.8rem; color: var(--text-muted); }
 .market-tabs button.has-pick { position: relative; }
 .market-tabs button.has-pick::after { content: ''; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+/* 刮刮樂 list: a shelf per price, two cards on each. */
+.sc-shelf { margin: 0 0 16px; }
+.sc-shelf-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 2px 8px; font-size: 1rem; font-weight: 900; }
+.sc-shelf-head small { font-size: 0.76rem; font-weight: 700; color: var(--text-muted); }
+.sc-shelf-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.sc-tile { position: relative; display: grid; align-content: start; gap: 4px; min-height: 132px; padding: 14px; overflow: hidden; border: 0; border-radius: 18px; color: #fff; text-align: left; font: inherit; cursor: pointer;
+  background: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--lotto) 55%, #fff) 0%, transparent 55%), linear-gradient(150deg, var(--lotto), color-mix(in srgb, var(--lotto) 55%, #000));
+  box-shadow: 0 10px 22px -14px var(--lotto), inset 0 0 0 1px rgb(255 255 255 / 0.18); }
+.sc-tile::after { content: ''; position: absolute; inset: auto -20% -40% auto; width: 70%; aspect-ratio: 1; border-radius: 50%; background: rgb(255 255 255 / 0.08); }
+.sc-tile:active { transform: scale(0.98); }
+.sc-tile-icon { font-size: 1.9rem; line-height: 1; filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.25)); }
+.sc-tile-name { font-size: 1.05rem; font-weight: 900; }
+.sc-tile-how { font-size: 0.72rem; line-height: 1.4; opacity: 0.9; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.sc-band-icon { font-size: 1.9rem; line-height: 1; }
+.sc-band { justify-content: flex-start; }
+.sc-band-prize { margin-left: auto; }
+.spot strong.big { font-size: 1.3rem; }
+/* Slots: rows of three reels and the row's prize. */
+.scratch-face.slots { gap: 6px; }
+.slot-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(64px, auto); gap: 6px; align-items: center; }
+.reel { display: grid; place-items: center; height: 46px; border-radius: 10px; background: var(--q-surface); box-shadow: inset 0 0 0 1px var(--q-border); font-size: 1.6rem; }
+.slot-prize { text-align: right; padding-right: 4px; font-size: 0.95rem; }
+.sc-ticket.revealed .slot-row.win .reel { background: var(--lotto); box-shadow: none; animation: sc-win 0.6s ease-out 2; }
+.sc-ticket.revealed .slot-row.win .slot-prize { color: var(--lotto); }
+/* 比大小 */
+.beat-dealer { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px; border-radius: 14px; background: color-mix(in srgb, var(--lotto) 14%, transparent); font-weight: 800; }
+.beat-dealer strong { display: grid; place-items: center; width: 48px; aspect-ratio: 1; border-radius: 50%; background: var(--lotto); color: #fff; font-size: 1.4rem; }
+/* 尋寶 */
+.treasure-map { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.dig { display: grid; place-items: center; aspect-ratio: 1.15; border-radius: 12px; background: color-mix(in srgb, #a16207 14%, var(--q-surface)); box-shadow: inset 0 0 0 1px var(--q-border); font-size: 1.6rem; }
+.sc-ticket.revealed .dig.win { background: var(--lotto); box-shadow: none; animation: sc-win 0.6s ease-out 2; }
+.treasure-key { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 6px; padding: 8px; border-radius: 12px; background: var(--q-surface); font-size: 0.72rem; }
+.treasure-key span { display: flex; align-items: center; gap: 3px; min-width: 0; white-space: nowrap; }
+.treasure-key b { font-size: 1rem; }
+/* 骰子對決 */
+.scratch-face.dice { gap: 6px; }
+.dice-head, .dice-row { display: grid; grid-template-columns: 20px 1fr 1fr minmax(60px, auto); gap: 8px; align-items: center; }
+.dice-head { padding: 0 8px; }
+.dice-head small { font-size: 0.7rem; font-weight: 800; color: var(--text-secondary); text-align: center; }
+.dice-head small:last-child { text-align: right; }
+.dice-row { padding: 6px 8px; border-radius: 12px; background: var(--q-surface); box-shadow: inset 0 0 0 1px var(--q-border); }
+.dice-row > small { color: var(--text-muted); }
+.dice-row > strong { text-align: right; }
+.die-pair { display: flex; align-items: center; justify-content: center; gap: 6px; }
+.die-pair b { font-size: 1.8rem; line-height: 1; letter-spacing: 2px; font-weight: 400; }
+.die-pair small { min-width: 18px; font-weight: 800; color: var(--text-secondary); }
+.die-pair.them b { color: var(--text-muted); }
+.sc-ticket.revealed .dice-row.win { background: var(--lotto); color: #fff; box-shadow: none; animation: sc-win 0.6s ease-out 2; }
+.sc-ticket.revealed .dice-row.win small, .sc-ticket.revealed .dice-row.win .die-pair.them b { color: #fff; }
+/* 幸運轉盤 */
+.scratch-face.wheel { place-items: center; }
+.wheel-box { position: relative; width: min(100%, 280px); aspect-ratio: 1; }
+.wheel-disc { --wheel-a: var(--lotto); --wheel-b: color-mix(in srgb, var(--lotto) 65%, #fff); --wheel-0: color-mix(in srgb, var(--lotto) 30%, var(--q-surface)); position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 5px color-mix(in srgb, var(--lotto) 70%, #000), 0 8px 20px -8px rgb(0 0 0 / 0.4); }
+.wheel-label { position: absolute; left: 50%; top: 50%; width: 50%; height: 20px; margin-top: -10px; display: flex; align-items: center; justify-content: flex-end; padding-right: 12px; box-sizing: border-box; transform-origin: 0 50%; }
+.wheel-label b { font-size: 0.74rem; font-weight: 900; white-space: nowrap; color: #fff; text-shadow: 0 1px 2px rgb(0 0 0 / 0.35); }
+.wheel-pointer { position: absolute; left: 50%; top: -8px; width: 0; height: 0; transform: translateX(-50%); border: 12px solid transparent; border-top: 22px solid var(--text-primary); filter: drop-shadow(0 2px 2px rgb(0 0 0 / 0.3)); }
+.wheel-box::after { content: ''; position: absolute; inset: 40%; border-radius: 50%; background: var(--q-surface); box-shadow: 0 0 0 4px color-mix(in srgb, var(--lotto) 70%, #000); }
+.wheel-label.flip b { transform: rotate(180deg); }
+.wheel-label.zero b { color: var(--lotto); text-shadow: none; }
+.sc-ticket.revealed .scratch-face.wheel.won .wheel-label.at b { font-size: 0.9rem; color: #fde047; }

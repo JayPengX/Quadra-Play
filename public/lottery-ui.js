@@ -15,7 +15,7 @@ const T = {
     stars: '星數', sideTitle: '其他玩法', big: '大', small: '小', odd: '單', even: '雙', bullseye: '超級獎號', latest: '最近開獎', open: '待開獎', won: '中獎', lost: '未中獎',
     today: '今天', yesterday: '昨天', filterAll: '全部', filterWins: '只看中獎', noWins: '還沒有中獎的彩券。', daySum: '花 {spent}', dayNone: '沒中', earlier: '更早的 {n} 天', groupWon: '{n} 張中 {k} 張，共 {v}', groupLost: '{n} 注都沒中', cardsLost: '{n} 張都沒中',
     drawAt: '{when} 開獎', noTickets: '還沒有彩券。', buyCard: '購買 {price}', scratchAll: '一次刮開', scratchHint: '用手指刮開銀色區域', youWon: '恭喜中獎！', noWin: '沒有中獎',
-    top: '最高 {v}', bought: '已購買', funds: '餘額不足', fundsBody: '這張刮刮樂要 {v}。到 Rewards 賺一點，或等下次發薪再來。', closed: '本期已截止', house: 'Quadra 開獎', perBet: '{v} / 注', how: '玩法', winNumbers: '中獎號碼', yourNumbers: '你的號碼',
+    top: '最高 {v}', bought: '已購買', funds: '餘額不足', fundsBody: '這張刮刮樂要 {v}。到 Rewards 賺一點，或等下次發薪再來。', closed: '本期已截止', house: 'Quadra 開獎', perBet: '{v} / 注', how: '玩法', winNumbers: '中獎號碼', yourNumbers: '你的號碼', dealer: '莊家', you: '你', prizeCol: '獎金',
     called: '開出號碼', prizes: '獎項', unscratched: '未刮開', every5: '每 5 分鐘開獎', mult: '倍數 ×{m}', settled: '已開獎',
     quick1: '快選 1 注', quickN: '快選 {n} 注', addLine: '加入這注', lines: '已選 {n} 注', remove: '移除', buyAll: '購買 {n} 注 · {v}', boughtN: '已買 {n} 注，共 {v}', seeTickets: '看我的彩券', again: '再買', inMin: '{n} 分鐘後開獎', inHour: '{h} 小時 {m} 分後開獎', picked: '已選 {k}/{n}', yourPick: '你的號碼', waiting: '等待開獎', drawnList: '已開獎', openSum: '{n} 張待開獎', wonSum: '累計中獎 {v}', basketHint: '選好號碼按「加入這注」，可以一次買好幾注。', sureTitle: '確定購買？', sureBody: '{what}，共 {v}。買了之後不能退。', sureOk: '購買 {v}'
   },
@@ -25,7 +25,7 @@ const T = {
     stars: 'Stars', sideTitle: 'Other plays', big: 'Big', small: 'Small', odd: 'Odd', even: 'Even', bullseye: 'Super number', latest: 'Latest draw', open: 'Awaiting draw', won: 'Won', lost: 'No win',
     today: 'Today', yesterday: 'Yesterday', filterAll: 'All', filterWins: 'Wins only', noWins: 'No winning tickets yet.', daySum: 'Spent {spent}', dayNone: 'No wins', earlier: '{n} earlier days', groupWon: '{k} of {n} won, {v}', groupLost: 'No win on {n} bets', cardsLost: 'No win on {n} cards',
     drawAt: 'Draw {when}', noTickets: 'No tickets yet.', buyCard: 'Buy {price}', scratchAll: 'Scratch all', scratchHint: 'Scratch the silver with your finger', youWon: 'You won!', noWin: 'No win this time',
-    top: 'Top {v}', bought: 'Bought', funds: 'Not enough money', fundsBody: 'This card costs {v}. Earn some in Rewards, or come back after the next payday.', closed: 'Sales closed', house: 'Quadra draw', perBet: '{v} a bet', how: 'How to play', winNumbers: 'Winning numbers', yourNumbers: 'Your numbers',
+    top: 'Top {v}', bought: 'Bought', funds: 'Not enough money', fundsBody: 'This card costs {v}. Earn some in Rewards, or come back after the next payday.', closed: 'Sales closed', house: 'Quadra draw', perBet: '{v} a bet', how: 'How to play', winNumbers: 'Winning numbers', yourNumbers: 'Your numbers', dealer: 'Dealer', you: 'You', prizeCol: 'Prize',
     called: 'Called', prizes: 'Prizes', unscratched: 'Not scratched', every5: 'A draw every 5 minutes', mult: 'Multiplier ×{m}', settled: 'Drawn',
     quick1: 'Quick pick 1', quickN: 'Quick pick {n}', addLine: 'Add this bet', lines: '{n} bets chosen', remove: 'Remove', buyAll: 'Buy {n} · {v}', boughtN: 'Bought {n} bets, {v}', seeTickets: 'My tickets', again: 'Buy more', inMin: 'Draw in {n} min', inHour: 'Draw in {h}h {m}m', picked: '{k}/{n} picked', yourPick: 'Your numbers', waiting: 'Awaiting the draw', drawnList: 'Drawn', openSum: '{n} awaiting a draw', wonSum: 'Won so far {v}', basketHint: 'Pick your numbers and tap “Add this bet”: you can buy several at once.', sureTitle: 'Buy this?', sureBody: '{what}, {v} in all. A ticket bought can’t be returned.', sureOk: 'Buy for {v}'
   }
@@ -376,18 +376,23 @@ export function mountLottery(ctx) {
     const open = (ctx.getAccount().tickets || []).filter(x => x.card && x.status === 'open');
     return el('div', {}, [
       open.length ? el('div', { class: 'scratch-pending' }, open.map(x => el('button', { class: 'q-chip', type: 'button', text: `${CARDS[x.card][lang]} · ${t('unscratched')}`, onclick: () => openScratch(x.id) }))) : null,
-      el(
-        'div',
-        { class: 'lotto-grid' },
-        CARD_ORDER.map(id => {
-          const c = CARDS[id];
-          return el('button', { class: 'lotto-card scratch-card-tile', type: 'button', style: `--lotto:${c.color}`, onclick: () => buyCard(id) }, [
-            el('span', { class: 'lotto-name', text: c[lang] }),
-            el('span', { class: 'lotto-price', text: money(c.price) }),
-            el('strong', { class: 'lotto-jackpot', text: t('top', { v: compactMoney(topPrize(id), lang) }) }),
-            el('span', { class: 'lotto-when', text: c.how[lang] })
-          ]);
-        })
+      // By price: a row of cards at each.
+      ...[...new Set(CARD_ORDER.map(id => CARDS[id].price))].map(price =>
+        el('section', { class: 'sc-shelf' }, [
+          el('h3', { class: 'sc-shelf-head' }, [el('span', { class: 'num', text: money(price) }), el('small', { text: t('top', { v: compactMoney(price * 10_000, lang) }) })]),
+          el(
+            'div',
+            { class: 'sc-shelf-row' },
+            CARD_ORDER.filter(id => CARDS[id].price === price).map(id => {
+              const c = CARDS[id];
+              return el('button', { class: 'sc-tile', type: 'button', style: `--lotto:${c.color}`, onclick: () => buyCard(id) }, [
+                el('span', { class: 'sc-tile-icon', 'aria-hidden': 'true', text: c.icon }),
+                el('strong', { class: 'sc-tile-name', text: c[lang] }),
+                el('span', { class: 'sc-tile-how', text: c.how[lang] })
+              ]);
+            })
+          )
+        ])
       )
     ]);
   }
@@ -424,7 +429,8 @@ export function mountLottery(ctx) {
     // The ticket: a band in the card's colour, the play area under silver.
     const ticketEl = el('div', { class: 'sc-ticket' }, [
       el('div', { class: 'sc-band' }, [
-        el('div', { class: 'sc-band-text' }, [el('small', { text: `QUADRA · ${t('scratch')}` }), el('strong', { text: c[lang] })]),
+        el('span', { class: 'sc-band-icon', 'aria-hidden': 'true', text: c.icon }),
+        el('div', { class: 'sc-band-text' }, [el('small', { text: t('scratch') }), el('strong', { text: c[lang] })]),
         el('div', { class: 'sc-band-prize' }, [el('small', { text: t('top', { v: '' }).trim() }), el('strong', { class: 'num', text: compactMoney(topPrize(ticket.card), lang) })])
       ]),
       wrap,
@@ -454,7 +460,8 @@ export function mountLottery(ctx) {
   }
 
   // Amounts inside a card's spots: short ($2萬, $1,000).
-  const spotMoney = v => compactMoney(v, lang).replace('NT$', '$');
+  const spotMoney = v => (v >= 10_000_000 && lang !== 'en' ? `$${v / 10_000_000}千萬` : v >= 10_000 ? compactMoney(v, lang).replace('NT$', '$') : v >= 1_000 ? (lang === 'en' ? `$${v / 1_000}K` : `$${v / 1_000}千`) : `$${v}`);
+  const DIE = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
   function faceEl(id, f) {
     if (f.kind === 'symbol')
       return el('div', { class: 'scratch-face symbol' }, [
@@ -475,6 +482,47 @@ export function mountLottery(ctx) {
         el('div', { class: 'bingo-grid' }, f.grid.flatMap(row => row.map(n => el('div', { class: `bcell${!n || called.has(n) ? ' hit' : ''}`, text: n ? String(n) : '★' })))),
         el('p', { class: 'sc-h', text: `${t('called')} · ${money(CARDS[id].price * 2)}+` }),
         el('div', { class: 'called' }, f.called.map(n => el('span', { class: 'num', text: String(n) })))
+      ]);
+    }
+    if (f.kind === 'slots')
+      return el('div', { class: 'scratch-face slots' }, f.rows.map(r => el('div', { class: `slot-row${r.s[0] === r.s[1] && r.s[1] === r.s[2] ? ' win' : ''}` }, [...r.s.map(x => el('span', { class: 'reel', text: x })), el('strong', { class: 'slot-prize num', text: spotMoney(r.a) })])));
+    if (f.kind === 'beat')
+      return el('div', { class: 'scratch-face beat' }, [
+        el('div', { class: 'beat-dealer' }, [el('span', { text: t('dealer') }), el('strong', { class: 'num', text: String(f.dealer) })]),
+        el('p', { class: 'sc-h', text: t('yourNumbers') }),
+        el('div', { class: 'scratch-spots' }, f.rows.map(r => el('div', { class: `spot${r.n > f.dealer ? ' win' : ''}` }, [el('strong', { class: 'num big', text: String(r.n) }), el('small', { class: 'num', text: spotMoney(r.a) })])))
+      ]);
+    if (f.kind === 'treasure') {
+      const counts = new Map();
+      for (const x of f.cells) counts.set(x, (counts.get(x) || 0) + 1);
+      return el('div', { class: 'scratch-face treasure' }, [
+        el('div', { class: 'treasure-map' }, f.cells.map(x => el('div', { class: `dig${counts.get(x) >= 3 ? ' win' : ''}`, text: x }))),
+        el('div', { class: 'treasure-key' }, f.key.map(k => el('span', {}, [el('b', { text: k.s }), el('small', { class: 'num', text: spotMoney(k.a) })])))
+      ]);
+    }
+    if (f.kind === 'dice')
+      return el('div', { class: 'scratch-face dice' }, [
+        el('div', { class: 'dice-head' }, [el('span'), el('small', { text: t('you') }), el('small', { text: t('dealer') }), el('small', { text: t('prizeCol') })]),
+        ...f.rounds.map((r, i) =>
+          el('div', { class: `dice-row${r.you[0] + r.you[1] > r.them[0] + r.them[1] ? ' win' : ''}` }, [
+            el('small', { class: 'num', text: String(i + 1) }),
+            el('span', { class: 'die-pair' }, [el('b', { text: `${DIE[r.you[0]]}${DIE[r.you[1]]}` }), el('small', { class: 'num', text: String(r.you[0] + r.you[1]) })]),
+            el('span', { class: 'die-pair them' }, [el('b', { text: `${DIE[r.them[0]]}${DIE[r.them[1]]}` }), el('small', { class: 'num', text: String(r.them[0] + r.them[1]) })]),
+            el('strong', { class: 'num', text: spotMoney(r.a) })
+          ])
+        )
+      ]);
+    if (f.kind === 'wheel') {
+      // The slice the pointer's on turned to the top.
+      const n = f.slices.length;
+      const step = 360 / n;
+      const turn = -(f.at * step + step / 2);
+      const stops = f.slices.map((v, i) => `${v ? (i % 2 ? 'var(--wheel-a)' : 'var(--wheel-b)') : 'var(--wheel-0)'} ${i * step}deg ${(i + 1) * step}deg`).join(', ');
+      return el('div', { class: `scratch-face wheel${f.slices[f.at] ? ' won' : ''}` }, [
+        el('div', { class: 'wheel-box' }, [
+          el('div', { class: 'wheel-disc', style: `background: conic-gradient(${stops}); transform: rotate(${turn}deg)` }, f.slices.map((v, i) => el('span', { class: `wheel-label${i === f.at ? ' at' : ''}${((((i + 0.5) * step + turn) % 360) + 360) % 360 > 180 ? ' flip' : ''}${v ? '' : ' zero'}`, style: `transform: rotate(${i * step + step / 2 - 90}deg)` }, [el('b', { class: 'num', text: v ? spotMoney(v) : '✕' })]))),
+          el('div', { class: 'wheel-pointer', 'aria-hidden': 'true' })
+        ])
       ]);
     }
     return el('div');

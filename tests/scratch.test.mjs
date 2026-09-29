@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { CARDS, CARD_ORDER, tiersOf, expectedReturn, face, facePays, drawPrize, buyScratch, revealScratch, topPrize } from '../public/lib/scratch.mjs';
 import { newAccount, balance } from '../public/lib/account.mjs';
 
-test('six scratch cards, each paying back like a real one', () => {
-  assert.equal(CARD_ORDER.length, 6);
+test('twelve scratch cards, two at each price, each paying back like a real one', () => {
+  assert.equal(CARD_ORDER.length, 12);
+  for (const price of [100, 200, 300, 500, 1000, 2000]) assert.equal(CARD_ORDER.filter(id => CARDS[id].price === price).length, 2);
   for (const id of CARD_ORDER) {
     const r = expectedReturn(id);
     assert.ok(r > 0.55 && r < 0.7, `${id}: ${r}`);
@@ -15,7 +16,7 @@ test('six scratch cards, each paying back like a real one', () => {
 test('every card face shows exactly the prize it was bought with', () => {
   for (const id of CARD_ORDER) {
     for (const prize of [0, ...tiersOf(id).map(t => t.prize)]) {
-      for (let seed = 1; seed <= 25; seed++) {
+      for (let seed = 1; seed <= 60; seed++) {
         const f = face(id, prize, seed * 7919);
         assert.equal(facePays(id, f), prize, `${id} ${prize} seed ${seed}`);
       }
