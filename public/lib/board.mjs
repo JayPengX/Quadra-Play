@@ -281,7 +281,7 @@ function sideOptions(game, base, probs) {
       if (m.kind === 'gamehcap') Object.assign(o, { line: pick.line, awayLine: m.awayLine, giver: m.giver, errKey: errKeyOf(game.sport), settle: { line: pick.line } });
       if (m.kind === 'gametotal') Object.assign(o, { line: m.line, errKey: errKeyOf(game.sport) });
       if (m.kind === 'teamtotal') Object.assign(o, { team: m.team, teamLine: m.line });
-      if (m.kind === 'htotal' || m.kind === 'totalsets') Object.assign(o, { line: m.line });
+      if (m.kind === 'htotal' || m.kind === 'f5total' || m.kind === 'totalsets') Object.assign(o, { line: m.line });
       if (m.kind === 'sethcap') Object.assign(o, { line: pick.line, awayLine: m.awayLine, giver: m.giver });
       if (m.kind === 'total') Object.assign(o, { totalLine: m.line, mainLine: m.main });
       out.push(o);
@@ -380,7 +380,7 @@ function resultSlice(o, probs) {
     const slice = { 'draw|away': [0, a + d], 'home|draw': [a, 1], 'home|away': [a + d, a] }[o.side];
     return { key: `${game}|side`, outLo: slice[0], outHi: slice[1] };
   }
-  if (o.kind === 'total' || o.kind === 'teamtotal' || o.kind === 'totalsets' || o.kind === 'gametotal' || o.kind === 'htotal') {
+  if (o.kind === 'total' || o.kind === 'teamtotal' || o.kind === 'totalsets' || o.kind === 'gametotal' || o.kind === 'htotal' || o.kind === 'f5total') {
     const over = o.side === 'over' ? o.fairChance : 1 - o.fairChance;
     return { key: `${game}|${o.kind}${o.kind === 'teamtotal' ? `|${o.team}` : ''}`, outLo: o.side === 'under' ? 0 : 1 - over, outHi: o.side === 'under' ? 1 - over : 1 };
   }

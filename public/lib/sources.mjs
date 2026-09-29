@@ -6,12 +6,14 @@ import { proxyJson } from './quadra.mjs';
 import { americanToProbability, devigProportional, devigPower } from './odds.mjs';
 import { normalizeTeamName, teamZh, LEAGUES, familyOf, isSoccer, rememberLogo, rememberTeams, hasTeams } from './teams.mjs';
 import { runOrder } from './live.mjs';
-import { useKambiToken, fetchKambiLeague, decidedFromLive, decidedTeamGame, parseKambiLiveData, kambiLiveDataUrl, setsWon, watchKambiMatches, fetchKeptKambi } from './kambi.mjs';
+import { KAMBI, useKambiToken, fetchKambiLeague, decidedFromLive, decidedTeamGame, parseKambiLiveData, kambiLiveDataUrl, setsWon, watchKambiMatches, fetchKeptKambi } from './kambi.mjs';
 import { KAMBI_LEAGUES } from './teams.mjs';
 
 export const PROXY_URL = 'https://sports-proxy.pengzjay.workers.dev';
 const ESPN = 'https://site.api.espn.com/apis/site/v2/sports';
 const GAMMA = 'https://gamma-api.polymarket.com';
+const OPENF1 = 'https://api.openf1.org/v1';
+export const F1_FLAG_KINDS = new Set(['f1sc', 'f1vsc', 'f1red']);
 const POLYMARKET_TAG = { mlb: 100381, epl: 306, f1: 100389, nba: 745 };
 const MLB_DAYS_AHEAD = 8;
 // Soccer rounds can be two weeks apart (international breaks).
@@ -366,6 +368,66 @@ export function parseF1RaceWinner(events, now) {
   };
 }
 
+// Kambi's F1 race, for when Polymarket hasn't opened the next one yet (it
+// opens some races only a few days out, some not at all): the next "Race:"
+// event of its F1 list, and the drivers' chances from its winner prices.
+const KAMBI_F1_LIST = `${KAMBI}/listView/formula_1/all/all/all/competitions.json?lang=en_GB&market=GB&useCombined=true`;
+export function nextKambiF1Race(list, now) {
+  return (list?.events || [])
+    .map(x => x.event)
+    .filter(e => e && /^race:/i.test(e.name || '') && e.state === 'NOT_STARTED' && Date.parse(e.start) > now.getTime())
+    .sort((a, b) => Date.parse(a.start) - Date.parse(b.start))[0] ?? null;
+}
+export function parseKambiF1Race(event, offers) {
+  const offer = (offers?.betOffers || []).find(o => o.criterion?.englishLabel === 'GP Winner' && o.from === 1 && o.to === 1 && !o.suspended);
+  const drivers = (offer?.outcomes || []).filter(o => o.odds > 1000 && o.participant).map(o => ({ name: o.participant, raw: 1000 / o.odds }));
+  if (drivers.length < 10) return null;
+  const fair = devigPower(drivers.map(d => d.raw));
+  const gp = event.name.replace(/^race:\s*/i, '').replace(/\s*\d{4}$/, '').replace(/\bGP\b/, 'Grand Prix');
+  return {
+    title: gp,
+    slug: `kambi-${event.id}`,
+    source: 'kambi',
+    startUtc: new Date(event.start).toISOString(),
+    drivers: drivers.map((d, i) => ({ name: d.name, fair: fair[i] })).sort((a, b) => b.fair - a.fair)
+  };
+}
+
+// Safety car, virtual safety car and red flag during the race: yes or no.
+// Polymarket's price when it has the race's market; else how often each
+// happened in the 85 races of 2023 to Azerbaijan 2026 (OpenF1's race
+// control messages): a safety car in 41, a VSC in 37, a red flag in 11.
+export const F1_FLAG_BASE = { sc: 0.48, vsc: 0.44, red: 0.13 };
+const FLAG_SLUG = { sc: /-safety-car-\d{4}-\d{2}-\d{2}$/, vsc: /-virtual-safety-car-\d{4}-\d{2}-\d{2}$/, red: /-red-flag-\d{4}-\d{2}-\d{2}$/ };
+export function parseF1Flags(events, startUtc) {
+  const out = {};
+  for (const [key, slug] of Object.entries(FLAG_SLUG)) {
+    const event = (events || []).find(e => slug.test(e.slug) && !(key === 'sc' && /virtual/.test(e.slug)) && Math.abs(Date.parse(e.startTime) - Date.parse(startUtc)) < 2 * DAY_MS);
+    const market = event?.markets?.find(m => !m.closed);
+    const yes = Number(parseJsonArray(market?.outcomePrices)?.[parseJsonArray(market?.outcomes)?.findIndex(o => /^yes$/i.test(o)) ?? 0]);
+    const known = yes > 0.02 && yes < 0.98;
+    out[key] = { fair: known ? yes : F1_FLAG_BASE[key], source: known ? 'polymarket' : 'history' };
+  }
+  return out;
+}
+
+// The race's safety car, VSC and red flag from OpenF1's race control
+// messages, once the race is over: { status, flags: { sc, vsc, red } }.
+export function parseOpenF1Flags(messages) {
+  if (!Array.isArray(messages) || !messages.length) return { status: 'pending' };
+  const text = messages.map(m => String(m.message || '').toUpperCase());
+  const over = text.some(m => m === 'CHEQUERED FLAG' || m === 'SESSION FINISHED' || m === 'RACE WILL NOT RESUME') || messages.some(m => m.flag === 'CHEQUERED');
+  if (!over) return { status: 'pending' };
+  return {
+    status: 'final',
+    flags: {
+      sc: text.some(m => m.startsWith('SAFETY CAR DEPLOYED')),
+      vsc: text.some(m => /^(VIRTUAL SAFETY CAR|VSC) DEPLOYED/.test(m)),
+      red: messages.some(m => m.flag === 'RED') || text.some(m => m.startsWith('RED FLAG'))
+    }
+  };
+}
+
 // The next race weekend's qualifying and race start from ESPN's F1
 // scoreboard: { qualifyingUtc, raceUtc } for the race nearest `startUtc`.
 export function parseF1Schedule(data, startUtc) {
@@ -486,13 +548,20 @@ export async function loadOdds(now = new Date(), onProgress) {
       fetchPolymarketEvents(POLYMARKET_TAG.epl, 'polymarket-events'),
       fetchPolymarketEvents(POLYMARKET_TAG.f1),
       fetchPolymarketEvents(POLYMARKET_TAG.nba, 'polymarket-events'),
-      getJson(`${ESPN}/racing/f1/scoreboard`)
+      getJson(`${ESPN}/racing/f1/scoreboard`),
+      getJson(KAMBI_F1_LIST)
     ].map(track)
   );
   if (results.every(r => r.status === 'rejected')) throw results[0].reason;
-  const [mlbDk, mlbPm, eplDk, eplPm, f1, nbaPm, f1Espn] = results.map(r => (r.status === 'fulfilled' ? r.value : []));
-  const race = parseF1RaceWinner(f1, now);
-  if (race) Object.assign(race, { qualifyingUtc: parseF1Schedule(f1Espn, race.startUtc)?.qualifyingUtc ?? null });
+  const [mlbDk, mlbPm, eplDk, eplPm, f1, nbaPm, f1Espn, f1Kambi] = results.map(r => (r.status === 'fulfilled' ? r.value : []));
+  let race = parseF1RaceWinner(f1, now);
+  // Polymarket not open for the next race yet (or only for a later one): Kambi's.
+  const kambiRace = nextKambiF1Race(f1Kambi, now);
+  if (kambiRace && (!race || Date.parse(kambiRace.start) < Date.parse(race.startUtc) - DAY_MS)) {
+    const offers = await getJson(`${KAMBI}/betoffer/event/${kambiRace.id}.json?lang=en_GB&market=GB`).catch(() => null);
+    race = parseKambiF1Race(kambiRace, offers) ?? race;
+  }
+  if (race) Object.assign(race, { qualifyingUtc: parseF1Schedule(f1Espn, race.startUtc)?.qualifyingUtc ?? null, flags: parseF1Flags(f1, race.startUtc) });
   return {
     loadedAt: now.toISOString(),
     games: lotteryGames(mergeGames([...mlbDk, ...eplDk], [...parsePolymarketMlb(mlbPm, now), ...parsePolymarketEpl(eplPm, now)]), now),
@@ -636,6 +705,19 @@ export async function fetchOutcomes(legs, now = new Date()) {
         return;
       }
       if (!leg.start || Date.parse(leg.start) > now.getTime()) return;
+      if (F1_FLAG_KINDS.has(leg.kind)) {
+        // OpenF1's race control messages for the race nearest the pick's start.
+        const day = new Date(Date.parse(leg.start) - DAY_MS).toISOString().slice(0, 10);
+        const sessions = await page(`${OPENF1}/sessions?session_name=Race&date_start>=${day}`);
+        const race = (Array.isArray(sessions) ? sessions : [])
+          .map(x => ({ key: x.session_key, gap: Math.abs(Date.parse(x.date_start) - Date.parse(leg.start)) }))
+          .filter(x => x.gap < 2 * DAY_MS)
+          .sort((a, b) => a.gap - b.gap)[0];
+        if (race) out.set(leg.id, parseOpenF1Flags(await page(`${OPENF1}/race_control?session_key=${race.key}`)));
+        // No race run within a week of its date (called off): the stake back.
+        else if (Array.isArray(sessions) && now.getTime() - Date.parse(leg.start) > 7 * DAY_MS) out.set(leg.id, { status: 'void' });
+        return;
+      }
       if (leg.kind?.startsWith('f1')) {
         // The race's day and the two after (the start kept with a pick can be
         // a little before the race itself).

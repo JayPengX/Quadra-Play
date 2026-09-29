@@ -16,7 +16,9 @@ import {
   choose,
   seededRandom,
   slipErrors,
-  slipSizes
+  slipSizes,
+  estimateLineOdds,
+  MLB_MARKET_OVERROUND
 } from './lib/odds.mjs';
 import {
   FANS,
@@ -379,10 +381,21 @@ function buildBets(data) {
     for (const p of more.h2h) {
       const w = winners[p.driver];
       const r = winners[p.rival];
-      bets.push({ ...w, id: `f1h2h|${w.driverEn}|${r.driverEn}`, kind: 'f1h2h', market: `f1h2h|${[w.driverEn, r.driverEn].sort().join('|')}`, rival: r.driverEn, rivalLabel: r.shortLabel, label: `F1 ${w.shortLabel} ${t('f1H2HBeats')} ${r.shortLabel}`, shortLabel: `${w.shortLabel} > ${r.shortLabel}`, fairChance: p.fair, estOdds: p.odds, errKey: 'extra', lock: p.lock, minLegs: p.minLegs });
+      bets.push({ ...w, id: `f1h2h|${w.driverEn}|${r.driverEn}`, kind: 'f1h2h', market: `f1h2h|${[w.driverEn, r.driverEn].sort().join('|')}`, rival: r.driverEn, settle: { rival: r.driverEn }, rivalLabel: r.shortLabel, label: `F1 ${w.shortLabel} ${t('f1H2HBeats')} ${r.shortLabel}`, shortLabel: `${w.shortLabel} > ${r.shortLabel}`, fairChance: p.fair, estOdds: p.odds, errKey: 'extra', lock: p.lock, minLegs: p.minLegs });
     }
     for (const p of more.teams) {
       bets.push({ id: `f1team|${p.team}`, gameId: 'f1', kind: 'f1team', sport: 'f1', market: 'f1team', matchup: data.f1.title, start: data.f1.startUtc, team: p.team, label: `F1 ${t('f1TeamShort')} ${p.team}`, shortLabel: p.team, fairChance: p.fair, estOdds: p.odds, errKey: 'extra', lock: p.lock, minLegs: p.minLegs });
+    }
+    // Safety car, virtual safety car, red flag: yes or no, priced like a
+    // two-way game line.
+    for (const [key, name] of [['sc', 'f1Sc'], ['vsc', 'f1Vsc'], ['red', 'f1Red']]) {
+      const flag = data.f1.flags?.[key];
+      if (!flag) continue;
+      for (const pick of ['yes', 'no']) {
+        const fair = pick === 'yes' ? flag.fair : 1 - flag.fair;
+        const short = `${t(name)} ${t(pick === 'yes' ? 'f1FlagYes' : 'f1FlagNo')}`;
+        bets.push({ id: `f1${key}|${pick}`, gameId: 'f1', kind: `f1${key}`, sport: 'f1', market: `f1${key}`, matchup: data.f1.title, start: data.f1.startUtc, pick, settle: { pick }, flagSource: flag.source, label: `F1 ${short}`, shortLabel: short, fairChance: fair, estOdds: estimateLineOdds(fair, MLB_MARKET_OVERROUND), errKey: 'extra' });
+      }
     }
   }
   // Single-source games: the typical DraftKings-Polymarket gap of that sport.
@@ -616,6 +629,8 @@ function logoImg(sport, enName, label, size = '') {
   const flag = countryFlag(enName);
   const fallback = () =>
     flag ? el('span', { class: `logo logo-flag ${size}`, 'aria-hidden': 'true', text: flag }) : el('span', { class: `logo logo-fallback ${size}`, 'aria-hidden': 'true', text: (label || '?').trim().slice(0, 1) });
+  // A side not decided yet ("Yankees/Red Sox"): no one team's logo.
+  if (/\//.test(enName || '')) return fallback();
   const url = teamLogo(sport, enName) ?? findTeamLogo(futureTeamLeagues(sport), enName);
   return logoPicture(url, url === teamLogo(sport, enName) ? teamLogo(sport, enName, true) : null, `logo ${size}`, fallback);
 }
@@ -835,7 +850,7 @@ function gameMore(game, bets) {
   if (['football', 'basketball', 'hockey'].includes(familyOf(game.sport))) notes.push(t('otherSportNote'));
   if (game.sport !== 'mlb' && game.total && game.total.line % 1 === 0) notes.push(t('wholeLine', { line: game.total.line, a: game.total.line - 0.5, b: game.total.line + 0.5 }));
   if (thin) notes.push(t('thin'));
-  return el('div', { class: 'game-more' }, [
+  const tabs =
     kinds.length > 1
       ? el('div', { class: 'segmented market-tabs', role: 'tablist', 'aria-label': t('moreMarkets') },
           kinds.map(sec =>
@@ -852,7 +867,15 @@ function gameMore(game, bets) {
             })
           )
         )
-      : null,
+      : null;
+  // The row scrolls sideways: the chosen tab kept in view after a redraw.
+  if (tabs)
+    requestAnimationFrame(() => {
+      const on = tabs.querySelector('[aria-selected="true"]');
+      if (on && tabs.scrollWidth > tabs.clientWidth) tabs.scrollLeft = Math.max(0, on.offsetLeft - (tabs.clientWidth - on.offsetWidth) / 2);
+    });
+  return el('div', { class: 'game-more' }, [
+    tabs,
     current ? marketPanel(game, current, bets.filter(b => b.kind === current.kind)) : null,
     el('div', { class: 'game-foot' }, [
       game.live ? null : pinButton(game),
@@ -931,7 +954,7 @@ function marketPanel(game, section, bets) {
 }
 
 // Kinds laid out as tables of lines: over/under, and one team giving a line.
-const TOTAL_KINDS = new Set(['total', 'gametotal', 'htotal', 'totalsets']);
+const TOTAL_KINDS = new Set(['total', 'gametotal', 'htotal', 'f5total', 'totalsets']);
 const HCAP_KINDS = new Set(['runline', 'gamehcap', 'sethcap']);
 
 // One section per kind of bet, each market of it with its own take. The
@@ -948,6 +971,7 @@ const SECTIONS = [
   { kind: 'htotal', title: 'secHalfTotal' },
   { kind: 'dc', title: 'secDoubleChance' },
   { kind: 'f5', title: 'secF5' },
+  { kind: 'f5total', title: 'secF5Total' },
   { kind: 'regulation', title: 'secRegulation' },
   { kind: 'firstinning', title: 'secFirstInning' },
   { kind: 'btts', title: 'secBtts' },
@@ -1694,7 +1718,7 @@ function renderParlay() {
 // A kind of bet's name (its board section's).
 function kindKey(kind) {
   const sec = SECTIONS.find(x => x.kind === kind);
-  return { f1: 'f1Title', f1podium: 'f1PodiumShort', f1top6: 'f1Top6Short', f1top10: 'f1Top10Short', f1h2h: 'f1H2HShort', f1team: 'f1TeamShort', future: 'futuresTitle' }[kind] ?? sec?.short ?? sec?.title ?? null;
+  return { f1: 'f1Title', f1podium: 'f1PodiumShort', f1top6: 'f1Top6Short', f1top10: 'f1Top10Short', f1h2h: 'f1H2HShort', f1team: 'f1TeamShort', f1sc: 'f1Sc', f1vsc: 'f1Vsc', f1red: 'f1Red', future: 'futuresTitle' }[kind] ?? sec?.short ?? sec?.title ?? null;
 }
 
 // The market a pick is from, as a small tag: 不讓分, 大小分, 讓分 …
@@ -2921,8 +2945,27 @@ function renderF1() {
         notes: [t('f1PodiumNote')],
         rows: (b, i) => (kind === 'f1team' ? entryRow(b, i, constructorBadge(b.team), '') : entryRow(b, i, driverBadge(b), kind === 'f1h2h' ? `vs ${b.rivalLabel}` : b.driver.team))
       });
-    })
+    }),
+    flagBoard(f1)
   );
+}
+
+// 安全車・虛擬安全車・紅旗: each yes and no, in one board.
+const FLAG_ICON = { f1sc: '🚗', f1vsc: '🟨', f1red: '🟥' };
+function flagBoard(f1) {
+  const t = state.t;
+  const list = state.bets.filter(b => b.kind in FLAG_ICON);
+  if (!list.length) return null;
+  const fromHistory = list.some(b => b.flagSource === 'history');
+  return board({
+    emblem: 'f1',
+    title: `${f1.title} · ${t('f1Flags')}`,
+    sub: t('f1FlagsSub'),
+    bets: list,
+    id: 'f1flags',
+    notes: [t('f1FlagsNote'), fromHistory ? t('f1FlagsHistory') : null].filter(Boolean),
+    rows: (b, i) => entryRow(b, i, el('span', { class: 'flag-badge', 'aria-hidden': 'true', text: FLAG_ICON[b.kind] }), t(b.flagSource === 'history' ? 'f1FlagFromHistory' : 'f1FlagFromMarket'))
+  });
 }
 
 // ============================================================================

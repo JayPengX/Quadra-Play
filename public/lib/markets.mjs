@@ -260,6 +260,31 @@ export function goalMarkets(means, { family, totalLine }) {
       { side: 'draw', fair: chance(grid, (a, h) => a === h) },
       { side: 'home', fair: chance(grid, (a, h) => h > a) }
     ] });
+    // The final score counts overtime's (or the shootout's) winning goal: a
+    // tie after 60 minutes ends one goal apart, won by each side as strong.
+    const homeShare = means.home / (means.home + means.away);
+    const finals = [];
+    for (const x of grid) {
+      if (x.away !== x.home) finals.push(x);
+      else finals.push({ away: x.away, home: x.home + 1, p: x.p * homeShare }, { away: x.away + 1, home: x.home, p: x.p * (1 - homeShare) });
+    }
+    const yes = chance(finals, (a, h) => a > 0 && h > 0);
+    out.push({ kind: 'btts', market: 'btts', cut: CUT.twoWay, picks: [{ side: 'yes', fair: yes }, { side: 'no', fair: 1 - yes }] });
+    const bands = [[0, 4], [5, 6], [7, 8], [9, null]];
+    out.push({ kind: 'goalbands', market: 'goalbands', cut: CUT.bands, picks: bands.map(([lo, hi]) => ({ side: `${lo}`, lo, hi, fair: chance(finals, (a, h) => a + h >= lo && (hi == null || a + h <= hi)) })) });
+    const margins = [];
+    for (const team of ['home', 'away']) {
+      for (const [lo, hi] of [[1, 1], [2, 2], [3, null]]) {
+        margins.push({ side: `${team}|${lo}`, team, lo, hi, fair: chance(finals, (a, h) => {
+          const m = team === 'home' ? h - a : a - h;
+          return m >= lo && (hi == null || m <= hi);
+        }) });
+      }
+    }
+    out.push({ kind: 'margin', market: 'margin', cut: CUT.bands, picks: margins });
+    const odd = chance(finals, (a, h) => (a + h) % 2 === 1);
+    out.push({ kind: 'oddeven', market: 'oddeven', cut: CUT.twoWay, picks: [{ side: 'odd', fair: odd }, { side: 'even', fair: 1 - odd }] });
+    return out;
   } else {
     const yes = chance(grid, (a, h) => a > 0 && h > 0);
     out.push({ kind: 'btts', market: 'btts', cut: CUT.twoWay, picks: [{ side: 'yes', fair: yes }, { side: 'no', fair: 1 - yes }] });
@@ -364,6 +389,20 @@ export function baseballMarkets({ homeWin, total }) {
     { side: 'draw', fair: tie },
     { side: 'home', fair: 1 - away - tie }
   ] });
+  // 前五局大小: runs in the first five innings, around their middle.
+  const runs5 = new Float64Array(A.length + H.length);
+  for (let a = 0; a < A.length; a++) for (let h = 0; h < H.length; h++) runs5[a + h] += A[a] * H[h];
+  const mean5 = ((means.away + means.home) * 5) / 9;
+  for (const d of [-1, 0, 1]) {
+    const line = half(mean5) + d;
+    if (line < 0.5) continue;
+    const over = runs5.reduce((s, p, n) => (n > line ? s + p : s), 0);
+    if (over < 0.04 || over > 0.96) continue;
+    out.push({ kind: 'f5total', market: `f5total|${line}`, line, posted: d === 0, steps: Math.abs(d), cut: CUT.twoWay, picks: [
+      { side: 'over', fair: over },
+      { side: 'under', fair: 1 - over }
+    ] });
+  }
   return out;
 }
 

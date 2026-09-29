@@ -130,8 +130,18 @@ export function legResult(leg, outcome) {
       const i = outcome.order.findIndex(x => norm(x) === norm(name));
       return i < 0 ? Infinity : i;
     };
-    if (leg.kind === 'f1h2h') return at(leg.driver) === at(leg.rival) ? 'void' : win(at(leg.driver) < at(leg.rival));
+    if (leg.kind === 'f1h2h') {
+      // The rival from the pick's id (f1h2h|driver|rival) where it wasn't kept.
+      const rival = leg.rival ?? String(leg.id || '').split('|')[2];
+      if (!rival) return null;
+      return at(leg.driver) === at(rival) ? 'void' : win(at(leg.driver) < at(rival));
+    }
     return win(at(leg.driver) < (leg.kind === 'f1top6' ? 6 : 10));
+  }
+  // Safety car, VSC, red flag: whether it happened, against the pick (yes / no).
+  if (leg.kind === 'f1sc' || leg.kind === 'f1vsc' || leg.kind === 'f1red') {
+    const happened = outcome.flags?.[leg.kind.slice(2)];
+    return typeof happened === 'boolean' ? win(happened === (leg.pick === 'yes')) : null;
   }
   if (leg.kind === 'f1team') return win(norm(f1Driver(outcome.winner).team) === norm(leg.team));
   const away = Number(outcome.awayScore);
@@ -183,6 +193,15 @@ export function legResult(leg, outcome) {
       const sum = list => list.slice(0, periods).reduce((s, x) => s + (Number(x) || 0), 0);
       const pts = sum(a) + sum(h);
       return push(leg.side === 'over' ? pts - leg.line : leg.line - pts);
+    }
+    case 'f5total': {
+      // Runs in the first five innings.
+      const a = outcome.awayInnings || [];
+      const h = outcome.homeInnings || [];
+      // A final shorter than five innings (called off early): the stake back.
+      if (a.length < 5 || h.length < 5) return outcome.status === 'final' ? 'void' : null;
+      const runs = [...a.slice(0, 5), ...h.slice(0, 5)].reduce((s, x) => s + (Number(x) || 0), 0);
+      return push(leg.side === 'over' ? runs - leg.line : leg.line - runs);
     }
     case 'goalbands':
       return win(away + home >= leg.lo && (leg.hi == null || away + home <= leg.hi));

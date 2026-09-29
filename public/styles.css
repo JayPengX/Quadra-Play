@@ -298,6 +298,7 @@ button.pick:active { transform: scale(0.98); }
 .entries { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
 .games-grid .entries { grid-template-columns: 1fr; }
 .entry { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--grid); min-width: 0; }
+.flag-badge { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; flex: none; font-size: 1.1rem; background: var(--surface-2, rgba(127, 127, 127, 0.12)); }
 .entry-rank { width: 1.4em; font-size: 0.75rem; color: var(--text-muted); text-align: right; font-variant-numeric: tabular-nums; flex: none; }
 .entry-name { flex: 1 1 auto; min-width: 0; font-weight: 600; font-size: 0.9rem; overflow-wrap: anywhere; }
 .entry-name small { display: block; font-size: 0.7rem; color: var(--text-muted); font-weight: 400; }
@@ -867,9 +868,14 @@ body.searching #live, body.searching #f1, body.searching #futures, body.searchin
 #stats-body .table-view th { white-space: nowrap; }
 
 /* A game's other markets: one tab per kind, one row per line */
-.market-tabs { display: flex; flex-wrap: wrap; gap: 4px; width: 100%; margin-bottom: 10px; }
+/* One row that scrolls sideways when the markets don't fit (never a lone
+   tab wrapped onto a second row); when they fit, they share the width. */
+.market-tabs {
+  display: flex; flex-wrap: nowrap; gap: 2px; width: 100%; box-sizing: border-box; margin-bottom: 10px;
+  overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; scroll-snap-type: x proximity;
+}
 .market-tabs::-webkit-scrollbar { display: none; }
-.market-tabs button { flex: 1 0 auto; padding: 6px 10px; }
+.market-tabs button { flex: 1 0 auto; padding: 6px 9px; scroll-snap-align: start; }
 .market-panel { display: grid; gap: 12px; }
 .line-table { display: grid; gap: 6px; }
 .line-head, .line-row { display: grid; grid-template-columns: minmax(4.6em, 0.8fr) 1fr 1fr; gap: 8px; align-items: center; }
