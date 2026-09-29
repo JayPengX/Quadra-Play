@@ -13,6 +13,7 @@ const T = {
     draws: '電腦彩券', scratch: '刮刮樂', mine: '我的彩券', nextDraw: '下一期', closes: '截止', jackpot: '頭獎累積', price: '每注', buy: '購買', cost: '共', bets: '注', multiple: '倍數',
     quick: '電腦選號', clear: '清除', pickN: '選 {n} 個號碼', zone2: '第二區', straight: '正彩', box: '組彩', pair: '對彩', size: '玩法', combos: '{n} 組',
     stars: '星數', sideTitle: '其他玩法', big: '大', small: '小', odd: '單', even: '雙', bullseye: '超級獎號', latest: '最近開獎', open: '待開獎', won: '中獎', lost: '未中獎',
+    today: '今天', yesterday: '昨天', filterAll: '全部', filterWins: '只看中獎', noWins: '還沒有中獎的彩券。', daySum: '花 {spent}', dayNone: '沒中', earlier: '更早的 {n} 天', groupWon: '{n} 張中 {k} 張，共 {v}', groupLost: '{n} 注都沒中', cardsLost: '{n} 張都沒中',
     drawAt: '{when} 開獎', noTickets: '還沒有彩券。', buyCard: '購買 {price}', scratchAll: '一次刮開', scratchHint: '用手指刮開銀色區域', youWon: '恭喜中獎！', noWin: '沒有中獎',
     top: '最高 {v}', bought: '已購買', funds: '餘額不足', fundsBody: '這張刮刮樂要 {v}。到 Rewards 賺一點，或等下次發薪再來。', closed: '本期已截止', house: 'Quadra 開獎', perBet: '{v} / 注', how: '玩法', winNumbers: '中獎號碼', yourNumbers: '你的號碼',
     called: '開出號碼', prizes: '獎項', unscratched: '未刮開', every5: '每 5 分鐘開獎', mult: '倍數 ×{m}', settled: '已開獎',
@@ -22,6 +23,7 @@ const T = {
     draws: 'Draw games', scratch: 'Scratch cards', mine: 'My tickets', nextDraw: 'Next draw', closes: 'Closes', jackpot: 'Jackpot', price: 'A bet', buy: 'Buy', cost: 'Total', bets: 'bets', multiple: 'Multiple',
     quick: 'Quick pick', clear: 'Clear', pickN: 'Pick {n} numbers', zone2: 'Zone 2', straight: 'Straight', box: 'Box', pair: 'Pair', size: 'Play', combos: '{n} combinations',
     stars: 'Stars', sideTitle: 'Other plays', big: 'Big', small: 'Small', odd: 'Odd', even: 'Even', bullseye: 'Super number', latest: 'Latest draw', open: 'Awaiting draw', won: 'Won', lost: 'No win',
+    today: 'Today', yesterday: 'Yesterday', filterAll: 'All', filterWins: 'Wins only', noWins: 'No winning tickets yet.', daySum: 'Spent {spent}', dayNone: 'No wins', earlier: '{n} earlier days', groupWon: '{k} of {n} won, {v}', groupLost: 'No win on {n} bets', cardsLost: 'No win on {n} cards',
     drawAt: 'Draw {when}', noTickets: 'No tickets yet.', buyCard: 'Buy {price}', scratchAll: 'Scratch all', scratchHint: 'Scratch the silver with your finger', youWon: 'You won!', noWin: 'No win this time',
     top: 'Top {v}', bought: 'Bought', funds: 'Not enough money', fundsBody: 'This card costs {v}. Earn some in Rewards, or come back after the next payday.', closed: 'Sales closed', house: 'Quadra draw', perBet: '{v} a bet', how: 'How to play', winNumbers: 'Winning numbers', yourNumbers: 'Your numbers',
     called: 'Called', prizes: 'Prizes', unscratched: 'Not scratched', every5: 'A draw every 5 minutes', mult: 'Multiplier ×{m}', settled: 'Drawn',
@@ -592,13 +594,98 @@ export function mountLottery(ctx) {
     const open = tickets.filter(x => x.status === 'open');
     const done = tickets.filter(x => x.status !== 'open');
     const won = done.reduce((s, x) => s + (x.prize || 0), 0);
+    const drawn = el('div', { class: 'lotto-done' });
+    const paint = () => drawn.replaceChildren(...drawnDays(done));
+    ui.paintDone = paint;
+    paint();
     return el('div', {}, [
       el('div', { class: 'lotto-summary' }, [el('span', { text: t('openSum', { n: open.length }) }), el('strong', { class: 'num', text: t('wonSum', { v: money(won) }) })]),
       open.length ? el('p', { class: 'lotto-h', text: t('waiting') }) : null,
       open.length ? el('div', { class: 'lotto-tickets' }, open.slice(0, 60).map(ticketRow)) : null,
-      done.length ? el('p', { class: 'lotto-h', text: t('drawnList') }) : null,
-      done.length ? el('div', { class: 'lotto-tickets' }, done.slice(0, 60).map(ticketRow)) : null
+      done.length ? el('div', { class: 'lotto-done-head' }, [el('p', { class: 'lotto-h', text: t('drawnList') }), el('div', { class: 'lotto-filter' }, ['all', 'wins'].map(k => el('button', { type: 'button', class: `q-chip${ui.doneFilter === k ? ' on' : ''}`, text: t(k === 'all' ? 'filterAll' : 'filterWins'), onclick: e => { ui.doneFilter = k; ui.doneDays = 7; e.currentTarget.parentNode.querySelectorAll('.q-chip').forEach(b => b.classList.toggle('on', b === e.currentTarget)); paint(); } }))) ]) : null,
+      done.length ? drawn : null
     ]);
+  }
+
+  // 已開獎, a day at a time (newest first): the day's spend and winnings,
+  // then one card per draw with every ticket on it, and scratch cards by kind.
+  const dayOf = ms => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' });
+  const whenOf = x => (x.card ? Date.parse(x.t) : x.draw?.at || Date.parse(x.t));
+  const hourText = ms => new Date(ms).toLocaleTimeString(lang === 'en' ? 'en-US' : 'zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Taipei' });
+  function dayName(key) {
+    const today = dayOf(Date.now());
+    const yesterday = dayOf(Date.now() - 864e5);
+    if (key === today) return t('today');
+    if (key === yesterday) return t('yesterday');
+    const [y, m, d] = key.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d, 4)).toLocaleDateString(lang === 'en' ? 'en-US' : 'zh-TW', { month: 'numeric', day: 'numeric', weekday: 'short', timeZone: 'Asia/Taipei' });
+  }
+  function drawnDays(done) {
+    ui.doneFilter ||= 'all';
+    ui.doneDays ||= 7;
+    const list = (ui.doneFilter === 'wins' ? done.filter(x => x.prize > 0) : done).slice().sort((a, b) => whenOf(b) - whenOf(a));
+    if (!list.length) return [el('p', { class: 'empty', text: t('noWins') })];
+    const days = new Map();
+    for (const x of list) {
+      const k = dayOf(whenOf(x));
+      if (!days.has(k)) days.set(k, []);
+      days.get(k).push(x);
+    }
+    const keys = [...days.keys()];
+    const out = keys.slice(0, ui.doneDays).map(k => {
+      const items = days.get(k);
+      const spent = items.reduce((s, x) => s + (x.cost || 0), 0);
+      const got = items.reduce((s, x) => s + (x.prize || 0), 0);
+      const groups = new Map();
+      for (const x of items) {
+        const g = x.card ? `card:${x.card}` : `${x.game}:${x.draw?.at}`;
+        if (!groups.has(g)) groups.set(g, []);
+        groups.get(g).push(x);
+      }
+      return el('section', { class: 'lotto-day' }, [
+        el('div', { class: 'lotto-day-head' }, [
+          el('strong', { text: dayName(k) }),
+          el('span', { class: 'num', text: t('daySum', { spent: money(spent) }) }),
+          got ? el('span', { class: 'num won', text: `+${money(got)}` }) : el('span', { class: 'num muted', text: t('dayNone') })
+        ]),
+        el('div', { class: 'lotto-tickets' }, [...groups.values()].map(g => (g[0].card ? scratchGroup(g) : drawGroup(g))))
+      ]);
+    });
+    if (keys.length > ui.doneDays) out.push(el('button', { type: 'button', class: 'q-btn ghost lotto-more', text: t('earlier', { n: keys.length - ui.doneDays }), onclick: () => { ui.doneDays += 14; ui.paintDone?.(); } }));
+    return out;
+  }
+  // One draw: its numbers once, then each ticket's picks (hits lit up).
+  function drawGroup(list) {
+    const x0 = list[0];
+    const g = GAMES[x0.game];
+    const drawn = x0.drawn;
+    const got = list.reduce((s, x) => s + (x.prize || 0), 0);
+    const bets = list.reduce((s, x) => s + (x.bets || 1), 0);
+    const cost = list.reduce((s, x) => s + (x.cost || 0), 0);
+    const winners = list.filter(x => x.prize > 0).length;
+    return el('div', { class: `lt-group${got ? ' won' : ''}`, style: `--lotto:${g.color}` }, [
+      el('div', { class: 'lt-head' }, [el('strong', { text: `${gameName(x0.game, lang)} · ${hourText(x0.draw.at)}` }), el('span', { class: 'num', text: money(cost) })]),
+      drawn ? el('div', { class: 'lt-drawn' }, [el('span', { class: 'lt-label', text: t('called') }), el('div', { class: 'balls' }, [...(drawn.digits || drawn.numbers || []).map(n => ball(n, 'dim')), drawn.special != null ? ball(drawn.special, 'dim special') : null, drawn.zone2 != null ? ball(drawn.zone2, 'dim special') : null].filter(Boolean))]) : null,
+      el('div', { class: 'lt-lines' }, list.map(x => el('div', { class: `lt-line${x.prize > 0 ? ' won' : ''}` }, [el('div', { class: 'balls' }, picksOf(x)), el('span', { class: 'num', text: x.prize > 0 ? `+${money(x.prize)}` : x.sel.play ? t(x.sel.play) : x.sel.size ? COMBO_NAME[lang][x.sel.size] : x.multiple > 1 ? `×${x.multiple}` : '' })]))),
+      el('p', { class: `lt-state ${got ? 'won' : 'lost'}`, text: got ? t('groupWon', { k: winners, n: list.length, v: money(got) }) : t('groupLost', { n: bets }) })
+    ]);
+  }
+  // Scratch cards of one kind that day: a tile each, tap to see it again.
+  function scratchGroup(list) {
+    const c = CARDS[list[0].card];
+    const got = list.reduce((s, x) => s + (x.prize || 0), 0);
+    const cost = list.reduce((s, x) => s + (x.cost || 0), 0);
+    return el('div', { class: `lt-group${got ? ' won' : ''}`, style: `--lotto:${c.color}` }, [
+      el('div', { class: 'lt-head' }, [el('strong', { text: `${t('scratch')} · ${c[lang]}${list.length > 1 ? ` ×${list.length}` : ''}` }), el('span', { class: 'num', text: money(cost) })]),
+      el('div', { class: 'lt-cards' }, list.map(x => el('button', { type: 'button', class: `lt-card${x.prize > 0 ? ' won' : ''}`, onclick: () => openScratch(x.id), text: x.prize > 0 ? `+${compactMoney(x.prize, lang)}` : '—' }))),
+      el('p', { class: `lt-state ${got ? 'won' : 'lost'}`, text: got ? t('groupWon', { k: list.filter(x => x.prize > 0).length, n: list.length, v: money(got) }) : t('cardsLost', { n: list.length }) })
+    ]);
+  }
+  function picksOf(x) {
+    const drawn = x.drawn;
+    if (x.sel.digits) return x.sel.digits.map(d => ball(d));
+    if (x.sel.side) return [el('span', { class: 'q-chip', text: t(x.sel.side) })];
+    return [...(x.sel.zones?.[0] || x.sel.numbers || []).map(n => ball(n, drawn?.numbers?.includes(n) ? 'hit' : '')), ...(x.sel.zones?.[1] || []).map(n => ball(n, drawn?.zone2 === n ? 'hit special' : 'special'))];
   }
   function ticketRow(x) {
     if (x.card) {

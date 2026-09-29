@@ -1405,3 +1405,34 @@ img[src*='thesportsdb'] { object-fit: contain; }
 
 /* Help, in the top-right like every Quadra app. */
 .help-button { display: inline-grid; place-items: center; font-weight: 800; font-size: 16px; text-decoration: none; color: var(--q-text-2); }
+
+/* 已開獎, by day and by draw */
+.lotto-done-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
+.lotto-filter { display: flex; gap: 6px; }
+.lotto-filter .q-chip { min-height: 30px; padding: 4px 12px; font-size: 0.8rem; }
+.lotto-filter .q-chip.on { background: var(--accent); }
+.lotto-done { display: grid; gap: 14px; margin-top: 8px; }
+.lotto-day { display: grid; gap: 8px; }
+.lotto-day-head { display: flex; align-items: baseline; gap: 10px; padding: 0 2px; font-size: 0.84rem; color: var(--text-secondary); }
+.lotto-day-head strong { flex: 1; color: var(--text-primary); font-size: 0.95rem; }
+.lotto-day-head .won { color: var(--good); font-weight: 750; }
+.lotto-day-head .muted { color: var(--text-muted); }
+.lt-drawn { display: grid; gap: 4px; padding-bottom: 8px; border-bottom: 1px dashed var(--q-divider); }
+.lt-label { font-size: 0.72rem; color: var(--text-muted); }
+.lt-lines { display: grid; gap: 6px; }
+.lt-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.lt-line .balls { gap: 4px; }
+.lt-line .ball { width: 26px; height: 26px; font-size: 0.72rem; }
+.lt-line > .num { flex: none; font-size: 0.8rem; color: var(--text-muted); }
+.lt-line.won > .num { color: var(--good); font-weight: 750; }
+.lt-cards { display: flex; flex-wrap: wrap; gap: 6px; }
+.lt-card { min-width: 52px; min-height: 36px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-sunken); color: var(--text-muted); font: 650 0.8rem/1 var(--q-font); font-variant-numeric: tabular-nums; cursor: pointer; }
+.lt-card.won { border-color: transparent; background: color-mix(in srgb, var(--good) 16%, var(--surface)); color: var(--good); }
+.lotto-more { justify-self: center; }
+.lt-group { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--border); border-left: 4px solid var(--lotto); border-radius: 14px; background: var(--surface); text-align: left; }
+.lt-group.won { background: color-mix(in srgb, var(--good) 7%, var(--surface)); }
+.lotto-day-head, .lotto-done-head { text-align: left; }
+.lt-line .balls { flex: 1; min-width: 0; }
+.lotto-done, .lotto-day, .lotto-day .lotto-tickets { width: 100%; justify-items: stretch; }
+.lt-group { width: 100%; box-sizing: border-box; }
+.lotto-tickets > .lotto-ticket { width: 100%; box-sizing: border-box; justify-items: stretch; text-align: left; box-shadow: none; }
