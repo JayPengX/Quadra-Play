@@ -277,7 +277,7 @@ export function applyResults(account, slipId, results, now = new Date(), finals 
   let updated = { ...slip, legs };
   let ledger = account.ledger;
   if (legs.every(leg => leg.result)) {
-    const { gross, net } = settleSlip({ legs, sizes: slip.sizes, stake: slip.stake });
+    const { gross, net } = settleSlip({ legs, sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0 });
     const payout = Math.round(net);
     updated = { ...updated, status: 'settled', settledAt: now.toISOString(), gross: Math.round(gross), payout };
     // (A slip refunded while it was lost, then found on another device, has
@@ -286,6 +286,21 @@ export function applyResults(account, slipId, results, now = new Date(), finals 
     if (!ledger.some(e => e.id === `payout-${slip.id}`)) ledger = [...ledger, { id: `payout-${slip.id}`, t: now.toISOString(), kind: 'payout', amount: payout - refunded, slipId: slip.id }];
   }
   return touched({ ...account, ledger, slips: account.slips.map(s => (s.id === slipId ? updated : s)) }, now);
+}
+
+// Cashes out an open slip for `amount` (cashout.mjs prices it): settled at
+// once, paid in as its payout (`payout-<slip>`, so a result coming in later
+// on another device can never pay it twice). Picks not yet decided stay
+// undecided.
+export function cashOut(account, slipId, amount, now = new Date()) {
+  const slip = account.slips.find(s => s.id === slipId);
+  if (!slip || slip.status !== 'open' || slip.recovered || !(amount > 0)) return account;
+  if (account.ledger.some(e => e.id === `payout-${slip.id}`)) return account;
+  const t = now.toISOString();
+  const payout = Math.floor(amount);
+  const updated = { ...slip, status: 'settled', settledAt: t, cashedOut: true, gross: payout, payout };
+  const entry = { id: `payout-${slip.id}`, t, kind: 'cashout', amount: payout, slipId: slip.id };
+  return touched({ ...account, ledger: [...account.ledger, entry], slips: account.slips.map(s => (s.id === slipId ? updated : s)) }, now);
 }
 
 // Two copies of one account (this device's and the synced one) as one: every
@@ -358,7 +373,7 @@ export function recoverFromWallet(account, wallet) {
   }
   const all = [...account.ledger, ...ledger];
   const slipIds = new Set(account.slips.map(s => s.id));
-  const paid = new Map(all.filter(e => e.kind === 'payout' && e.slipId).map(e => [e.slipId, e]));
+  const paid = new Map(all.filter(e => (e.kind === 'payout' || e.kind === 'cashout') && e.slipId).map(e => [e.slipId, e]));
   const refunds = new Set(all.filter(e => e.kind === 'refund' && e.slipId).map(e => e.slipId));
   const slips = [];
   for (const e of all) {

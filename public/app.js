@@ -9,6 +9,8 @@ import {
   slipPayoutTable,
   expectedReturn,
   settleSlip,
+  boostRate,
+  PARLAY_BOOST,
   median,
   quantile,
   SLIP_RULES,
@@ -65,8 +67,10 @@ import {
   mergeDistinct,
   poolEntries,
   compactAccount,
+  cashOut,
   isAccount
 } from './lib/account.mjs';
+import { cashOutValue, CASHOUT_KEEP } from './lib/cashout.mjs';
 import { renderHome } from './home.js';
 import { mountLottery } from './lottery-ui.js';
 import { mountStats } from './stats-ui.js';
@@ -85,14 +89,19 @@ import {
   notify,
   schedulePush,
   storedAccount,
-  helpUrl
+  helpUrl,
+  PLUS,
+  plusMember,
+  openPlus,
+  ask,
+  tell
 } from './lib/quadra.mjs';
 import { pack, unpack } from './lib/codec.mjs';
 import { historyStats, outlookOf, chanceOf, funFacts, crowdPercentile } from './lib/history.mjs';
 import { detectLocale, makeT } from './lib/i18n.mjs';
 import { f1Driver, f1Constructor, findTeamLogo, countryFlag, leagueLogo, teamLogo, teamZh, LEAGUES, familyOf, isSoccer, isSets, isNeutral, normalizeTeamName } from './lib/teams.mjs';
 import { logoPicture, raceName } from './lib/logos.mjs';
-import { houseRule, minLegsProblem } from './lib/rules.mjs';
+import { houseRule, minLegsProblem, leagueTier } from './lib/rules.mjs';
 import { gameOptions, crowdPool, f1Podium, f1Markets } from './lib/board.mjs';
 import { auditPools, auditCrowd } from './lib/audit.mjs';
 import { recommend } from './lib/recommend.mjs';
@@ -763,7 +772,24 @@ function renderGames() {
     return;
   }
   const byGame = groupBy(state.bets, b => b.gameId);
-  container.replaceChildren(...games.filter(g => byGame.get(g.id)).map(game => gameCard(game, byGame.get(game.id))));
+  const listed = games.filter(g => byGame.get(g.id));
+  // The big leagues first (by time), then the rest; with every sport shown,
+  // the thinly traded ones (table tennis, lower tennis tours…) fold away
+  // behind one row, so the board opens on the games people know.
+  const TIER = { major: 0, minor: 1, thin: 2 };
+  const ordered = searching ? listed : [...listed].sort((a, b) => TIER[leagueTier(a.sport)] - TIER[leagueTier(b.sport)] || a.startUtc.localeCompare(b.startUtc));
+  const fold = !searching && state.sport === 'all' && !state.showThin && ordered.some(g => leagueTier(g.sport) !== 'thin');
+  const shown = fold ? ordered.filter(g => leagueTier(g.sport) !== 'thin') : ordered;
+  const rest = ordered.length - shown.length;
+  container.replaceChildren(
+    ...shown.map(game => gameCard(game, byGame.get(game.id))),
+    rest
+      ? el('button', { class: 'more-leagues', type: 'button', onclick: () => ((state.showThin = true), renderGames()) }, [
+          el('span', { text: t('moreLeagues', { n: rest }) }),
+          el('small', { text: [...new Set(ordered.slice(shown.length).map(g => t(`sport_${g.sport}`)))].slice(0, 4).join('・') })
+        ])
+      : ''
+  );
 }
 
 function hhmm(iso) {
@@ -1228,6 +1254,7 @@ function toggleLeg(bet) {
   renderF1();
   renderFutures();
   renderParlay();
+  if (state.tab === 'home') renderHome(homeCtx());
 }
 
 // Everything that can go on the slip: games, F1 and championships.
@@ -1675,24 +1702,7 @@ function renderParlay() {
   }
   const cost = comboCount(slip, sizes) * stake;
   if (sizes.length && !errors.includes('stakeUnit') && cost > 0) ticket.push(payoutBox(slip, sizes, stake, mode));
-  // 再加一場: the soonest favourite from a game not on the slip, and what the
-  // whole parlay would pay with it.
-  if (mode === 'parlay' && n < SLIP_RULES.maxLegs && cost > 0 && !errors.length) {
-    const onSlip = new Set(legs.map(b => b.gameId));
-    const extra = (state.bets || [])
-      .filter(b => b.kind === 'ml' && !b.lock && !onSlip.has(b.gameId) && b.estOdds >= 1.3 && b.estOdds <= 2.2 && Date.parse(b.start) > Date.now())
-      .sort((a, b) => a.start.localeCompare(b.start))[0];
-    if (extra) {
-      const now = legs.reduce((m, b) => m * effectiveOdds(b), 1) * stake;
-      const more = now * effectiveOdds(extra);
-      ticket.push(
-        el('button', { class: 'upsell', type: 'button', onclick: () => toggleLeg(extra) }, [
-          el('span', { class: 'upsell-plus', text: '＋' }),
-          el('span', { class: 'upsell-text' }, [el('strong', { text: t('upsellTitle', { pick: extra.shortLabel || extra.label, odds: fmtOdds(effectiveOdds(extra)) }) }), el('small', { text: t('upsellSub', { from: fmtMoney(now, { sign: false }), to: fmtMoney(more, { sign: false }) }) })])
-        ])
-      );
-    }
-  }
+  if (mode !== 'single' && n >= 2 && !errors.includes('stakeUnit')) ticket.push(boostLadder(mode === 'parlay' ? n : Math.max(...sizes, 0)));
   ticket.push(placeButton(legs, sizes, cost, errors));
   ticket.push(el('details', { class: 'info' }, [el('summary', { text: t('slipRulesTitle') }), el('p', { text: t('slipRulesNote') })]));
 
@@ -1732,7 +1742,7 @@ function payoutBox(legs, sizes, stake, mode) {
   const combos = comboCount(legs, sizes);
   const bySize = combosBySize(legs);
   const cost = combos * stake;
-  const { gross, net } = slipPayoutTable({ legs, sizes, stake });
+  const { gross, net } = slipPayoutTable({ legs, sizes, stake, boost: mode === 'single' ? 0 : boostX() });
   const all = (1 << n) - 1;
   let least = Infinity;
   for (let won = 1; won < gross.length; won++) if (gross[won] > 0) least = Math.min(least, net[won]);
@@ -1749,6 +1759,8 @@ function payoutBox(legs, sizes, stake, mode) {
   } else {
     for (const k of sizes) rows.push(payLine(t('paySize', { size: sizeName(k, n), c: fmtInt(bySize[k] ?? 0) }), fmtMoney((bySize[k] ?? 0) * stake, { sign: false })));
   }
+  const lift = mode === 'single' ? 0 : boostRate(Math.max(...sizes, 0), boostX());
+  if (lift > 0) rows.push(payLine(t('payBoost'), `+${Math.round(lift * 100)}%`, 'pay-boost'));
   rows.push(payLine(t('payCost', { c: fmtInt(combos) }), fmtMoney(cost, { sign: false }), 'pay-cost'));
   const taxed = gross[all] - net[all] > 0.5;
   return el('div', { class: 'pay-box' }, [
@@ -1761,6 +1773,30 @@ function payoutBox(legs, sizes, stake, mode) {
     ]),
     taxed ? el('p', { class: 'pay-note', text: t('payTaxed', { gross: fmtMoney(gross[all], { sign: false }), tax: fmtMoney(gross[all] - net[all], { sign: false }) }) }) : null,
     mode !== 'parlay' && least < net[all] ? el('p', { class: 'pay-note', text: t('payLeast', { v: fmtMoney(least, { sign: false }) }) }) : null
+  ]);
+}
+
+// The parlay boost's multiplier for a slip bought now: doubled for Quadra Plus.
+function boostX() {
+  return plusMember(q.wallet) ? PLUS.odds.boost : 1;
+}
+// The parlay boost as a ladder: 3 picks and up, the share the winnings grow
+// by at each size, where this slip stands, and what Plus makes of it.
+function boostLadder(size) {
+  const t = state.t;
+  const x = boostX();
+  const steps = PARLAY_BOOST.map((r, k) => k).filter(k => k >= 3);
+  const pct = r => `+${Math.round(r * 100)}%`;
+  const now = boostRate(size, x);
+  const next = steps.find(k => k > size);
+  const line = now > 0 ? t('boostNow', { v: pct(now) }) : t('boostFrom', { n: 3 });
+  const more = next ? t('boostNext', { n: next - size, v: pct(boostRate(next, x)) }) : t('boostTop');
+  return el('div', { class: `boost${now > 0 ? ' on' : ''}` }, [
+    el('div', { class: 'boost-head' }, [el('strong', { text: line }), el('small', { text: more })]),
+    el('ol', { class: 'boost-steps' }, steps.map(k => el('li', { class: k <= size ? 'hit' : '' }, [el('span', { text: k === steps.at(-1) ? `${k}+` : String(k) }), el('b', { class: 'num', text: pct(boostRate(k, x)) })]))),
+    x > 1
+      ? el('p', { class: 'boost-plus', text: t('boostPlusOn') })
+      : el('button', { class: 'q-plus-hint', type: 'button', onclick: () => openPlus(q), text: t('boostPlusOff', { v: pct(boostRate(Math.max(size, 3), PLUS.odds.boost)) }) })
   ]);
 }
 
@@ -1868,7 +1904,7 @@ function noticeSettled(prev, next) {
   if (!prev) return;
   const was = new Map(prev.slips.map(x => [x.id, x.status]));
   for (const slip of next.slips) {
-    if (slip.status !== 'settled' || was.get(slip.id) !== 'open') continue;
+    if (slip.status !== 'settled' || was.get(slip.id) !== 'open' || slip.cashedOut) continue;
     const won = slip.payout > 0;
     notify(q, {
       title: won ? state.t('noticeSlipWon', { v: fmtMoney(slip.payout, { sign: false }) }) : state.t('noticeSlipLost'),
@@ -2069,10 +2105,12 @@ function placeButton(legs, sizes, cost, errors) {
         // 單場: each pick its own slip (its own bet, its own line in 紀錄),
         // the stake the same on each; the others, one slip.
         const records = legs.map(legRecord);
+        // The parlay boost as it stands now (doubled for Quadra Plus), kept with the slip.
+        const boost = boostX();
         const slips =
           state.slipMode === 'single' && records.length > 1
             ? records.map(leg => ({ id: newSlipId(), mode: 'single', sizes: [1], stake: state.slipStake, cost: cost / records.length, legs: [leg] }))
-            : [{ id: newSlipId(), mode: state.slipMode, sizes, stake: state.slipStake, cost, legs: records }];
+            : [{ id: newSlipId(), mode: state.slipMode, sizes, stake: state.slipStake, cost, legs: records, ...(state.slipMode !== 'single' ? { boost } : {}) }];
         if (cost > funds()) return;
         let account = state.account;
         const now = new Date();
@@ -2236,12 +2274,59 @@ function legState(leg, now = Date.now()) {
 function slipRange(slip) {
   const as = result => slip.legs.map(leg => ({ gameId: leg.gameId, odds: leg.odds, result: leg.result ?? result }));
   return {
-    locked: settleSlip({ legs: as('lost'), sizes: slip.sizes, stake: slip.stake }).net,
-    most: settleSlip({ legs: as('won'), sizes: slip.sizes, stake: slip.stake }).net
+    locked: settleSlip({ legs: as('lost'), sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0 }).net,
+    most: settleSlip({ legs: as('won'), sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0 }).net
   };
 }
 
-const LEG_ICON = { won: '✓', lost: '✗', void: '↺', live: '●', waiting: '⏳' };
+const LEG_ICON = { won: '✓', lost: '✗', void: '↺', live: '●', waiting: '⏳', cashed: '–' };
+
+// ---- Cash out ------------------------------------------------------------------------
+
+// A pick's price right now: its own on the board before the game, the same
+// market on the live board once it's under way (win, total, run line, team
+// total), or null (no cash out on it now).
+function currentOdds(leg, now = Date.now()) {
+  if (leg.result) return null;
+  const priced = b => (b && !b.lock && b.estOdds > 1 ? effectiveOdds(b) : null);
+  if (!leg.start || Date.parse(leg.start) > now) return priced([...state.bets, ...state.futures].find(b => b.id === leg.id));
+  const game = state.liveGames.find(g => g.sport === leg.sport && g.away.en === leg.away && g.home.en === leg.home);
+  if (!game) return null;
+  const line = b => b.totalLine ?? b.runLine ?? b.teamLine ?? null;
+  return priced(state.liveBets.find(b => b.gameId === game.id && b.kind === leg.kind && b.side === leg.side && (leg.kind === 'ml' || line(b) === leg.line) && (leg.kind !== 'teamtotal' || b.team === leg.team)));
+}
+function cashOutPrice(slip) {
+  const keep = plusMember(q.wallet) ? PLUS.odds.cashOutKeep : CASHOUT_KEEP;
+  return cashOutValue(slip, slip.legs.map(leg => currentOdds(leg)), { keep });
+}
+async function doCashOut(slip, value) {
+  const t = state.t;
+  const fresh = cashOutPrice(slip);
+  // The price moved since it was shown: ask again at the new one.
+  if (fresh == null) return tell({ lang: state.locale, title: t('cashOutGone'), body: t('cashOutGoneBody') });
+  if (!(await ask({ lang: state.locale, icon: '💵', title: t('cashOutAsk', { v: fmtMoney(fresh, { sign: false }) }), body: t('cashOutAskBody', { most: fmtMoney(Math.max(0, slipRange(slip).most), { sign: false }) }), ok: t('cashOutOk'), cancel: t('cashOutKeep') }))) return;
+  const account = cashOut(state.account, slip.id, cashOutPrice(slip) ?? fresh);
+  if (account === state.account) return;
+  state.freshSlips.add(slip.id);
+  commitAccount(account);
+  clearTimeout(pushTimer);
+  syncNow();
+  track('cashout', [...new Set(slip.legs.flatMap(leg => betKeys(leg)))], 1);
+  renderSaved();
+  if (state.tab === 'home') renderHome(homeCtx());
+}
+function cashOutRow(slip) {
+  const t = state.t;
+  const value = cashOutPrice(slip);
+  const plus = plusMember(q.wallet);
+  return el('div', { class: `cashout${value == null ? ' off' : ''}` }, [
+    el('button', { class: 'cashout-btn', type: 'button', disabled: value == null ? '' : null, onclick: () => doCashOut(slip, value) }, [
+      el('span', { text: t('cashOut') }),
+      el('strong', { class: 'num', text: value == null ? t('cashOutPaused') : fmtMoney(value, { sign: false }) })
+    ]),
+    value != null && !plus ? el('button', { class: 'q-plus-hint', type: 'button', onclick: () => openPlus(q), text: t('cashOutPlus', { v: fmtMoney(cashOutValue(slip, slip.legs.map(leg => currentOdds(leg)), { keep: PLUS.odds.cashOutKeep }) ?? value, { sign: false }) }) }) : null
+  ]);
+}
 
 // Where a pick's game in play stands, if the game ended right now: the same
 // settlement the slip will use ('won', 'lost', 'void' for a push), 'level'
@@ -2282,7 +2367,7 @@ function slipNowLine(slip, states) {
   const count = x => slip.legs.filter((leg, k) => states[k] === 'live' && now[k] === x).length;
   const parts = [t('slipNowCount', { win: count('won'), lose: count('lost') })];
   if (now.every(Boolean)) {
-    const pay = settleSlip({ legs: slip.legs.map((leg, k) => ({ gameId: leg.gameId, odds: leg.odds, result: now[k] })), sizes: slip.sizes, stake: slip.stake }).net;
+    const pay = settleSlip({ legs: slip.legs.map((leg, k) => ({ gameId: leg.gameId, odds: leg.odds, result: now[k] })), sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0 }).net;
     parts.push(pay > 0 ? t('slipNowPays', { v: fmtMoney(pay, { sign: false }) }) : t('slipNowNothing'));
   }
   return el('p', { class: 'slip-now' }, [el('span', { class: 'live-dot', text: t('tagLive') }), document.createTextNode(` ${parts.join(' · ')}`)]);
@@ -2351,7 +2436,7 @@ function savedSlipCard(slip) {
   const n = slip.legs.length;
   const now = Date.now();
   const settled = slip.status === 'settled';
-  const states = slip.legs.map(leg => legState(leg, now));
+  const states = slip.legs.map(leg => (slip.cashedOut && !leg.result ? 'cashed' : legState(leg, now)));
   const decided = states.filter(st => ['won', 'lost', 'void'].includes(st)).length;
   const profit = settled ? slip.payout - slip.cost : null;
   const range = settled ? null : slipRange(slip);
@@ -2359,7 +2444,7 @@ function savedSlipCard(slip) {
   const dead = !settled && range.most <= 0;
   const mode = slip.mode === 'system' ? slip.sizes.map(k => sizeName(k, n)).join('、') : t(`slipMode_${slip.mode}`);
   const pill = settled
-    ? el('span', { class: `slip-pill ${profit > 0 ? 'won' : profit < 0 ? 'lost' : ''}`, text: slip.payout > 0 ? t('slipPaid', { v: fmtMoney(slip.payout, { sign: false }) }) : t('slipLost') })
+    ? el('span', { class: `slip-pill ${slip.cashedOut ? 'cashed' : profit > 0 ? 'won' : profit < 0 ? 'lost' : ''}`, text: slip.cashedOut ? t('slipCashed', { v: fmtMoney(slip.payout, { sign: false }) }) : slip.payout > 0 ? t('slipPaid', { v: fmtMoney(slip.payout, { sign: false }) }) : t('slipLost') })
     : dead
       ? el('span', { class: 'slip-pill lost', text: t('slipDead') })
       : el('span', { class: `slip-pill ${states.includes('live') ? 'live' : 'open'}`, text: states.includes('live') ? t('slipLiveNow') : t('slipOpen') });
@@ -2402,6 +2487,8 @@ function savedSlipCard(slip) {
           decided && range.locked > 0 ? payCell(t('slipLocked'), fmtMoney(range.locked, { sign: false }), 'back-high') : null,
           payCell(decided ? t('slipMost') : t('payAll'), fmtMoney(range.most, { sign: false }), dead ? 'back-low' : '')
         ]),
+    slip.boost && boostRate(Math.max(...slip.sizes), slip.boost) > 0 ? el('p', { class: 'saved-boost', text: t('slipBoosted', { v: `+${Math.round(boostRate(Math.max(...slip.sizes), slip.boost) * 100)}%` }) }) : null,
+    settled || dead ? null : cashOutRow(slip),
     slipInsight(slip)
   ]);
 }
@@ -3473,7 +3560,7 @@ function homeCtx() {
     renderParlay();
     showTab('slip');
   };
-  return { state, q, el, fmtMoney, fmtOdds, fmtTime, pickTitle, gameSeries, matchupText, logoImg, leagueImg, toggleLeg, takeParlay, showTab, openGame: id => ((state.wantedGame = id), openWantedGame()), betKeys, track, funds, slipRange };
+  return { state, q, el, fmtMoney, fmtOdds, fmtTime, pickTitle, pickButton, teamName, gameSeries, matchupText, logoImg, leagueImg, toggleLeg, takeParlay, showTab, openGame: id => ((state.wantedGame = id), openWantedGame()), betKeys, track, funds, slipRange, cashOutPrice, doCashOut, leagueTier, isSoccer, isNeutral };
 }
 statsUi = mountStats({ state, el, svgEl, fmtMoney, fmtInt, fmtPctShort, fmtOdds, fmtTime, sportName: key => (key === 'mixed' ? state.t('sportMixed') : state.t(`sport_${key}`) === `sport_${key}` ? String(key).toUpperCase() : state.t(`sport_${key}`)), youCard, crowdCard, funCard, picksCard, breakdownCard });
 lotteryUi = mountLottery({ state, q, el, fmtMoney, funds, commitAccount, track, getAccount: () => state.account, syncNow, showTickets });

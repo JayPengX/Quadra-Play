@@ -31,21 +31,40 @@ cards, all with the one Quadra balance.
 
 `public/home.js`.
 
-- **The header card:** the Quadra balance, the money in open bets and the
-  most they can pay, and the ways in: games, lottery, scratch cards, history.
-- **Games you follow:** the teams and leagues followed in Quadra Fixtures
-  (the wallet's `follow:match`), their games on the board, soonest first;
-  without follows, a link to follow in Fixtures.
-- **For you:** every pick on the board ranked by Quadra's shared recommender
-  (`rank` in `quadra.mjs`). What's followed in Fixtures weighs most (a
-  followed team as much as the strongest habit, followed leagues and the
-  first sports a little less), then what the person bets on and opens, with
-  decaying weight; each pick's quality comes from the board (its average
-  back per NT$100, the house's tag, closeness to even money, how soon it
-  starts); at most one pick per game, no league filling the list, and a
-  dismissed pick sinks. Team logos on every card.
-- Then the open slips (picks, cost, most to win), the lottery jackpots and
-  what starts soonest.
+Calm on purpose: no banners, no one-tap "hot" parlays, no nags.
+
+- **The balance:** the Quadra balance; with open slips, what's in play and
+  what they'd cash out for right now (or the most they can pay).
+- **焦點賽事 Featured:** up to four games, drawn like the board (logos, the
+  win prices; a tap puts a price on the slip). Ranked by Quadra's shared
+  recommender (`rank` in `quadra.mjs`): what's followed in Quadra Fixtures
+  weighs most (the wallet's `follow:match`), then the teams, leagues and
+  sports bet on and opened; each game's own weight is its league tier
+  (`leagueTier` in `rules.mjs`: MLB, NBA, NFL, NHL, the top soccer leagues
+  and F1 first, thinly traded ones last) and how soon it starts.
+- **你的投注 Your bets:** open slips, each with its cash-out price.
+- **The lottery:** the next draws and their jackpots.
+- **Quadra Plus**, once, for someone who isn't a member.
+
+### Making money the way a real book does
+
+- **The board** opens on the big leagues; with every sport shown, thinly
+  traded games (table tennis, lower tennis tours…) fold behind one row
+  ("其他 N 場").
+- **Parlay boost** (`PARLAY_BOOST` in `odds.mjs`): the winnings of any
+  winning combination of 3+ picks grow by 5% (3), 8%, 12%, 15%, up to 20%
+  (7+); Quadra Plus doubles it. The slip shows the ladder and where the
+  ticket stands. A slip keeps its `boost` (1 or 2) from when it was bought;
+  older slips have none. Even doubled, a parlay keeps most of the house's
+  cut, since every pick carries its own and they multiply.
+- **Cash out** (`lib/cashout.mjs`): an open slip can be sold back. Its price
+  weighs every way the undecided picks can land by the board's current
+  odds (1/odds, so the cut is in it), times what the slip would pay then
+  (tax, cap and boost included), less 5% (2% for Plus). Before a game the
+  pick's own price is used; once it's under way, the same market on the
+  live board (MLB and soccer win, total, run line, team total); no price:
+  suspended. Paid as `payout-<slip>` with kind `cashout`, so a result
+  arriving later on another device can never pay twice.
 
 Notices: a slip settling (won, or not) and a winning lottery ticket, as a
 banner on screen or a system notice when allowed.

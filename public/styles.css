@@ -1129,11 +1129,9 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .account-slot { flex: none; min-width: 0; }
 .mobile-bar .account-slot .q-account { min-height: 34px; font-size: 13px; }
 .home-sub { margin: -4px 0 10px; color: var(--text-muted); font-size: 0.82rem; }
-.home-pick { padding-right: 30px; }
 .home-teams { display: grid; gap: 6px; }
 .home-teams > span { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 650; }
 .home-teams > span > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.home-lotto { border-top: 3px solid var(--lotto); }
 
 .lotto-seg { display: flex; width: 100%; margin-bottom: 14px; }
 .lotto-seg button { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
@@ -1265,37 +1263,10 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .lotto-card .lotto-quick { min-height: 34px; background: color-mix(in srgb, var(--lotto) 12%, transparent); color: var(--lotto); border: 0; }
 
 /* ---- Home: the header card, follows, picks, slips ---- */
-.play-hero { position: relative; overflow: hidden; margin: 4px 0 18px; padding: 18px 18px 14px; border-radius: 24px; color: #fff; background: radial-gradient(120% 90% at 100% 0%, #60a5fa 0%, transparent 55%), linear-gradient(145deg, #1d4ed8, #1e3a8a); box-shadow: 0 18px 40px -20px rgba(30, 58, 138, 0.7); }
-.play-hero::after { content: ''; position: absolute; right: -40px; bottom: -60px; width: 200px; height: 200px; border-radius: 50%; background: rgba(255,255,255,.07); }
-.hero-brand { display: flex; align-items: center; gap: 10px; }
-.hero-brand img { border-radius: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
-.hero-kicker { margin: 0; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.22em; opacity: 0.75; }
-.hero-brand h2 { margin: 0; font-size: 1.15rem; font-weight: 850; }
-.hero-label { margin: 16px 0 0; font-size: 0.8rem; opacity: 0.8; }
-.hero-balance { margin: 2px 0 0; font-size: 2.1rem; font-weight: 850; letter-spacing: -0.02em; line-height: 1.1; }
-.hero-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
-.hero-stats div { display: grid; gap: 2px; padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,.12); }
-.hero-stats small { font-size: 0.72rem; opacity: 0.8; }
-.hero-stats strong { font-size: 0.95rem; }
-.hero-actions { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px; }
-.hero-action { display: grid; justify-items: center; gap: 4px; padding: 10px 4px 8px; border: 0; border-radius: 14px; background: rgba(255,255,255,.14); color: #fff; font: inherit; font-size: 0.78rem; font-weight: 750; cursor: pointer; }
-.hero-action:active { transform: scale(0.97); }
-.hero-icon svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; display: block; }
-.home-nudge { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 16px; margin: 0 0 18px; border-radius: 16px; border: 1px dashed color-mix(in srgb, #ea580c 45%, transparent); background: color-mix(in srgb, #ea580c 7%, var(--surface)); color: var(--text-primary); text-decoration: none; font-size: 0.86rem; }
-.home-nudge strong { color: #c2410c; white-space: nowrap; }
 .pick-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .pick-head .q-rec-why { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pick-logos { display: inline-flex; flex: none; }
 .pick-logos > * + * { margin-left: -6px; }
-.home-game.mine { box-shadow: inset 0 3px 0 #ea580c, var(--q-shadow-sm); }
-.home-lotto .lotto-emblem { width: 24px; height: 24px; font-size: 0.72rem; }
-.home-slips { display: grid; gap: 8px; }
-.home-slip { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border-radius: 16px; border: 1px solid var(--border); background: var(--surface); color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
-.hs-main { display: grid; gap: 2px; min-width: 0; }
-.hs-main strong { font-size: 0.92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hs-main small, .hs-money small { color: var(--text-secondary); font-size: 0.76rem; }
-.hs-money { display: grid; justify-items: end; flex: none; }
-.hs-money strong { color: var(--accent); font-variant-numeric: tabular-nums; }
 
 /* The 彩券 tab's way to the tickets (they live in 紀錄). */
 .lotto-mine-link { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 16px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); box-shadow: var(--shadow-sm); color: inherit; font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
@@ -1560,14 +1531,78 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .lt-card.out-up { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); font-weight: 800; }
 .lt-card.out-even { color: var(--text-primary); font-weight: 800; }
 /* 熱門串關 */
-.hot-parlay { display: grid; gap: 8px; align-content: start; text-align: left; background: radial-gradient(120% 90% at 100% 0%, #fb7185 0%, transparent 55%), linear-gradient(150deg, #dc2626, #7c2d12); color: #fff; border: 0; }
-.hot-parlay .q-rec-why { color: #fde68a; font-weight: 800; }
-.hot-legs { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 0.84rem; }
-.hot-legs li { display: flex; justify-content: space-between; gap: 8px; }
-.hot-legs span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hot-pay { margin: 2px 0 0; font-size: 1.25rem; font-weight: 900; color: #fde68a; }
-.hot-go { font-size: 0.8rem; font-weight: 800; }
-.upsell { display: flex; align-items: center; gap: 12px; width: 100%; margin: 10px 0 0; padding: 12px 14px; border: 1.5px dashed #f59e0b; border-radius: 14px; background: color-mix(in srgb, #f59e0b 10%, var(--surface)); color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.upsell-plus { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: #f59e0b; color: #fff; font-weight: 900; flex: none; }
-.upsell-text { display: grid; gap: 2px; min-width: 0; }
-.upsell-text small { color: #b45309; font-weight: 700; }
+
+/* ---- Home: the balance, featured games, your bets, the lottery ---- */
+.wallet-card { display: grid; gap: 2px; margin: 4px 0 22px; padding: 16px 18px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+.wallet-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.wallet-label { font-size: 0.8rem; color: var(--text-muted); }
+.wallet-plus { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.16em; color: color-mix(in srgb, var(--q-plus-gold, #d9b877) 75%, var(--text-primary)); }
+.wallet-balance { font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; white-space: nowrap; }
+.wallet-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.wallet-stats div { display: grid; gap: 1px; min-width: 0; }
+.wallet-stats small { font-size: 0.74rem; color: var(--text-muted); }
+.wallet-stats strong { font-size: 0.96rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-block { margin: 0 0 24px; }
+.home-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; margin: 0 2px 10px; }
+.home-head h2 { margin: 0; font-size: 1.12rem; font-weight: 800; letter-spacing: -0.01em; }
+.home-sub { margin: 2px 0 0; color: var(--text-muted); font-size: 0.78rem; }
+.home-link { flex: none; border: 0; background: none; padding: 4px 0; font: inherit; font-size: 0.84rem; font-weight: 650; color: var(--accent); cursor: pointer; white-space: nowrap; }
+.features { display: grid; gap: 10px; }
+.feature { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; }
+.feature-top { display: flex; align-items: center; gap: 8px; width: 100%; padding: 11px 14px 4px; border: 0; background: none; font: inherit; font-size: 0.76rem; color: var(--text-muted); text-align: left; cursor: pointer; }
+.feature-series { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feature-tag { flex: none; padding: 1px 7px; border-radius: 999px; font-size: 0.68rem; font-weight: 700; color: var(--accent); background: var(--accent-wash); }
+.feature-time { flex: none; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.feature-rows { display: grid; padding: 2px 14px 8px; }
+.feature-row { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 5px 0; }
+.feature-row + .feature-row { border-top: 1px solid var(--border); }
+.feature-team { flex: 1; min-width: 0; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feature-draw { display: grid; place-items: center; width: 30px; height: 30px; flex: none; color: var(--text-muted); font-weight: 800; }
+.feature-row .pick { flex: none; min-width: 74px; }
+.feature-more { display: block; width: 100%; padding: 9px 14px; border: 0; border-top: 1px solid var(--border); background: var(--surface-raised); font: inherit; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); text-align: left; cursor: pointer; }
+.bet-rows { display: grid; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-sm); overflow: hidden; }
+.bet-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 14px; }
+.bet-row + .bet-row { border-top: 1px solid var(--border); }
+.bet-main { display: grid; gap: 2px; flex: 1; min-width: 0; padding: 0; border: 0; background: none; font: inherit; text-align: left; color: var(--text-primary); cursor: pointer; }
+.bet-main strong { font-size: 0.92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bet-main small { font-size: 0.76rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bet-cash { display: grid; justify-items: end; gap: 0; flex: none; min-width: 84px; padding: 6px 10px; border: 1px solid color-mix(in srgb, var(--good) 45%, var(--border)); border-radius: 12px; background: var(--good-wash); font: inherit; color: var(--good); cursor: pointer; }
+.bet-cash small { font-size: 0.68rem; font-weight: 700; }
+.bet-cash strong { font-size: 0.9rem; white-space: nowrap; }
+.bet-cash.off { border-color: var(--border); background: var(--surface-sunken); color: var(--text-muted); cursor: default; }
+.jackpots { display: grid; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-sm); overflow: hidden; }
+.jackpot { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 12px 14px; border: 0; background: none; font: inherit; text-align: left; color: var(--text-primary); cursor: pointer; }
+.jackpot + .jackpot { border-top: 1px solid var(--border); }
+.jackpot-what { display: grid; gap: 1px; min-width: 0; }
+.jackpot-name { font-size: 0.92rem; font-weight: 700; color: var(--lotto); }
+.jackpot-what small { font-size: 0.74rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jackpot-amount { flex: none; font-size: 1.08rem; font-weight: 800; white-space: nowrap; }
+
+/* ---- The board: the thin leagues folded behind one row ---- */
+.more-leagues { display: grid; gap: 2px; width: 100%; padding: 14px 16px; border: 1px dashed var(--border); border-radius: var(--radius); background: transparent; font: inherit; text-align: left; color: var(--text-secondary); cursor: pointer; }
+.more-leagues span { font-weight: 700; color: var(--accent); }
+.more-leagues small { font-size: 0.76rem; color: var(--text-muted); }
+
+/* ---- Slip: the parlay boost ---- */
+.boost { display: grid; gap: 8px; margin: 12px 0 0; padding: 12px 14px; border-radius: 14px; background: var(--surface-sunken); }
+.boost-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.boost-head strong { font-size: 0.92rem; }
+.boost.on .boost-head strong { color: var(--good); }
+.boost-head small { font-size: 0.78rem; color: var(--text-muted); }
+.boost-steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin: 0; padding: 0; list-style: none; }
+.boost-steps li { display: grid; justify-items: center; gap: 1px; padding: 6px 2px; border-radius: 10px; background: var(--surface); color: var(--text-muted); font-size: 0.7rem; }
+.boost-steps li b { font-size: 0.8rem; color: var(--text-secondary); }
+.boost-steps li.hit { background: var(--good-wash); color: var(--good); }
+.boost-steps li.hit b { color: var(--good); }
+.boost-plus { margin: 0; font-size: 0.78rem; font-weight: 600; color: color-mix(in srgb, var(--q-plus-gold, #d9b877) 70%, var(--text-primary)); }
+
+/* ---- Saved slips: cash out ---- */
+.cashout { display: grid; gap: 6px; margin: 12px 0 0; }
+.cashout-btn { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; min-height: 46px; padding: 0 16px; border: 0; border-radius: 12px; background: var(--good); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.cashout-btn strong { font-size: 1.02rem; font-variant-numeric: tabular-nums; }
+.cashout.off .cashout-btn { background: var(--surface-sunken); color: var(--text-muted); cursor: default; }
+.cashout .q-plus-hint { justify-self: end; }
+.slip-pill.cashed { background: var(--good-wash); color: var(--good); }
+.seg-cashed { background: var(--axis) !important; opacity: 0.6; }
+.pay-boost strong { color: var(--good); }
+.saved-boost { margin: 8px 2px 0; font-size: 0.78rem; font-weight: 600; color: var(--good); }
