@@ -1540,3 +1540,22 @@ img[src*='thesportsdb'] { object-fit: contain; }
 :root[data-theme='dark'] :is(.lt-state.out-part, .lotto-day-head .out-part, .lt-line.out-part > .num, .lt-card.out-part) { color: #fbbf24; }
 .lt-state.out-even, .lotto-day-head .out-even { color: var(--text-secondary); font-weight: 800; }
 .lotto-summary .out-up { color: var(--good); } .lotto-summary .out-part { color: #b45309; } .lotto-summary .out-none { color: var(--bad-strong); } .lotto-summary .out-even { color: var(--text-secondary); }
+
+/* 我的彩券, simpler: a plain card each, its name and what it cost on the left,
+   one net tag on the right; the day and the whole list the same tag. */
+.lt-group, .lt-group.out-up, .lt-group.out-part, .lt-group.out-none { gap: 10px; padding: 14px; border: 1px solid var(--border); border-left: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: var(--q-shadow-sm, none); }
+.lt-group .lt-head { align-items: center; }
+.lt-title { display: grid; gap: 2px; min-width: 0; }
+.lt-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lt-title small { font-size: 0.74rem; color: var(--text-muted); }
+.lt-net { flex: none; padding: 3px 10px; border-radius: 999px; font-size: 0.86rem; font-weight: 800; background: var(--surface-sunken); color: var(--text-secondary); }
+.lt-net.out-up { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); }
+.lt-net.out-part { background: color-mix(in srgb, #d97706 14%, transparent); color: #b45309; }
+.lt-net.out-none { background: color-mix(in srgb, var(--bad-strong) 10%, transparent); color: var(--bad-strong); }
+@media (prefers-color-scheme: dark) { .lt-net.out-part { color: #fbbf24; } }
+:root[data-theme='dark'] .lt-net.out-part { color: #fbbf24; }
+.lotto-summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.lotto-day-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.lt-card, .lt-card.won { min-width: 56px; border: 0; border-radius: 10px; background: var(--surface-sunken); color: var(--text-muted); }
+.lt-card.out-up { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); font-weight: 800; }
+.lt-card.out-even { color: var(--text-primary); font-weight: 800; }
