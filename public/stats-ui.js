@@ -8,9 +8,9 @@ import { gameName } from './lib/lottery.mjs';
 
 const T = {
   zh: {
-    all: '全部', d30: '30 天', d7: '7 天', net: '下注淨輸贏', lede: '{n} 張 · 下注 {staked} · 拿回 {paid}', hit: '中獎率', back: '每百拿回', open: '進行中', odds: '照賠率 {v}',
+    all: '全部', d30: '30 天', d7: '7 天', total: '總輸贏', split: '運彩 {a} · 彩券 {b}', betting: '運彩', lottoLuck: '彩券：運氣 vs 抽成', lottoLuckNote: '彩券每 NT$100 平均只拿回約 50-60（刮刮樂約 58），剩下的是彩券公司的抽成與稅。', items: '各項目', drawGames: '電腦彩券', bigPrize: '彩券最大獎', net: '下注淨輸贏', lede: '{n} 張 · 下注 {staked} · 拿回 {paid}', hit: '中獎率', back: '每百拿回', open: '進行中', odds: '照賠率 {v}',
     balance: '餘額走勢', balanceSub: 'Play 帳本（下注、派彩、彩券、補助）', low: '最低 {v}', high: '最高 {v}',
-    weeks: '每週輸贏', weeksSub: '已結算的投注單，依結算那週', luck: '運氣 vs 抽成', luckExp: '照賠率應拿回', luckGot: '實際拿回', per100: '每 NT$100',
+    weeks: '每週輸贏', weeksSub: '投注單和彩券，依開獎、結算那週', luck: '運氣 vs 抽成', luckExp: '照賠率應拿回', luckGot: '實際拿回', per100: '每 NT$100',
     luckGood: '比預期好：大約只有 {p}% 的人手氣這麼好。', luckBad: '比預期差：大約只有 {p}% 的人手氣這麼差。', luckNormal: '和預期差不多：這就是長期平均。', luckNote: '運氣會隨著張數越多越平均；抽成不會。',
     calib: '選得準不準', calibSub: '機率區間：實際中的比例（條）vs 照機率該中（線）', picks: '{n} 個選項',
     sports: '各運動', slips: '{n} 張', lottery: '彩券', tickets: '張數', spent: '花費', won: '中獎', lottoBack: '每百拿回', best: '最大一筆：{game} {v}', scratch: '刮刮樂', noLotto: '還沒買過彩券。',
@@ -19,9 +19,9 @@ const T = {
     more: '更多分析', empty: '這段時間沒有投注或彩券。', wait: '還沒有結算的投注單，比賽結束後這裡會有完整分析。'
   },
   en: {
-    all: 'All', d30: '30 days', d7: '7 days', net: 'Betting result', lede: '{n} slips · staked {staked} · back {paid}', hit: 'Hit rate', back: 'Back per 100', open: 'Open', odds: 'Odds say {v}',
+    all: 'All', d30: '30 days', d7: '7 days', total: 'Overall result', split: 'Betting {a} · Lottery {b}', betting: 'Betting', lottoLuck: 'Lottery: luck vs the cut', lottoLuckNote: 'The lottery pays back only about 50-60 per NT$100 (scratch cards about 58); the rest is the lottery’s cut and tax.', items: 'By game', drawGames: 'Draw games', bigPrize: 'Biggest lottery prize', net: 'Betting result', lede: '{n} slips · staked {staked} · back {paid}', hit: 'Hit rate', back: 'Back per 100', open: 'Open', odds: 'Odds say {v}',
     balance: 'Balance', balanceSub: 'Play’s own books (bets, payouts, lottery, grants)', low: 'Low {v}', high: 'High {v}',
-    weeks: 'Week by week', weeksSub: 'Settled slips, by the week they settled', luck: 'Luck vs the cut', luckExp: 'The odds said', luckGot: 'You got back', per100: 'per NT$100',
+    weeks: 'Week by week', weeksSub: 'Slips and lottery tickets, by the week they settled', luck: 'Luck vs the cut', luckExp: 'The odds said', luckGot: 'You got back', per100: 'per NT$100',
     luckGood: 'Better than expected: only about {p}% get a run this good.', luckBad: 'Worse than expected: only about {p}% get a run this bad.', luckNormal: 'About as expected: this is the long-run average.', luckNote: 'Luck evens out over more slips; the cut doesn’t.',
     calib: 'Were the chances right?', calibSub: 'By chance: how often picks won (bar) vs the odds (line)', picks: '{n} picks',
     sports: 'By sport', slips: '{n} slips', lottery: 'Lottery', tickets: 'Tickets', spent: 'Spent', won: 'Won', lottoBack: 'Back per 100', best: 'Biggest: {game} {v}', scratch: 'Scratch cards', noLotto: 'No lottery tickets yet.',
@@ -63,14 +63,25 @@ export function mountStats(ctx) {
     return el('div', { class: 'st-metric' }, [el('div', { class: 'st-ring-box' }, [svg, el('strong', { class: 'num', text })]), el('span', { text: label }), sub ? el('small', { text: sub }) : null]);
   }
 
-  function hero(s) {
+  // The top: betting and the lottery together, then each; the betting
+  // rings under it when there are slips, the lottery's when there are only tickets.
+  function hero(s, l) {
     const hit = s.settled ? s.paidSlips / s.settled : null;
     const expHit = s.settled ? s.expectedPaidSlips / s.settled : null;
-    return el('section', { class: `st-hero ${{ up: 'pos', down: 'neg' }[tone(s.net)] || ''}` }, [
-      el('p', { class: 'st-kicker', text: t('net') }),
-      el('p', { class: 'st-big num', text: fmtMoney(s.net) }),
-      el('p', { class: 'st-lede', text: t('lede', { n: fmtInt(s.placed), staked: money(s.staked), paid: money(s.paid) }) }),
-      el('div', { class: 'st-metrics' }, [
+    const total = (s.placed ? s.net : 0) + (l.n ? l.net : 0);
+    const lede = s.placed && l.n ? t('split', { a: fmtMoney(s.net), b: fmtMoney(l.net) }) : s.placed ? t('lede', { n: fmtInt(s.placed), staked: money(s.staked), paid: money(s.paid) }) : `${t('lottery')} · ${t('tickets')} ${fmtInt(l.n)} · ${t('spent')} ${money(l.spent)}`;
+    return el('section', { class: `st-hero ${{ up: 'pos', down: 'neg' }[tone(total)] || ''}` }, [
+      el('p', { class: 'st-kicker', text: t('total') }),
+      el('p', { class: 'st-big num', text: fmtMoney(total) }),
+      el('p', { class: 'st-lede', text: lede }),
+      !s.placed
+        ? el('div', { class: 'st-metrics' }, [
+            ring(l.n - l.open ? l.wins / (l.n - l.open) : null, null, t('hit'), l.n - l.open ? fmtPctShort(l.wins / (l.n - l.open)) : '–', null),
+            ring(l.back == null ? null : l.back / 200, l.expectedBack == null ? null : l.expectedBack / 200, t('lottoBack'), l.back == null ? '–' : fmtInt(Math.round(l.back)), l.expectedBack == null ? null : t('odds', { v: fmtInt(Math.round(l.expectedBack)) })),
+            el('div', { class: 'st-metric' }, [el('div', { class: 'st-ring-box plain' }, [el('strong', { class: 'num', text: fmtInt(l.open) })]), el('span', { text: t('open') }), el('small', { class: 'num', text: '' })])
+          ])
+        : null,
+      !s.placed ? null : el('div', { class: 'st-metrics' }, [
         ring(hit, expHit, t('hit'), hit == null ? '–' : fmtPctShort(hit), expHit == null ? null : t('odds', { v: fmtPctShort(expHit) })),
         ring(s.settled ? s.back / 200 : null, s.settled ? s.expectedBack / 200 : null, t('back'), s.settled ? fmtInt(Math.round(s.back)) : '–', s.settled ? t('odds', { v: fmtInt(Math.round(s.expectedBack)) }) : null),
         el('div', { class: 'st-metric' }, [el('div', { class: 'st-ring-box plain' }, [el('strong', { class: 'num', text: fmtInt(s.open) })]), el('span', { text: t('open') }), el('small', { class: 'num', text: money(s.openStake) })])
@@ -115,8 +126,10 @@ export function mountStats(ctx) {
   }
 
   // Week by week: a bar each, up green, down red.
-  function weeksCard(s) {
-    const weeks = s.weeks.slice(0, 12).reverse();
+  function weeksCard(s, l) {
+    const byWeek = new Map();
+    for (const w of [...s.weeks, ...l.weeks]) byWeek.set(w.week, { week: w.week, net: (byWeek.get(w.week)?.net || 0) + w.net });
+    const weeks = [...byWeek.values()].sort((a, b) => b.week.localeCompare(a.week)).slice(0, 12).reverse();
     if (weeks.length < 2) return null;
     const top = Math.max(1, ...weeks.map(w => Math.abs(w.net)));
     return card(
@@ -167,6 +180,28 @@ export function mountStats(ctx) {
     );
   }
 
+  // The lottery's own: what the games pay back on average against what came back.
+  function lottoLuckCard(l) {
+    if (l.back == null || l.expectedBack == null) return null;
+    const max = Math.max(200, Math.ceil(l.back / 50) * 50);
+    const pos = v => `${Math.max(0, Math.min(100, (v / max) * 100)).toFixed(1)}%`;
+    return card(
+      t('lottoLuck'),
+      null,
+      el('div', { class: 'st-luck' }, [
+        el('div', {}, [el('small', { text: t('luckExp') }), el('strong', { class: 'num', text: fmtInt(Math.round(l.expectedBack)) }), el('small', { text: t('per100') })]),
+        el('div', { class: tone(l.back - l.expectedBack) }, [el('small', { text: t('luckGot') }), el('strong', { class: 'num', text: fmtInt(Math.round(l.back)) }), el('small', { text: t('per100') })])
+      ]),
+      el('div', { class: 'st-meter' }, [
+        el('span', { class: `st-meter-fill ${tone(l.back - l.expectedBack)}`, style: `width:${pos(l.back)}` }),
+        el('span', { class: 'st-meter-mark exp', style: `left:${pos(l.expectedBack)}` }),
+        el('span', { class: 'st-meter-mark even', style: `left:${pos(100)}` })
+      ]),
+      el('div', { class: 'st-meter-scale num' }, [el('span', { text: '0' }), el('span', { text: '100' }), el('span', { text: String(max) })]),
+      el('p', { class: 'st-note', text: t('lottoLuckNote') })
+    );
+  }
+
   function calibCard(s) {
     const bands = s.bands.filter(b => b.legs);
     if (!bands.length) return null;
@@ -187,19 +222,31 @@ export function mountStats(ctx) {
     );
   }
 
-  function sportsCard(s) {
-    const rows = s.bySport.filter(b => b.slips).sort((a, b) => b.staked - a.staked);
+  function sportsCard(s, l) {
+    const lotto = key => l.byGame.filter(g => (key === 'scratch') === (g.key === 'scratch'));
+    const lottoRow = (key, name) => {
+      const games = lotto(key);
+      const spent = games.reduce((a, g) => a + g.spent, 0);
+      return spent ? { key, name, staked: spent, net: games.reduce((a, g) => a + g.won - g.spent, 0), sub: `${fmtInt(games.reduce((a, g) => a + g.n, 0))} ${lang() === 'en' ? 'tickets' : '張'} · ${money(spent)}` } : null;
+    };
+    const rows = [
+      ...s.bySport.filter(b => b.slips).map(b => ({ ...b, name: ctx.sportName(b.key), sub: `${t('slips', { n: fmtInt(b.slips) })} · ${money(b.staked)}` })),
+      lottoRow('draw', `🎱 ${t('drawGames')}`),
+      lottoRow('scratch', `🪙 ${t('scratch')}`)
+    ]
+      .filter(Boolean)
+      .sort((a, b) => b.staked - a.staked);
     if (!rows.length) return null;
     const top = Math.max(1, ...rows.map(b => Math.abs(b.net)));
     return card(
-      t('sports'),
+      t('items'),
       null,
       el(
         'div',
         { class: 'st-rows' },
         rows.map(b =>
           el('div', { class: 'st-row' }, [
-            el('div', { class: 'st-row-label' }, [el('strong', { text: ctx.sportName(b.key) }), el('small', { text: `${t('slips', { n: fmtInt(b.slips) })} · ${money(b.staked)}` })]),
+            el('div', { class: 'st-row-label' }, [el('strong', { text: b.name }), el('small', { text: b.sub })]),
             el('div', { class: 'st-diverge' }, [el('span', { class: `st-dv ${tone(b.net)}`, style: `width:${((Math.abs(b.net) / top) * 50).toFixed(1)}%` })]),
             el('strong', { class: `st-row-val num ${tone(b.net)}`, text: fmtMoney(b.net) })
           ])
@@ -269,8 +316,10 @@ export function mountStats(ctx) {
 
   const tile = (label, value, cls = '', sub = '') => el('div', { class: 'st-tile' }, [el('span', { text: label }), el('strong', { class: `num ${cls}`, text: value }), sub ? el('small', { text: sub }) : null]);
 
-  function recordsCard(s) {
-    if (!s.settled) return null;
+  function recordsCard(s, l) {
+    if (!s.settled && !l.best) return null;
+    if (!s.settled)
+      return card(t('records'), null, el('div', { class: 'st-tiles' }, [tile(`🎟️ ${t('bigPrize')}`, money(l.best.prize), 'up', l.best.card ? t('scratch') : gameName(l.best.game, lang())), tile(`🏆 ${t('won')}`, `${fmtInt(l.wins)} / ${fmtInt(l.n - l.open)}`)]));
     const r = s.records;
     const when = slip => fmtTime(slip.t).split(' ')[0];
     const now = s.streak.current > 0 ? [t('winN', { n: s.streak.current }), 'up'] : s.streak.current < 0 ? [t('lossN', { n: -s.streak.current }), 'down'] : [t('none'), ''];
@@ -285,8 +334,9 @@ export function mountStats(ctx) {
         tile(`💸 ${t('worstSlip')}`, r.worst && r.worst.profit < 0 ? fmtMoney(r.worst.profit) : t('none'), 'down', r.worst && r.worst.profit < 0 ? when(r.worst.slip) : ''),
         tile(`🚀 ${t('longest')}`, r.longest ? `×${fmtOdds(r.longest.odds)}` : t('none'), '', r.longest ? when(r.longest.slip) : ''),
         tile(`🎟️ ${t('avg')}`, money(s.avgCost)),
-        tile(`🧾 ${t('tax')}`, money(s.tax))
-      ])
+        tile(`🧾 ${t('tax')}`, money(s.tax)),
+        l.best ? tile(`🎟️ ${t('bigPrize')}`, money(l.best.prize), 'up', l.best.card ? t('scratch') : gameName(l.best.game, lang())) : null
+      ].filter(Boolean))
     );
   }
 
@@ -319,10 +369,10 @@ export function mountStats(ctx) {
       kids.push(el('p', { class: 'st-empty', text: t('empty') }));
       return root.replaceChildren(...kids);
     }
-    if (s.placed) kids.push(hero(s));
+    if (s.placed || l.n) kids.push(hero(s, l));
     kids.push(balanceCard(full.timeline, since));
-    if (s.placed && !s.settled) kids.push(el('p', { class: 'st-empty', text: t('wait') }));
-    kids.push(weeksCard(s), luckCard(s), calibCard(s), sportsCard(s), lotteryCard(l), flowCard(m, l), recordsCard(s));
+    if (s.placed && !s.settled && !l.n) kids.push(el('p', { class: 'st-empty', text: t('wait') }));
+    kids.push(weeksCard(s, l), sportsCard(s, l), luckCard(s), lottoLuckCard(l), lotteryCard(l), calibCard(s), flowCard(m, l), recordsCard(s, l));
     if (s.settled) kids.push(more([ctx.youCard(), ctx.crowdCard(s), ctx.funCard(), ctx.picksCard(s), ctx.breakdownCard(s)]));
     root.replaceChildren(...kids.filter(Boolean));
   }
