@@ -106,7 +106,6 @@ export function renderHome(ctx) {
     if (followedKeys.has(k)) return T.why.follow;
     const kind = k.split(':')[0];
     if (T.why[kind]) return T.why[kind];
-    if (p.rec) return T.why[p.rec.tag];
     return (Date.parse(p.bet.start) - now) / 3_600_000 < 6 ? T.why.soon : T.why.new;
   };
   const gameOf = id => state.data?.games.find(g => g.id === id);

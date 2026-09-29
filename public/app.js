@@ -842,15 +842,6 @@ function gameMore(game, bets) {
   const t = state.t;
   const kinds = SECTIONS.filter(sec => sec.kind !== 'ml' && bets.some(b => b.kind === sec.kind));
   const current = kinds.find(sec => sec.kind === state.marketTab.get(game.id)) ?? kinds[0];
-  const sourceKey = game.live ? (game.live.pmWin != null ? 'liveSourcePm' : 'liveSource') : game.book === 'kambi' ? 'sourceKambi' : game.draftKings && game.polymarket ? 'sourceBoth' : game.draftKings ? 'sourceDk' : 'sourcePm';
-  const thin = sourceKey === 'sourcePm' && (game.polymarketLiquidity ?? 0) < THIN_LIQUIDITY;
-  const notes = [];
-  if (game.live) notes.push(t(game.sport === 'mlb' ? 'liveNote' : 'liveNoteSoccer'));
-  if (game.book === 'kambi') notes.push(t('kambiNote'));
-  if (isSoccer(game.sport)) notes.push(t('soccerUnverified'));
-  if (['football', 'basketball', 'hockey'].includes(familyOf(game.sport))) notes.push(t('otherSportNote'));
-  if (game.sport !== 'mlb' && game.total && game.total.line % 1 === 0) notes.push(t('wholeLine', { line: game.total.line, a: game.total.line - 0.5, b: game.total.line + 0.5 }));
-  if (thin) notes.push(t('thin'));
   const tabs =
     kinds.length > 1
       ? el('div', { class: 'segmented market-tabs', role: 'tablist', 'aria-label': t('moreMarkets') },
@@ -878,10 +869,7 @@ function gameMore(game, bets) {
   return el('div', { class: 'game-more' }, [
     tabs,
     current ? marketPanel(game, current, bets.filter(b => b.kind === current.kind)) : null,
-    el('div', { class: 'game-foot' }, [
-      game.live ? null : pinButton(game),
-      el('details', { class: 'info' }, [el('summary', { text: t('notesTitle') }), el('p', { text: `${fmtTime(game.startUtc)} · ${t(sourceKey)}` }), ...notes.map(text => el('p', { text }))])
-    ])
+    game.live ? null : el('div', { class: 'game-foot' }, [pinButton(game)])
   ]);
 }
 
@@ -894,7 +882,6 @@ function lineRow(label, pair, { posted = false, main = false } = {}) {
   return el('div', { class: `line-row ${posted ? 'posted' : ''} ${main ? 'main' : ''}` }, [
     el('span', { class: 'line-label' }, [
       el('strong', { text: label }),
-      posted ? el('small', { class: 'line-tag', text: t(main ? 'lineMain' : 'lineLottery') }) : null
     ]),
     ...pair.map(b => (b ? pickButton(b, '') : el('span')))
   ]);
@@ -948,10 +935,7 @@ function marketPanel(game, section, bets) {
       el('div', { class: 'market-picks' }, list.map(b => pickButton(b, b.chip ?? b.shortLabel)))
     ]);
   }
-  const extra = bets.some(b => b.posted === false);
-  // Only MLB's lines were compared with the lottery; elsewhere the main line is DraftKings'.
-  const note = game.sport === 'mlb' ? (extra ? t('linesNote') : null) : ['total', 'runline', 'teamtotal'].includes(section.kind) ? t('linesNoteOther') : null;
-  return el('div', { class: `market-panel ${section.kind}` }, [...body, note ? el('p', { class: 'note', text: note }) : null]);
+  return el('div', { class: `market-panel ${section.kind}` }, body);
 }
 
 // Kinds laid out as tables of lines: over/under, and one team giving a line.
@@ -993,15 +977,12 @@ function fmtPctShort(p) {
   return p >= 0.1 ? `${Math.round(p * 100)}%` : `${(p * 100).toFixed(1)}%`;
 }
 
+// A pick's tooltip: what it is, its odds, and whether the house limits it.
 function pickTitle(bet) {
   const t = state.t;
-  const err = ODDS_ERROR[bet.errKey] ?? ODDS_ERROR.extra;
   return [
     bet.label,
-    `${t('legendOdds')} ${fmtOdds(effectiveOdds(bet))} ±${fmtOdds(bet.estOdds * err.rel)}${err.checked ? '' : '?'}`,
-    bet.cut ? `${t('takeTitle')} ${fmtPct(1 - 1 / bet.cut)}` : null,
-    `${t('colFair')} ${fmtPct(bet.fairChance)}${bet.fairMargin ? ` ${fmtMarginPts(bet.fairMargin)}${bet.typicalMargin ? '*' : ''}` : ''}`,
-    `${t('legendBack')} ${fmtMoney(betReturn(bet), { sign: false })} ±${Math.round(betBackMargin(bet))}`,
+    `${t('legendOdds')} ${fmtOdds(effectiveOdds(bet))}`,
     bet.lock ? t(`lock_${bet.lock}`) : bet.minLegs > 1 ? t('minLegsNote', { n: bet.minLegs }) : null
   ]
     .filter(Boolean)
@@ -1009,18 +990,14 @@ function pickTitle(bet) {
 }
 
 // A pick: tap to put it on the bet slip (or take it off). The big number is
-// the estimated lottery odds; its colour, whether it pays back more or less
-// than most (the numbers behind it are in its tooltip and in 說明). A locked
+// the odds, like any sportsbook's board. A locked
 // pick (the house doesn't sell it) shows a lock; one sold only in parlays
 // shows its minimum (2關, 3關).
 function pickButton(bet, name) {
   const t = state.t;
-  const back = betReturn(bet);
   const inSlip = state.parlay.includes(bet.id);
   const locked = Boolean(bet.lock);
-  const rec = !locked && (bet.live ? state.liveRecs : state.recs)?.get(bet.id);
   const body = [
-    rec ? el('span', { class: `rec rec-${rec.tag}`, text: t(`rec_${rec.tag}`) }) : null,
     name ? el('span', { class: 'pick-name', text: name }) : null,
     el('span', { class: 'pick-odds' }, [
       locked ? el('span', { class: 'lock', 'aria-hidden': 'true', text: '🔒' }) : document.createTextNode(fmtOdds(effectiveOdds(bet))),
@@ -1028,9 +1005,9 @@ function pickButton(bet, name) {
     ])
   ];
   return el('button', {
-    class: `pick ${locked ? 'locked' : backClass(back)} ${rec ? 'has-rec' : ''} ${inSlip ? 'in-slip' : ''}`,
+    class: `pick ${locked ? 'locked' : ''} ${inSlip ? 'in-slip' : ''}`,
     type: 'button',
-    title: [rec ? t(`recWhy_${rec.tag}`, { back: Math.round(rec.back), beats: Math.round(rec.beats * 100) }) : null, pickTitle(bet)].filter(Boolean).join('\n'),
+    title: pickTitle(bet),
     disabled: locked ? true : null,
     'aria-pressed': String(inSlip),
     'aria-label': `${bet.label} ${fmtOdds(effectiveOdds(bet))} · ${locked ? t(`lock_${bet.lock}`) : inSlip ? t('removeLeg') : t('addLeg')}`,
@@ -1185,7 +1162,7 @@ function entryRow(bet, i, picture, sub) {
     el('span', { class: 'entry-rank', text: String(i + 1) }),
     picture,
     // sub === null: the name alone (no chance, no second line).
-    el('span', { class: 'entry-name' }, [document.createTextNode(bet.shortLabel), sub === null ? null : el('small', { text: [fmtPctShort(bet.fairChance), sub].filter(Boolean).join(' · ') })]),
+    el('span', { class: 'entry-name' }, [document.createTextNode(bet.shortLabel), sub === null ? null : sub ? el('small', { text: sub }) : null]),
     el('button', {
       class: `entry-odds ${inSlip ? 'in-slip' : ''}`,
       type: 'button',
@@ -1197,7 +1174,8 @@ function entryRow(bet, i, picture, sub) {
   ]);
 }
 
-function board({ emblem, title, sub, bets, rows, id, notes = [], shown = Infinity, tabs = null, lead = null }) {
+// A board of prices (F1, championships): its picks and nothing else.
+function board({ emblem, title, sub, bets, rows, id, shown = Infinity, tabs = null, lead = null }) {
   const t = state.t;
   const entries = bets.map((b, i) => rows(b, i));
   const rest = entries.slice(shown);
@@ -1209,8 +1187,7 @@ function board({ emblem, title, sub, bets, rows, id, notes = [], shown = Infinit
     tabs ? el('div', { class: 'board-tabs' }, tabs) : null,
     lead ? el('p', { class: 'board-lead', text: lead }) : null,
     el('div', { class: 'entries' }, entries.slice(0, shown)),
-    rest.length ? el('details', { class: 'board-more' }, [el('summary', { text: t('futureMore', { n: rest.length }) }), el('div', { class: 'entries' }, rest)]) : null,
-    notes.length ? el('div', { class: 'board-foot' }, [el('details', { class: 'info' }, [el('summary', { text: t('notesTitle') }), ...notes.map(text => el('p', { text }))])]) : null
+    rest.length ? el('details', { class: 'board-more' }, [el('summary', { text: t('futureMore', { n: rest.length }) }), el('div', { class: 'entries' }, rest)]) : null
   ]);
 }
 
@@ -1221,17 +1198,12 @@ function renderFutures() {
   $('futures-list').replaceChildren(
     ...[...markets.values()].map(bets => {
       const { market, matchup, sport } = bets[0];
-      const notes = [];
-      if (sport === 'nba') notes.push(t('futureNbaNote'));
-      if (sport === 'epl') notes.push(t('futureEplNote'));
-      if (bets[0].errKey === 'futureOther') notes.push(t('futureOtherNote'));
       return board({
         emblem: sport,
         title: matchup,
         sub: `${t('futureSettles')} ${t(`futureSettle_${market}`)}`,
         bets,
         id: `fut|${market}`,
-        notes,
         shown: FUTURES_SHOWN,
         rows: (b, i) => entryRow(b, i, market === 'f1drivers' ? driverBadge({ driverEn: b.teamEn, driver: f1Driver(b.teamEn) }) : market === 'f1constructors' ? constructorBadge(b.teamEn) : logoImg(b.sport, b.teamEn, b.shortLabel))
       });
@@ -1706,15 +1678,8 @@ function renderParlay() {
   ticket.push(placeButton(legs, sizes, cost, errors));
   ticket.push(el('details', { class: 'info' }, [el('summary', { text: t('slipRulesTitle') }), el('p', { text: t('slipRulesNote') })]));
 
-  let results = [];
-  if (sizes.length && !errors.includes('stakeUnit') && cost > 0) {
-    const a = analyzeSlip({ legs: slip, sizes, stake });
-    results = slipAnalysisView(a, legs, {
-      // A new ticket starts a new tally of draws.
-      sig: JSON.stringify([slip, sizes, stake])
-    });
-  }
-  body.replaceChildren(el('div', { class: 'slip has-legs' }, [el('div', { class: 'card ticket' }, ticket), el('div', { class: 'slip-results' }, results)]));
+  // The ticket and what it pays: no analysis beside it.
+  body.replaceChildren(el('div', { class: 'slip has-legs' }, [el('div', { class: 'card ticket' }, ticket)]));
 }
 
 // ---- Slip: what each pick is, what the ticket pays ------------------------------
@@ -2983,7 +2948,6 @@ function renderF1() {
     const on = tabRow.querySelector('[aria-selected="true"]');
     if (on && tabRow.scrollWidth > tabRow.clientWidth) tabRow.scrollLeft = Math.max(0, on.offsetLeft - (tabRow.clientWidth - on.offsetWidth) / 2);
   });
-  const fromHistory = current.flag && list.some(b => b.flagSource === 'history');
   const badge = b => (current.flag ? el('span', { class: 'flag-badge', 'aria-hidden': 'true', text: FLAG_ICON[b.kind] }) : b.kind === 'f1team' ? constructorBadge(b.team) : driverBadge(b));
   const sub = b => (current.flag ? null : b.kind === 'f1team' ? '' : b.kind === 'f1h2h' ? `vs ${b.rivalLabel}` : b.driver.team);
   $('f1-body').replaceChildren(
@@ -2996,7 +2960,6 @@ function renderF1() {
       bets: list,
       id: current.kind,
       shown: current.shown ?? Infinity,
-      notes: [...current.notes.map(k => t(k)), fromHistory ? t('f1FlagsHistory') : null, t('f1CombineNote')].filter(Boolean),
       rows: (b, i) => entryRow(b, i, badge(b), sub(b))
     })
   );
