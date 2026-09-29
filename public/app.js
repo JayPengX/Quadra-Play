@@ -1815,7 +1815,7 @@ async function loadAccount() {
       const stored = await unpack(localStorage.getItem(key));
       if (!isAccount(stored)) continue;
       if (key === ACCOUNT_KEY && !stored.ledger.some(e => e.kind === 'stake' && onPass.has(`odds:${e.id}`))) continue;
-      account = mergeAccounts(account, compactAccount(stored));
+      account = splitOnce(mergeAccounts(account, compactAccount(stored)));
     } catch {}
   }
   return account;
@@ -1943,6 +1943,23 @@ function syncNow() {
 }
 const mergeFirst = remote => (syncChain = syncChain.then(() => mergeRemote(remote)).catch(console.error));
 
+// A one-time repair (2026-09-29): one pass's 單場 purchase of two picks from
+// the same game, saved as one slip before 單場 made a slip per pick, split
+// into two slips of NT$1,000 each. The money's stake entry stays as it was
+// (NT$2,000, under the first slip); only the slips change. Runs on every
+// load and merge, so any copy that still has the old slip is fixed too.
+const SPLIT_ONCE = 'mumi7p13fbc6ea9f';
+function splitOnce(account) {
+  const slip = account?.slips.find(x => x.id === SPLIT_ONCE);
+  if (!slip || slip.legs.length !== 2 || slip.mode !== 'single') return account;
+  const [first, second] = slip.legs;
+  const half = slip.cost / 2;
+  const slips = account.slips.flatMap(x =>
+    x.id !== SPLIT_ONCE ? [x] : [{ ...x, cost: half, legs: [first] }, ...(account.slips.some(y => y.id === `${SPLIT_ONCE}b`) ? [] : [{ ...x, id: `${SPLIT_ONCE}b`, cost: half, legs: [second] }])]
+  );
+  return { ...account, slips };
+}
+
 async function mergeRemote(remote) {
   if (!remote) return;
   const theirs = remote.payload ? await unpack(remote.payload).catch(() => null) : null;
@@ -1955,7 +1972,7 @@ async function mergeRemote(remote) {
     if (isAccount(other)) merged = mergeDistinct(merged, compactAccount(other));
   }
   const wallet = remote.wallet || state.wallet;
-  merged = refundLost(recoverFromWallet(merged, wallet));
+  merged = splitOnce(refundLost(recoverFromWallet(merged, wallet)));
   const have = new Set((wallet?.entries || []).map(e => e.id));
   const entries = poolEntries(merged).filter(e => !have.has(e.id));
   const open = merged.slips.filter(x => x.status === 'open').reduce((sum, x) => sum + x.cost, 0);
@@ -2066,11 +2083,25 @@ function placeButton(legs, sizes, cost, errors) {
       disabled: blocked ? '' : null,
       text: updating ? t('placeUpdating') : short ? t('placeShort', { v: fmtMoney(money, { sign: false }) }) : t('placeSlip', { v: fmtMoney(cost, { sign: false }) }),
       onclick: () => {
-        const slip = { id: newSlipId(), mode: state.slipMode, sizes, stake: state.slipStake, cost, legs: legs.map(legRecord) };
-        const { account, error } = placeSlip(state.account, slip, new Date(), { extra: poolExtra() });
-        if (error) return;
+        // 單場: each pick its own slip (its own bet, its own line in 紀錄),
+        // the stake the same on each; the others, one slip.
+        const records = legs.map(legRecord);
+        const slips =
+          state.slipMode === 'single' && records.length > 1
+            ? records.map(leg => ({ id: newSlipId(), mode: 'single', sizes: [1], stake: state.slipStake, cost: cost / records.length, legs: [leg] }))
+            : [{ id: newSlipId(), mode: state.slipMode, sizes, stake: state.slipStake, cost, legs: records }];
+        if (cost > funds()) return;
+        let account = state.account;
+        const now = new Date();
+        for (const one of slips) {
+          // The whole cost was checked above: each part goes through.
+          const placed = placeSlip(account, one, now, { extra: Infinity });
+          if (placed.error) return;
+          account = placed.account;
+        }
+        const slip = { legs: records };
         state.parlay = [];
-        state.freshSlips.add(slip.id);
+        for (const one of slips) state.freshSlips.add(one.id);
         commitAccount(account);
         // Synced at once, not in a moment: going straight back to Quadra
         // Fixtures should find the new slip there.
