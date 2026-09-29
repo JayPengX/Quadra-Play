@@ -33,7 +33,6 @@
   --hero: linear-gradient(135deg, #1e3a8a 0%, #2563eb 55%, #0ea5e9 100%);
   --radius: var(--q-radius);
   --radius-sm: var(--q-radius-sm);
-  --bottom-nav: 0px;
   font-family: var(--q-font);
 }
 @media (prefers-color-scheme: dark) {
@@ -88,60 +87,8 @@ h1, h2, h3, p { margin: 0; }
 .back-high { color: var(--good); font-weight: 600; }
 .note { font-size: 0.8rem; color: var(--text-muted); margin-top: 8px; }
 
-/* ---- App bar and tabs ------------------------------------------------------ */
-.appbar {
-  position: sticky; top: 0; z-index: 10;
-  background: var(--bar-bg); backdrop-filter: saturate(1.6) blur(14px); -webkit-backdrop-filter: saturate(1.6) blur(14px);
-  border-bottom: 1px solid var(--border);
-}
-.appbar-inner { max-width: 1120px; margin: 0 auto; padding: 8px 16px; display: flex; align-items: center; gap: 12px; }
-.brand { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 auto; }
-.brand-logo { width: 36px; height: 36px; border-radius: 10px; flex: none; box-shadow: var(--shadow-sm); }
-.brand-text { min-width: 0; }
-h1 { font-size: 1.1rem; letter-spacing: -0.01em; line-height: 1.2; }
-.status { font-size: 0.72rem; color: var(--text-muted); overflow-wrap: anywhere; }
-.icon-button {
-  flex: none; width: 38px; height: 38px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface);
-  display: grid; place-items: center; box-shadow: var(--shadow-sm); padding: 0;
-}
-.icon-button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-.icon-button:disabled svg { animation: spin 0.9s linear infinite; }
-/* Hover colours only where there's a mouse: on a phone a tapped button
-   keeps :hover until the next tap, so it stayed in its hover colour (the
-   light blue of the dark theme). */
-@media (hover: hover) { .icon-button:hover { background: var(--accent-wash); } }
-
-.tabs { display: flex; gap: 2px; padding: 3px; border-radius: 14px; background: var(--surface-sunken); }
-.tab {
-  position: relative; display: flex; align-items: center; gap: 6px; border: 0; background: none; color: var(--text-secondary);
-  padding: 7px 14px; border-radius: 11px; font-size: 0.9rem; font-weight: 600; white-space: nowrap; transition: background 0.15s, color 0.15s;
-}
-.tab svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
-@media (hover: hover) { .tab:hover { color: var(--text-primary); } }
-.tab[aria-selected='true'] { background: var(--surface); color: var(--accent); box-shadow: var(--shadow-sm); }
-.tab-badge {
-  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--bad-strong); color: #fff;
-  font-size: 0.7rem; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums;
-}
-
-/* Phones: tabs become a bottom navigation bar. */
-@media (max-width: 720px) {
-  :root { --bottom-nav: calc(62px + max(env(safe-area-inset-bottom), var(--q-safe-bottom, 0px))); }
-  /* A backdrop filter would make the app bar the fixed tab bar's container. */
-  .appbar { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--surface); }
-  .tabs {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; border-radius: 0; padding: 6px 8px calc(6px + max(env(safe-area-inset-bottom), var(--q-safe-bottom, 0px)));
-    background: var(--bar-bg); backdrop-filter: saturate(1.6) blur(14px); -webkit-backdrop-filter: saturate(1.6) blur(14px);
-    border-top: 1px solid var(--border);
-  }
-  .tab { flex: 1 1 0; flex-direction: column; gap: 2px; padding: 6px 2px; font-size: 0.7rem; }
-  .tab svg { width: 22px; height: 22px; }
-  .tab[aria-selected='true'] { background: var(--accent-wash); box-shadow: none; }
-  .tab-badge { position: absolute; top: 2px; left: calc(50% + 6px); }
-}
-
 /* ---- Page --------------------------------------------------------------------- */
-.page { max-width: 1120px; margin: 0 auto; padding: 12px 16px calc(40px + var(--bottom-nav)); }
+.page { max-width: var(--q-page-max); margin: 0 auto; padding: 10px 16px calc(40px + var(--q-nav)); }
 /* The "education only, 18+" note: a quiet card at the top of 說明 and a
    grey footnote under the games (no longer a yellow tile over them). */
 .notice-card { margin: 0 0 14px; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--border); color: var(--text-secondary); font-size: 0.84rem; line-height: 1.55; }
@@ -480,7 +427,7 @@ button.pick:active { transform: scale(0.98); }
 /* The loading screen is the Quadra one (quadra.css). */
 :root[data-theme='dark'] .loading { background: #000; }
 @keyframes spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .spinner, .icon-button:disabled svg { animation-duration: 3s; } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
 
 /* ---- Ticket analysis ------------------------------------------------------------ */
 .split-bar { display: flex; height: 16px; border-radius: 8px; overflow: hidden; background: var(--surface-sunken); }
@@ -679,19 +626,6 @@ body.searching #live, body.searching #f1, body.searching #futures, body.searchin
 .logo-fallback.logo-sm, .logo-fallback.logo-xs { font-size: 0.6rem; }
 .bar-item > .badge { width: 28px; height: 28px; }
 
-/* Phones: no app header; its controls sit in a slim row at the top. */
-.mobile-bar { display: none; }
-@media (max-width: 720px) {
-  /* The tab bar lives in the app bar (fixed to the bottom on phones), so
-     only the bar's own look and the brand go, never the bar itself. */
-  .appbar { position: static; background: none; border: 0; }
-  .appbar-inner { padding: 0; }
-  .brand { display: none; }
-  .page { padding-top: calc(10px + var(--q-top, env(safe-area-inset-top))); }
-  .mobile-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-  .mobile-bar .status { flex: 1 1 auto; font-size: 0.74rem; }
-  .mobile-bar .icon-button { width: 34px; height: 34px; border-radius: 10px; }
-}
 
 /* ---- Bet slip: grade, rarity ladder, try a draw ---- */
 .grade-card { display: flex; gap: 16px; align-items: center; }
@@ -1126,8 +1060,6 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .arcade-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 4px 0 6px; font-size: 1rem; }
 
 /* ---- Quadra v2: account chip, home and the lottery ---- */
-.account-slot { flex: none; min-width: 0; }
-.mobile-bar .account-slot .q-account { min-height: 34px; font-size: 13px; }
 .home-sub { margin: -4px 0 10px; color: var(--text-muted); font-size: 0.82rem; }
 .home-teams { display: grid; gap: 6px; }
 .home-teams > span { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 650; }
@@ -1384,8 +1316,6 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .st-fold[open] > summary::after { transform: rotate(90deg); }
 .st-fold > :not(summary) { padding: 0 16px 16px; }
 
-/* Help, in the top-right like every Quadra app. */
-.help-button { display: inline-grid; place-items: center; font-weight: 800; font-size: 16px; text-decoration: none; color: var(--q-text-2); }
 
 /* 已開獎, by day and by draw */
 .lotto-done-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
@@ -1608,7 +1538,7 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .saved-boost { margin: 8px 2px 0; font-size: 0.78rem; font-weight: 600; color: var(--good); }
 
 /* ---- The slip bar: picks at hand on every tab ---- */
-.slip-bar { position: fixed; left: 12px; right: 12px; bottom: calc(var(--bottom-nav, 0px) + 10px); z-index: 55; display: flex; align-items: center; gap: 12px; max-width: 560px; margin: 0 auto; padding: 10px 12px 10px 10px; border: 0; border-radius: 16px; background: var(--q-text); color: var(--q-page); font: inherit; text-align: left; box-shadow: 0 16px 36px -14px rgba(0, 0, 0, 0.55); cursor: pointer; }
+.slip-bar { position: fixed; left: 12px; right: 12px; bottom: calc(var(--q-nav) + 10px); z-index: 55; display: flex; align-items: center; gap: 12px; max-width: 560px; margin: 0 auto; padding: 10px 12px 10px 10px; border: 0; border-radius: 16px; background: var(--q-text); color: var(--q-page); font: inherit; text-align: left; box-shadow: 0 16px 36px -14px rgba(0, 0, 0, 0.55); cursor: pointer; }
 .slip-bar[hidden] { display: none; }
 .slip-bar-count { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border-radius: 10px; background: var(--accent); color: #fff; font-weight: 800; }
 .slip-bar-main { display: grid; gap: 1px; flex: 1; min-width: 0; }

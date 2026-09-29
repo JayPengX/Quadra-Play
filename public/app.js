@@ -83,14 +83,14 @@ import {
   installGate,
   watchUpdates,
   quadraSession,
-  accountButton,
+  tabBar,
+  topActions,
   recordAffinity,
   affinityPatch,
   activityPatch,
   notify,
   schedulePush,
   storedAccount,
-  helpUrl,
   PLUS,
   plusMember,
   openPlus,
@@ -684,8 +684,6 @@ function renderStatic() {
   $('game-search').placeholder = t('searchPlaceholder');
   $('game-search').setAttribute('aria-label', t('searchPlaceholder'));
   $('games-footnote').textContent = t('notice');
-  $('refresh').setAttribute('aria-label', t('refresh'));
-  $('refresh').title = t('refresh');
   $('footer').textContent = t('footer');
   for (const [id, key] of [
     ['games-title', 'gamesTitle'],
@@ -699,7 +697,7 @@ function renderStatic() {
   ])
     $(id).textContent = t(key);
   for (const node of document.querySelectorAll('[data-t]')) node.textContent = t(node.dataset.t);
-  for (const tab of TABS) $(`tab-${tab}`).querySelector('.tab-label').textContent = t(`tab_${tab}`);
+  for (const tab of TABS) tabNav.label(tab, t(`tab_${tab}`));
 }
 
 // One icon per guide group, in order: reading the numbers, the odds math,
@@ -3439,20 +3437,14 @@ function tabAvailable(tab) {
   return true;
 }
 
+const TAB_ICONS = { home: 'home', games: 'calendar', lottery: 'balls', slip: 'ticket', history: 'history' };
+const tabNav = tabBar({ tabs: TABS.map(id => ({ id, label: state.t(`tab_${id}`), icon: TAB_ICONS[id] })), onSelect: (tab, { again }) => !again && showTab(tab) });
 function renderTabs() {
-  const t = state.t;
   if (!tabAvailable(state.tab)) state.tab = 'home';
-  const legs = state.parlay.length;
-  const badge = $('tab-slip').querySelector('.tab-badge');
-  badge.hidden = legs === 0;
-  badge.textContent = String(legs);
-  for (const tab of TABS) {
-    const button = $(`tab-${tab}`);
-    button.hidden = !tabAvailable(tab);
-    button.setAttribute('aria-selected', String(tab === state.tab));
-    button.tabIndex = tab === state.tab ? 0 : -1;
-    $(`panel-${tab}`).hidden = tab !== state.tab;
-  }
+  tabNav.badge('slip', state.parlay.length, { tone: 'accent' });
+  for (const tab of TABS) tabNav.hide(tab, !tabAvailable(tab));
+  // Every tab starts at its top: what was opened on it folds when it's left.
+  tabNav.select(state.tab, { top: true });
 }
 
 // The simulated period as pills; the hidden select keeps the value.
@@ -3484,12 +3476,8 @@ function collapseAll() {
 function showTab(tab) {
   if (tab !== state.tab) collapseAll();
   state.tab = tab;
-  try {
-    history.replaceState(null, '', `#${tab}`);
-  } catch {}
   renderTabs();
   renderSlipBar();
-  window.scrollTo({ top: 0 });
   if (tab === 'home') renderHome(homeCtx());
   if (tab === 'lottery') lotteryUi?.render();
   if (tab === 'history') {
@@ -3498,19 +3486,9 @@ function showTab(tab) {
   }
 }
 
-for (const button of document.querySelectorAll('#tabs .tab')) button.addEventListener('click', () => showTab(button.dataset.tab));
 $('game-search').addEventListener('input', event => {
   state.query = event.target.value.trim();
   if (state.data) renderGames();
-});
-$('tabs').addEventListener('keydown', event => {
-  const visible = TABS.filter(tab => !$(`tab-${tab}`).hidden);
-  const i = visible.indexOf(state.tab);
-  const next = event.key === 'ArrowRight' ? visible[(i + 1) % visible.length] : event.key === 'ArrowLeft' ? visible[(i - 1 + visible.length) % visible.length] : null;
-  if (!next) return;
-  event.preventDefault();
-  showTab(next);
-  $(`tab-${next}`).focus();
 });
 {
   const fromHash = location.hash.slice(1);
@@ -3559,7 +3537,6 @@ function openWantedGame() {
   requestAnimationFrame(() => document.querySelector(`[data-game="${CSS.escape(game.id)}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
 }
 
-$('refresh').addEventListener('click', load);
 // Redraw only when the width changes: phones fire resize when the address bar
 // slides away, and that shouldn't reset the chart.
 let resizeTimer;
@@ -3572,25 +3549,8 @@ window.addEventListener('resize', () => {
   }, 150);
 });
 
-// Phones: no app header. The status and refresh move to a
-// slim row at the top of the page (the tabs are already at the bottom).
 // The same top-right in every Quadra app: help, refresh, then the account.
-const helpLink = Object.assign(document.createElement('a'), { className: 'icon-button help-button', href: helpUrl('odds'), textContent: '?' });
-helpLink.addEventListener('click', e => (e.preventDefault(), q.go('vocab', 'help=odds')));
-helpLink.setAttribute('aria-label', state.locale === 'en' ? 'Help' : '說明');
-{
-  const phone = matchMedia('(max-width: 720px)');
-  const place = () => {
-    const into = phone.matches ? $('mobile-bar') : document.querySelector('.appbar-inner');
-    if (phone.matches) into.append($('status'), helpLink, $('refresh'), $('account-slot'));
-    else {
-      document.querySelector('.brand-text').append($('status'));
-      into.append(helpLink, $('refresh'), $('account-slot'));
-    }
-  };
-  place();
-  phone.addEventListener('change', place);
-}
+topActions(q, { refresh: load });
 
 // Big numbers on one line: each of these shrinks its font (down to 60%) to
 // fit its box, instead of wrapping onto a second row on phones. Checked when
@@ -3638,7 +3598,6 @@ const gated = installGate('odds', state.locale);
 watchUpdates({ current: document.querySelector('meta[name="build-version"]')?.content, key: 'oddsStudy', cachePrefix: 'quadra-odds-' });
 renderStatic();
 renderTabs();
-$('account-slot').append(accountButton(q));
 q.on('wallet', wallet => {
   state.wallet = wallet;
   renderAccount();
