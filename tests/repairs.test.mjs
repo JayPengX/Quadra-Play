@@ -4,35 +4,55 @@ import { restoreDodgersSlip } from '../public/lib/repairs.mjs';
 import { mergeAccounts, refundLost, balance } from '../public/lib/account.mjs';
 
 const ID = 'c7334d292057cc65';
+const lostSlip = (id, t) => ({ id, t, mode: 'single', sizes: [1], stake: 2000, cost: 2000, legs: [], status: 'settled', payout: 2000, settledAt: t, recovered: true, refunded: true });
+// Two lost NT$2,000 bets: 'sat' on Saturday 9/26 (Taiwan), 'thu' on Thursday 9/24.
 const lost = {
   v: 1,
   created: '2026-01-01T00:00:00.000Z',
-  updated: '2026-09-20T00:00:00.000Z',
+  updated: '2026-09-28T00:00:00.000Z',
   ledger: [
-    { id: 'grant-1', t: '2026-01-01T00:00:00.000Z', kind: 'grant', amount: 5000 },
-    { id: 'stake-abc', t: '2026-06-10T04:00:00.000Z', kind: 'stake', amount: -2000, slipId: 'abc' },
-    { id: 'refund-abc', t: '2026-06-14T04:00:00.000Z', kind: 'refund', amount: 2000, slipId: 'abc' }
+    { id: 'grant-1', t: '2026-01-01T00:00:00.000Z', kind: 'grant', amount: 10000 },
+    { id: 'stake-thu', t: '2026-09-24T04:00:00.000Z', kind: 'stake', amount: -2000, slipId: 'thu' },
+    { id: 'stake-sat', t: '2026-09-26T04:00:00.000Z', kind: 'stake', amount: -2000, slipId: 'sat' },
+    { id: 'refund-thu', t: '2026-09-28T01:00:00.000Z', kind: 'refund', amount: 2000, slipId: 'thu' },
+    { id: 'refund-sat', t: '2026-09-28T01:00:00.000Z', kind: 'refund', amount: 2000, slipId: 'sat' }
   ],
-  slips: [{ id: 'abc', t: '2026-06-10T04:00:00.000Z', mode: 'single', sizes: [1], stake: 2000, cost: 2000, legs: [], status: 'settled', payout: 2000, settledAt: '2026-06-10T04:00:00.000Z', recovered: true, refunded: true }]
+  slips: [lostSlip('sat', '2026-09-26T04:00:00.000Z'), lostSlip('thu', '2026-09-24T04:00:00.000Z')]
+};
+const open = (fixed, id) => fixed.slips.find(s => s.id === id);
+
+// What the first version of the repair did: both rebuilt, both staked again.
+const dodgers = { id: 'fut|ws|Los Angeles Dodgers', kind: 'future', team: 'Los Angeles Dodgers', odds: 2.5, result: null };
+const wrong = {
+  ...lost,
+  ledger: [...lost.ledger, { id: 'restake-thu', t: '2026-09-28T01:00:00.000Z', kind: 'stake', amount: -2000, slipId: 'thu' }, { id: 'restake-sat', t: '2026-09-28T01:00:00.000Z', kind: 'stake', amount: -2000, slipId: 'sat' }],
+  slips: lost.slips.map(s => ({ id: s.id, t: s.t, mode: 'single', sizes: [1], stake: 2000, cost: 2000, legs: [dodgers], status: 'open' }))
 };
 
-test('the lost Dodgers slip comes back open, staked again, at that day’s odds', () => {
+test('only the Saturday slip comes back as the Dodgers bet', () => {
   const fixed = restoreDodgersSlip(lost, ID);
-  const slip = fixed.slips[0];
-  assert.equal(slip.status, 'open');
-  assert.equal(slip.recovered, undefined);
-  assert.equal(slip.legs[0].kind, 'future');
-  assert.equal(slip.legs[0].team, 'Los Angeles Dodgers');
-  assert.equal(slip.legs[0].odds, 2.84);
-  assert.equal(balance(fixed), 3000);
-  assert.equal(fixed.ledger.find(e => e.id === 'restake-abc').t, '2026-06-14T04:00:00.000Z');
-  // Once done it stays done, refundLost leaves it alone, and it wins a merge
-  // with a device still holding the refunded copy.
+  assert.equal(open(fixed, 'sat').status, 'open');
+  assert.equal(open(fixed, 'sat').legs[0].team, 'Los Angeles Dodgers');
+  assert.equal(open(fixed, 'sat').legs[0].odds, 2.44);
+  assert.equal(open(fixed, 'thu').recovered, true);
+  assert.equal(balance(fixed), 8000);
   assert.equal(restoreDodgersSlip(fixed, ID), fixed);
-  assert.equal(refundLost(fixed, new Date('2026-09-30')).slips[0].status, 'open');
-  for (const merged of [mergeAccounts(lost, fixed), mergeAccounts(fixed, lost)]) {
-    assert.equal(merged.slips[0].status, 'open');
-    assert.equal(balance(merged), 3000);
+  assert.equal(open(refundLost(fixed, new Date('2026-10-05')), 'sat').status, 'open');
+});
+
+test('the first version’s extra slip is put back and its stake returned', () => {
+  const fixed = restoreDodgersSlip(wrong, ID);
+  assert.equal(open(fixed, 'sat').status, 'open');
+  assert.equal(open(fixed, 'thu').status, 'settled');
+  assert.equal(open(fixed, 'thu').refunded, true);
+  assert.equal(balance(fixed), 8000);
+  assert.equal(restoreDodgersSlip(fixed, ID), fixed);
+  // A device still holding the wrong copy doesn't bring it back.
+  for (const merged of [mergeAccounts(wrong, fixed), mergeAccounts(fixed, wrong)]) {
+    const again = restoreDodgersSlip(merged, ID);
+    assert.equal(open(again, 'thu').status, 'settled');
+    assert.equal(open(again, 'sat').status, 'open');
+    assert.equal(balance(again), 8000);
   }
 });
 

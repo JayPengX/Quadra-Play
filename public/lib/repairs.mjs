@@ -72,29 +72,51 @@ function dodgersOdds(t) {
   return DODGERS_WS[at];
 }
 
+// The owner bet on the Dodgers once, on a Saturday (Taiwan): that slip is
+// rebuilt. A first version of this repair rebuilt every lost NT$2,000 slip;
+// any other is put back as it was (lost and refunded, `undone` so it wins a
+// merge with a copy still open) and its stake paid back (`unrestake-<slip>`).
+const isDodgers = s => s.legs?.length === 1 && s.legs[0].id === 'fut|ws|Los Angeles Dodgers';
+const taipeiWeekday = t => new Date(Date.parse(t) + 8 * 3600e3).getUTCDay();
+
 export function restoreDodgersSlip(account, id) {
   if (id !== DODGERS_ACCOUNT || !account) return account;
-  const slip = account.slips.find(s => s.recovered && s.cost === DODGERS_COST && s.t >= '2026-01-22');
-  if (!slip) return account;
-  const [odds, fairChance] = dodgersOdds(slip.t);
-  const leg = {
-    id: 'fut|ws|Los Angeles Dodgers',
-    kind: 'future',
-    sport: 'mlb',
-    label: '2026 世界大賽冠軍（總冠軍） 洛杉磯道奇',
-    shortLabel: '洛杉磯道奇',
-    matchup: '2026 世界大賽冠軍（總冠軍）',
-    odds,
-    fairChance,
-    eventSlug: 'mlb-world-series-champion-2026',
-    team: 'Los Angeles Dodgers',
-    logo: teamLogo('mlb', 'Los Angeles Dodgers') ?? undefined,
-    result: null
-  };
-  const restored = { id: slip.id, t: slip.t, mode: 'single', sizes: [1], stake: slip.cost, cost: slip.cost, legs: [leg], status: 'open' };
-  // Taken again at the refund's time, so no week's figures move.
-  const refund = account.ledger.find(e => e.id === `refund-${slip.id}`);
-  const restake = `restake-${slip.id}`;
-  const ledger = refund && !account.ledger.some(e => e.id === restake) ? [...account.ledger, { id: restake, t: refund.t, kind: 'stake', amount: -slip.cost, slipId: slip.id }].sort((x, y) => x.t.localeCompare(y.t)) : account.ledger;
-  return { ...account, updated: new Date().toISOString(), ledger, slips: account.slips.map(s => (s === slip ? restored : s)) };
+  const has = new Set(account.ledger.map(e => e.id));
+  const candidates = account.slips.filter(s => s.cost === DODGERS_COST && s.t >= '2026-01-22' && !s.undone && (s.recovered || (isDodgers(s) && has.has(`restake-${s.id}`))));
+  const target = candidates.filter(s => taipeiWeekday(s.t) === 6).sort((a, b) => b.t.localeCompare(a.t))[0];
+  if (!target) return account;
+  const now = new Date().toISOString();
+  const add = [];
+  const slips = account.slips.map(slip => {
+    if (!candidates.includes(slip)) return slip;
+    if (slip === target) {
+      if (!slip.recovered) return slip;
+      const [odds, fairChance] = dodgersOdds(slip.t);
+      const leg = {
+        id: 'fut|ws|Los Angeles Dodgers',
+        kind: 'future',
+        sport: 'mlb',
+        label: '2026 世界大賽冠軍（總冠軍） 洛杉磯道奇',
+        shortLabel: '洛杉磯道奇',
+        matchup: '2026 世界大賽冠軍（總冠軍）',
+        odds,
+        fairChance,
+        eventSlug: 'mlb-world-series-champion-2026',
+        team: 'Los Angeles Dodgers',
+        logo: teamLogo('mlb', 'Los Angeles Dodgers') ?? undefined,
+        result: null
+      };
+      // Taken again at the refund's time, so no week's figures move.
+      const refund = account.ledger.find(e => e.id === `refund-${slip.id}`);
+      if (refund && !has.has(`restake-${slip.id}`)) add.push({ id: `restake-${slip.id}`, t: refund.t, kind: 'stake', amount: -slip.cost, slipId: slip.id });
+      return { id: slip.id, t: slip.t, mode: 'single', sizes: [1], stake: slip.cost, cost: slip.cost, legs: [leg], status: 'open' };
+    }
+    // Not the Dodgers bet: back to lost and refunded.
+    if (slip.recovered) return slip;
+    const restake = account.ledger.find(e => e.id === `restake-${slip.id}`);
+    if (!has.has(`unrestake-${slip.id}`)) add.push({ id: `unrestake-${slip.id}`, t: restake.t, kind: 'refund', amount: slip.cost, slipId: slip.id });
+    return { id: slip.id, t: slip.t, mode: 'single', sizes: [1], stake: slip.cost, cost: slip.cost, legs: [], status: 'settled', payout: slip.cost, settledAt: restake.t, recovered: true, refunded: true, undone: true };
+  });
+  if (!add.length && slips.every((x, i) => x === account.slips[i])) return account;
+  return { ...account, updated: now, ledger: [...account.ledger, ...add].sort((x, y) => x.t.localeCompare(y.t)), slips };
 }

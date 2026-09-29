@@ -281,6 +281,10 @@ export function mergeAccounts(a, b) {
   for (const slip of [...a.slips, ...b.slips]) {
     const other = slips.get(slip.id);
     if (!other) slips.set(slip.id, slip);
+    // A slip a repair put back (repairs.mjs) wins over any other copy.
+    else if (other.undone || slip.undone) {
+      if (slip.undone) slips.set(slip.id, slip);
+    }
     // A slip recovered from the wallet (no picks) gives way to the real one.
     else if (other.recovered || slip.recovered) {
       if (other.recovered && !slip.recovered) slips.set(slip.id, slip);
