@@ -67,7 +67,9 @@ export function mountLottery(ctx) {
     const mins = Math.ceil(ms / 60_000);
     if (mins < 60) return t('inMin', { n: mins });
     if (mins < 24 * 60) return t('inHour', { h: Math.floor(mins / 60), m: mins % 60 });
-    return t('drawAt', { when: timeText(at) });
+    // Days away: the weekday and time only ("週四 20:30 開獎"), short enough for a tile.
+    const when = new Date(at).toLocaleString(lang === 'en' ? 'en-US' : 'zh-TW', { weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Taipei' });
+    return t('drawAt', { when });
   }
   // The balls a selection makes.
   function selBalls(id, sel) {
