@@ -1,4 +1,5 @@
 // Logos, flags and the F1 grid: the shared kit's (lib/logos.mjs).
+import { CATALOG, familyOfSport } from './catalog.mjs';
 import { normalizeTeamName, MLB_ABBR, NBA_ABBR, EPL_ESPN_ID, TEAM_BADGES, rememberLogo, teamLogo } from './logos.mjs';
 export { normalizeTeamName, rememberLogo, teamLogo, leagueLogo, teamBadge, f1Driver, f1Constructor, countryFlag } from './logos.mjs';
 
@@ -113,81 +114,20 @@ export function teamZh(sport, name) {
   return MLB_TEAM_ZH[name] ?? name;
 }
 
-// Every league the page lists: ESPN path, kind of sport (which markets it
-// gets) and ESPN's league logo id for soccer. Order is the sport filter's.
-export const LEAGUES = {
-  mlb: { family: 'baseball', path: 'baseball/mlb' },
-  nfl: { family: 'football', path: 'football/nfl' },
-  ncaaf: { family: 'football', path: 'football/college-football' },
-  nba: { family: 'basketball', path: 'basketball/nba' },
-  wnba: { family: 'basketball', path: 'basketball/wnba' },
-  ncaam: { family: 'basketball', path: 'basketball/mens-college-basketball' },
-  ncaaw: { family: 'basketball', path: 'basketball/womens-college-basketball' },
-  nhl: { family: 'hockey', path: 'hockey/nhl' },
-  epl: { family: 'soccer', path: 'soccer/eng.1', logo: 23 },
-  laliga: { family: 'soccer', path: 'soccer/esp.1', logo: 15 },
-  seriea: { family: 'soccer', path: 'soccer/ita.1', logo: 12 },
-  bundesliga: { family: 'soccer', path: 'soccer/ger.1', logo: 10 },
-  ligue1: { family: 'soccer', path: 'soccer/fra.1', logo: 9 },
-  ucl: { family: 'soccer', path: 'soccer/uefa.champions', logo: 2 },
-  uel: { family: 'soccer', path: 'soccer/uefa.europa', logo: 2310 },
-  eredivisie: { family: 'soccer', path: 'soccer/ned.1', logo: 11 },
-  primeira: { family: 'soccer', path: 'soccer/por.1', logo: 14 },
-  championship: { family: 'soccer', path: 'soccer/eng.2', logo: 24 },
-  mls: { family: 'soccer', path: 'soccer/usa.1', logo: 19 },
-  ligamx: { family: 'soccer', path: 'soccer/mex.1', logo: 22 },
-  jleague: { family: 'soccer', path: 'soccer/jpn.1', logo: 2199 },
-  // More leagues ESPN carries with winner odds; everything past the winner comes
-  // from our own model (lines.mjs), so they get the full board too.
-  brasileirao: { family: 'soccer', path: 'soccer/bra.1', logo: 85 },
-  argentina: { family: 'soccer', path: 'soccer/arg.1', logo: 1 },
-  superlig: { family: 'soccer', path: 'soccer/tur.1', logo: 18 },
-  scotland: { family: 'soccer', path: 'soccer/sco.1', logo: 45 },
-  // More leagues and cups ESPN has DraftKings lines for (the board's other
-  // markets from our own model, lines.mjs).
-  bundesliga2: { family: 'soccer', path: 'soccer/ger.2', logo: 97 },
-  laliga2: { family: 'soccer', path: 'soccer/esp.2', logo: 107 },
-  serieb: { family: 'soccer', path: 'soccer/ita.2', logo: 99 },
-  ligue2: { family: 'soccer', path: 'soccer/fra.2', logo: 96 },
-  league1: { family: 'soccer', path: 'soccer/eng.3', logo: 25 },
-  belgium: { family: 'soccer', path: 'soccer/bel.1', logo: 6 },
-  austria: { family: 'soccer', path: 'soccer/aut.1', logo: 5 },
-  swiss: { family: 'soccer', path: 'soccer/sui.1', logo: 17 },
-  denmark: { family: 'soccer', path: 'soccer/den.1' },
-  norway: { family: 'soccer', path: 'soccer/nor.1' },
-  sweden: { family: 'soccer', path: 'soccer/swe.1', logo: 16 },
-  greece: { family: 'soccer', path: 'soccer/gre.1', logo: 98 },
-  saudi: { family: 'soccer', path: 'soccer/ksa.1', logo: 2488 },
-  aleague: { family: 'soccer', path: 'soccer/aus.1', logo: 1308 },
-  csl: { family: 'soccer', path: 'soccer/chn.1', logo: 2350 },
-  colombia: { family: 'soccer', path: 'soccer/col.1', logo: 1543 },
-  chile: { family: 'soccer', path: 'soccer/chi.1', logo: 86 },
-  usl: { family: 'soccer', path: 'soccer/usa.usl.1', logo: 2292 },
-  nwsl: { family: 'soccer', path: 'soccer/usa.nwsl', logo: 2323 },
-  uecl: { family: 'soccer', path: 'soccer/uefa.europa.conf', logo: 20296 },
-  libertadores: { family: 'soccer', path: 'soccer/conmebol.libertadores', logo: 58 },
-  sudamericana: { family: 'soccer', path: 'soccer/conmebol.sudamericana', logo: 1208 },
-  nationsleague: { family: 'soccer', path: 'soccer/uefa.nations', logo: 2395 },
-  wcqeurope: { family: 'soccer', path: 'soccer/fifa.worldq.uefa', logo: 67 },
-  leaguecup: { family: 'soccer', path: 'soccer/eng.league_cup', logo: 41 },
-  copadelrey: { family: 'soccer', path: 'soccer/esp.copa_del_rey', logo: 80 },
-  // From Kambi's public odds (one bookmaker's line). Asian baseball and
-  // basketball use their kind of sport's markets; the rest are played in
-  // sets (`sets`: best of how many, and what a set is made of). Only tennis
-  // has an automatic result (ESPN); the others settle from the live score
-  // once the match is decided, or by hand.
-  npb: { family: 'baseball', kambi: 'baseball/japan/npb', icon: '⚾', badge: 'lk85rg1575038781' },
-  kbo: { family: 'baseball', kambi: 'baseball/south_korea/kbo_league', icon: '⚾', badge: 'qfr1hx1589707979' },
-  cpbl: { family: 'baseball', kambi: 'baseball/taiwan/chinese_professional_baseball', icon: '⚾', badge: 'c3vetj1655924198' },
-  euroleague: { family: 'basketball', kambi: 'basketball/euroleague', icon: '🏀', badge: '7xjtuy1554397263' },
-  bleague: { family: 'basketball', kambi: 'basketball/japan/b1__league', icon: '🏀', badge: 'vcx6gw1745501883' },
-  tennis: { family: 'sets', kambi: 'tennis/atp', icon: '🎾', neutral: true, sets: { bestOf: 3, unit: 'games', target: 6 }, results: 'tennis/atp' },
-  wta: { family: 'sets', kambi: 'tennis/wta', icon: '🎾', badge: 'bddhun1768230678', neutral: true, sets: { bestOf: 3, unit: 'games', target: 6 }, results: 'tennis/wta' },
-  badminton: { family: 'sets', kambi: 'badminton', icon: '🏸', badge: 'd5xvqq1750423289', neutral: true, sets: { bestOf: 3, unit: 'points', target: 21, cap: 30 } },
-  tabletennis: { family: 'sets', kambi: 'table_tennis', icon: '🏓', badge: 'fvesg01750422363', neutral: true, sets: { bestOf: 5, unit: 'points', target: 11 }, cap: 16 },
-  volleyball: { family: 'sets', kambi: 'volleyball', icon: '🏐', sets: { bestOf: 5, unit: 'points', target: 25, last: 15 }, cap: 16 },
-  snooker: { family: 'sets', kambi: 'snooker', icon: '🎱', badge: '0gmkgj1555600537', neutral: true, sets: { bestOf: null, unit: 'frames' } }
-};
+// Every league Play sells, from the shared catalogue (catalog.mjs, the kit's
+// leagues.mjs): its kind of markets (family), where its odds come from (an
+// ESPN `path`, or a `kambi` list) and the market details for sports in sets.
+export const LEAGUES = Object.fromEntries(
+  Object.values(CATALOG)
+    .filter(l => l.bet && l.odds)
+    .map(l => {
+      const league = { family: familyOfSport(l.sport) };
+      if (l.odds === 'espn') league.path = l.espn;
+      else league.kambi = l.kambi;
+      for (const k of ['logo', 'icon', 'badge', 'neutral', 'sets', 'results', 'cap']) if (l[k] !== undefined) league[k] = l[k];
+      return [l.bet, league];
+    })
+);
 
 // Leagues from Kambi.
 export const KAMBI_LEAGUES = Object.keys(LEAGUES).filter(key => LEAGUES[key].kambi);

@@ -13,6 +13,7 @@
 // - Quadra Plus, once, for someone who isn't a member.
 import { rank, affinity, setting, plusMember, plusCard } from './lib/quadra.mjs';
 import { GAMES, nextDraw, latestResults, gameName } from './lib/lottery.mjs';
+import { familyOfSport } from './lib/catalog.mjs';
 
 const TXT = {
   zh: {
@@ -59,7 +60,7 @@ export function followAffinity(follow, top = 1) {
   const out = {};
   if (!follow) return out;
   const sports = follow.sports || [];
-  sports.forEach((sp, i) => (out[`sport:${sp === 'tennis' || sp === 'racket' ? 'sets' : sp}`] = top * (0.6 - (0.3 * i) / Math.max(1, sports.length))));
+  sports.forEach((sp, i) => (out[`sport:${sp === 'racket' ? 'sets' : familyOfSport(sp)}`] = top * (0.6 - (0.3 * i) / Math.max(1, sports.length))));
   for (const k of follow.leagues || []) out[`league:${k}`] = Math.max(out[`league:${k}`] || 0, top * 0.7);
   for (const t of follow.teams || []) out[`team:${t.league}:${norm(t.name)}`] = top * 1.2;
   return out;
