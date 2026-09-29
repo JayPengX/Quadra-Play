@@ -67,7 +67,6 @@ export function mountStats(ctx) {
   // rings under it when there are slips, the lottery's when there are only tickets.
   function hero(s, l) {
     const hit = s.settled ? s.paidSlips / s.settled : null;
-    const expHit = s.settled ? s.expectedPaidSlips / s.settled : null;
     const total = (s.placed ? s.net : 0) + (l.n ? l.net : 0);
     const lede = s.placed && l.n ? t('split', { a: fmtMoney(s.net), b: fmtMoney(l.net) }) : s.placed ? t('lede', { n: fmtInt(s.placed), staked: money(s.staked), paid: money(s.paid) }) : `${t('lottery')} · ${t('tickets')} ${fmtInt(l.n)} · ${t('spent')} ${money(l.spent)}`;
     return el('section', { class: `st-hero ${{ up: 'pos', down: 'neg' }[tone(total)] || ''}` }, [
@@ -77,13 +76,13 @@ export function mountStats(ctx) {
       !s.placed
         ? el('div', { class: 'st-metrics' }, [
             ring(l.n - l.open ? l.wins / (l.n - l.open) : null, null, t('hit'), l.n - l.open ? fmtPctShort(l.wins / (l.n - l.open)) : '–', null),
-            ring(l.back == null ? null : l.back / 200, l.expectedBack == null ? null : l.expectedBack / 200, t('lottoBack'), l.back == null ? '–' : fmtInt(Math.round(l.back)), l.expectedBack == null ? null : t('odds', { v: fmtInt(Math.round(l.expectedBack)) })),
+            ring(l.back == null ? null : l.back / 200, null, t('lottoBack'), l.back == null ? '–' : fmtInt(Math.round(l.back)), null),
             el('div', { class: 'st-metric' }, [el('div', { class: 'st-ring-box plain' }, [el('strong', { class: 'num', text: fmtInt(l.open) })]), el('span', { text: t('open') }), el('small', { class: 'num', text: '' })])
           ])
         : null,
       !s.placed ? null : el('div', { class: 'st-metrics' }, [
-        ring(hit, expHit, t('hit'), hit == null ? '–' : fmtPctShort(hit), expHit == null ? null : t('odds', { v: fmtPctShort(expHit) })),
-        ring(s.settled ? s.back / 200 : null, s.settled ? s.expectedBack / 200 : null, t('back'), s.settled ? fmtInt(Math.round(s.back)) : '–', s.settled ? t('odds', { v: fmtInt(Math.round(s.expectedBack)) }) : null),
+        ring(hit, null, t('hit'), hit == null ? '–' : fmtPctShort(hit), null),
+        ring(s.settled ? s.back / 200 : null, null, t('back'), s.settled ? fmtInt(Math.round(s.back)) : '–', null),
         el('div', { class: 'st-metric' }, [el('div', { class: 'st-ring-box plain' }, [el('strong', { class: 'num', text: fmtInt(s.open) })]), el('span', { text: t('open') }), el('small', { class: 'num', text: money(s.openStake) })])
       ])
     ]);
@@ -198,7 +197,6 @@ export function mountStats(ctx) {
         el('span', { class: 'st-meter-mark even', style: `left:${pos(100)}` })
       ]),
       el('div', { class: 'st-meter-scale num' }, [el('span', { text: '0' }), el('span', { text: '100' }), el('span', { text: String(max) })]),
-      el('p', { class: 'st-note', text: t('lottoLuckNote') })
     );
   }
 
@@ -372,8 +370,9 @@ export function mountStats(ctx) {
     if (s.placed || l.n) kids.push(hero(s, l));
     kids.push(balanceCard(full.timeline, since));
     if (s.placed && !s.settled && !l.n) kids.push(el('p', { class: 'st-empty', text: t('wait') }));
-    kids.push(weeksCard(s, l), sportsCard(s, l), luckCard(s), lottoLuckCard(l), lotteryCard(l), calibCard(s), flowCard(m, l), recordsCard(s, l));
-    if (s.settled) kids.push(more([ctx.youCard(), ctx.crowdCard(s), ctx.funCard(), ctx.picksCard(s), ctx.breakdownCard(s)]));
+    // Your own results only: no 'what the odds say', no luck against the cut.
+    kids.push(weeksCard(s, l), sportsCard(s, l), lotteryCard(l), flowCard(m, l), recordsCard(s, l));
+    if (s.settled) kids.push(more([ctx.picksCard(s), ctx.breakdownCard(s)]));
     root.replaceChildren(...kids.filter(Boolean));
   }
 
