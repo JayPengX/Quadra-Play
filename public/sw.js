@@ -4,8 +4,9 @@
 // team and league logos are kept (see the end of this file).
 //
 // A file with a ?v= version (every deploy stamps one) is served from the
-// cache first, since that exact version never changes; anything else (the
-// page itself) comes from the network first, the cache only when offline.
+// cache first, since that exact version never changes; the page itself from
+// the cache too, refreshed behind it (pageFirst); anything else from the
+// network first, the cache only when offline.
 // One copy per file is kept: a new version replaces the old one.
 const CACHE = 'quadra-odds-v1';
 
@@ -52,6 +53,18 @@ async function networkFirst(request) {
   }
 }
 
+// Opening the app: the page kept here at once (no wait for the network,
+// even on a poor connection), refreshed in the background for next time.
+// A newer deploy is caught by the kit's watchUpdates right after opening,
+// which reloads under a ?v= address: that one always asks the network.
+async function pageFirst(event) {
+  const kept = await caches.match(event.request, { ignoreSearch: true });
+  const fresh = networkFirst(event.request);
+  if (!kept) return fresh;
+  event.waitUntil(fresh.catch(() => {}));
+  return kept;
+}
+
 async function cacheFirst(request) {
   const cached = await caches.match(request);
   if (cached) return cached;
@@ -65,6 +78,7 @@ self.addEventListener('fetch', event => {
   const url = new URL(request.url);
   if (isLogo(request, url)) return event.respondWith(logo(event));
   if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.endsWith('/version.json')) return;
+  if (request.mode === 'navigate' && !url.searchParams.has('v')) return event.respondWith(pageFirst(event));
   event.respondWith(url.searchParams.has('v') && request.mode !== 'navigate' ? cacheFirst(request) : networkFirst(request));
 });
 
