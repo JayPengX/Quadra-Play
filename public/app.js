@@ -1184,7 +1184,8 @@ function entryRow(bet, i, picture, sub) {
   return el('div', { class: `entry ${inSlip ? 'in-slip' : ''} ${locked ? 'locked' : ''}`, title: pickTitle(bet) }, [
     el('span', { class: 'entry-rank', text: String(i + 1) }),
     picture,
-    el('span', { class: 'entry-name' }, [document.createTextNode(bet.shortLabel), el('small', { text: [fmtPctShort(bet.fairChance), sub].filter(Boolean).join(' · ') })]),
+    // sub === null: the name alone (no chance, no second line).
+    el('span', { class: 'entry-name' }, [document.createTextNode(bet.shortLabel), sub === null ? null : el('small', { text: [fmtPctShort(bet.fairChance), sub].filter(Boolean).join(' · ') })]),
     el('button', {
       class: `entry-odds ${inSlip ? 'in-slip' : ''}`,
       type: 'button',
@@ -2953,7 +2954,7 @@ function renderF1() {
   });
   const fromHistory = current.flag && list.some(b => b.flagSource === 'history');
   const badge = b => (current.flag ? el('span', { class: 'flag-badge', 'aria-hidden': 'true', text: FLAG_ICON[b.kind] }) : b.kind === 'f1team' ? constructorBadge(b.team) : driverBadge(b));
-  const sub = b => (current.flag ? t(b.flagSource === 'history' ? 'f1FlagFromHistory' : 'f1FlagFromMarket') : b.kind === 'f1team' ? '' : b.kind === 'f1h2h' ? `vs ${b.rivalLabel}` : b.driver.team);
+  const sub = b => (current.flag ? null : b.kind === 'f1team' ? '' : b.kind === 'f1h2h' ? `vs ${b.rivalLabel}` : b.driver.team);
   $('f1-body').replaceChildren(
     board({
       emblem: 'f1',
