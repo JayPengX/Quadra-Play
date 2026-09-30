@@ -136,7 +136,8 @@ export function legResult(leg, outcome) {
   if (!outcome || outcome.status === 'pending') return null;
   if (outcome.status === 'void') return 'void';
   const win = test => (test ? 'won' : 'lost');
-  if (leg.kind === 'f1') return win(norm(outcome.winner) === norm(leg.driver));
+  if (leg.kind === 'f1' || leg.kind === 'race') return win(norm(outcome.winner) === norm(leg.driver));
+  if (leg.kind === 'racepodium') return outcome.podium ? win(outcome.podium.some(name => norm(name) === norm(leg.driver))) : null;
   if (leg.kind === 'f1pole') return outcome.pole ? win(norm(outcome.pole) === norm(leg.driver)) : null;
   if (leg.kind === 'future') return win(norm(outcome.winner) === norm(leg.team));
   if (leg.kind === 'f1podium') return outcome.podium ? win(outcome.podium.some(name => norm(name) === norm(leg.driver))) : null;

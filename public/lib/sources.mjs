@@ -7,7 +7,7 @@ import { americanToProbability, devigProportional, devigPower } from './odds.mjs
 import { normalizeTeamName, teamZh, LEAGUES, familyOf, isSoccer, rememberLogo, rememberTeams, hasTeams } from './teams.mjs';
 import { runOrder, shareLeft } from './live.mjs';
 import { KAMBI, kambiUrl, parseKambiInPlay, useKambiToken, fetchKambiLeague, decidedFromLive, decidedTeamGame, parseKambiLiveData, kambiLiveDataUrl, setsWon, watchKambiMatches, fetchKeptKambi } from './kambi.mjs';
-import { KAMBI_LEAGUES } from './teams.mjs';
+import { KAMBI_LEAGUES, onSale } from './teams.mjs';
 import { withHousePrices, sameSide, pointsStrengths } from './house.mjs';
 import { SOLD_DAYS, ASIA_URL, asiaMonth, asiaMonthOf } from './catalog.mjs';
 import { parseAsiaSchedule, parseEspnCard, parseEspnDraw, parseRankings } from './schedules.mjs';
@@ -301,7 +301,7 @@ async function fetchLeague(key, now) {
 
 // Leagues fetched from ESPN alone (DraftKings); MLB and the Premier League
 // also have Polymarket.
-export const EXTRA_LEAGUES = Object.keys(LEAGUES).filter(key => LEAGUES[key].path && !['mlb', 'epl'].includes(key));
+export const EXTRA_LEAGUES = Object.keys(LEAGUES).filter(key => LEAGUES[key].path && onSale(key) && !['mlb', 'epl'].includes(key));
 
 // ---- Polymarket ---------------------------------------------------------------
 
@@ -438,6 +438,39 @@ export function parseKambiF1Race(event, offers) {
     startUtc: new Date(event.start).toISOString(),
     drivers: drivers.map((d, i) => ({ name: d.name, fair: fair[i] })).sort((a, b) => b.fair - a.fair)
   };
+}
+
+// NASCAR's Cup Series and IndyCar: the next race of each from Kambi's
+// motorsport list (its winner prices, the margin taken out), settled from
+// ESPN's scoreboard of the series. `words`: the path Kambi files it under.
+export const RACE_SERIES = {
+  nascar: { words: ['nascar', 'cup_series'], espn: 'racing/nascar-premier' },
+  indycar: { words: ['indycar'], espn: 'racing/irl' }
+};
+const KAMBI_MOTOR_LIST = `${KAMBI}/listView/motorsports/all/all/all/competitions.json?lang=en_GB&market=GB&useCombined=true`;
+export function parseKambiSeriesRaces(list, now) {
+  const races = [];
+  for (const [series, { words }] of Object.entries(RACE_SERIES)) {
+    const item = (list?.events || [])
+      .filter(({ event: e }) => {
+        const path = (e?.path || []).map(p => (typeof p === 'string' ? p : p?.termKey) || '');
+        // The race itself: not its qualifying, not the season's title.
+        return e && e.state === 'NOT_STARTED' && Date.parse(e.start) > now.getTime() && !/qualif|championship/i.test(e.name || '') && words.every(w => path.some(p => p.includes(w)));
+      })
+      .sort((a, b) => Date.parse(a.event.start) - Date.parse(b.event.start))[0];
+    const offer = item && (item.betOffers || []).find(o => o.from === 1 && o.to === 1 && /^(finishing position|race winner|winner)$/i.test(o.criterion?.englishLabel || '') && !o.suspended);
+    const drivers = (offer?.outcomes || []).filter(o => o.odds > 1000 && o.participant).map(o => ({ name: o.participant, raw: 1000 / o.odds }));
+    if (drivers.length < 10) continue;
+    const fair = devigPower(drivers.map(d => d.raw));
+    races.push({
+      series,
+      title: item.event.name.trim(),
+      slug: `kambi-${item.event.id}`,
+      startUtc: new Date(item.event.start).toISOString(),
+      drivers: drivers.map((d, i) => ({ name: d.name, fair: fair[i] })).sort((a, b) => b.fair - a.fair)
+    });
+  }
+  return races;
 }
 
 // Pole position (排位賽第一): Polymarket's driver pole market for the race
@@ -625,11 +658,12 @@ export async function loadOdds(now = new Date(), onProgress) {
       // The whole season (the plain scoreboard stays on the last race until the
       // week's first session): the next race's qualifying time.
       getJson(`${ESPN}/racing/f1/scoreboard?dates=${now.getUTCFullYear()}`),
-      getJson(KAMBI_F1_LIST)
+      getJson(KAMBI_F1_LIST),
+      getJson(KAMBI_MOTOR_LIST)
     ].map(track)
   );
   if (results.every(r => r.status === 'rejected')) throw results[0].reason;
-  const [mlbDk, mlbPm, eplDk, eplPm, f1, nbaPm, f1Espn, f1Kambi] = results.map(r => (r.status === 'fulfilled' ? r.value : []));
+  const [mlbDk, mlbPm, eplDk, eplPm, f1, nbaPm, f1Espn, f1Kambi, motorKambi] = results.map(r => (r.status === 'fulfilled' ? r.value : []));
   let race = parseF1RaceWinner(f1, now);
   // Polymarket not open for the next race yet (or only for a later one): Kambi's.
   const kambiRace = nextKambiF1Race(f1Kambi, now);
@@ -648,6 +682,7 @@ export async function loadOdds(now = new Date(), onProgress) {
     loadedAt: now.toISOString(),
     games: lotteryGames(mergeGames([...mlbDk, ...eplDk], [...parsePolymarketMlb(mlbPm, now), ...parsePolymarketEpl(eplPm, now)]), now),
     f1: race,
+    races: parseKambiSeriesRaces(motorKambi, now),
     futures: [...parseFutures(mlbPm, 'mlb'), ...parseFutures(eplPm, 'epl'), ...(nbaInSeason(now) ? parseFutures(nbaPm, 'nba') : [])]
   };
 }
@@ -696,11 +731,13 @@ export function parseEspnResults(data, sport) {
 // weekend's rather than the race's). ESPN can take hours to mark a race
 // final; its "session complete" already has the finishing order, so it
 // counts as the result too.
-export function parseEspnRace(data, startUtc) {
+// `anyType`: every competition counts (NASCAR's and IndyCar's scoreboards
+// list the race alone, without a session type).
+export function parseEspnRace(data, startUtc, { anyType = false } = {}) {
   let best = null;
   for (const event of data.events || []) {
     for (const comp of event.competitions || []) {
-      if (comp.type?.abbreviation !== 'Race') continue;
+      if (!anyType && comp.type?.abbreviation !== 'Race') continue;
       const gap = Math.abs(Date.parse(comp.date) - Date.parse(startUtc));
       if (gap <= 4 * DAY_MS && (!best || gap < best.gap)) best = { gap, comp };
     }
@@ -874,6 +911,17 @@ export async function fetchOutcomes(legs, now = new Date()) {
         for (const days of [0, 1]) {
           const data = await page(`${ESPN}/racing/f1/scoreboard?dates=${yyyymmdd(new Date(Date.parse(leg.start) + days * DAY_MS))}`);
           const result = data && parseEspnPole(data, leg.start);
+          if (result) return out.set(leg.id, result);
+        }
+        return;
+      }
+      if (leg.kind === 'race' || leg.kind === 'racepodium') {
+        // NASCAR, IndyCar: the race's day and the two after (a rain delay).
+        const path = RACE_SERIES[leg.sport]?.espn;
+        if (!path) return;
+        for (const days of [0, 1, 2]) {
+          const data = await page(`${ESPN}/${path}/scoreboard?dates=${yyyymmdd(new Date(Date.parse(leg.start) + days * DAY_MS))}`);
+          const result = data && parseEspnRace(data, leg.start, { anyType: true });
           if (result) return out.set(leg.id, result);
         }
         return;
@@ -1073,7 +1121,7 @@ const LIVE_HOURS = { baseball: 5, soccer: 2.5, football: 4.5, basketball: 3, hoc
 // `extra`: leagues asked for anyway (a game Quadra Fixtures sent here that's on now).
 export function liveLeagues(now = new Date(), extra = []) {
   const t = now.getTime();
-  const out = new Set(['mlb', 'epl', ...extra.filter(k => ESPN_PATH[k])]);
+  const out = new Set(['mlb', 'epl', ...extra.filter(k => ESPN_PATH[k] && onSale(k))]);
   for (const [sport, starts] of seenStarts) {
     const hours = LIVE_HOURS[familyOf(sport)];
     if (!hours || !ESPN_PATH[sport]) continue;

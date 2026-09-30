@@ -7,6 +7,7 @@
 import { devigProportional } from './odds.mjs';
 import { LEAGUES, normalizeTeamName, teamZh } from './teams.mjs';
 import { housePrices } from './house.mjs';
+import { kambiKept } from './catalog.mjs';
 
 export const KAMBI = 'https://eu-offering-api.kambicdn.com/offering/v2018/ub';
 
@@ -38,7 +39,7 @@ export function parseKambiEvents(data, sport, now = new Date(), { unpriced = fal
   for (const item of data?.events || []) {
     const e = item.event;
     if (!e || e.state !== 'NOT_STARTED' || Date.parse(e.start) <= now.getTime()) continue;
-    if (!e.homeName || !e.awayName) continue;
+    if (!e.homeName || !e.awayName || !kambiKept(sport, e)) continue;
     const offers = item.betOffers || [];
     const match = offers.find(o => o.betOfferType?.englishName === 'Match' || /match odds|moneyline/i.test(o.criterion?.englishLabel || ''));
     // Two-way winner; a three-way one (a draw after regulation) is split between the two.
@@ -107,7 +108,7 @@ export function parseKambiInPlay(data, sport) {
   const games = [];
   for (const item of data?.events || []) {
     const e = item.event;
-    if (!e || e.state !== 'STARTED' || !e.homeName || !e.awayName) continue;
+    if (!e || e.state !== 'STARTED' || !e.homeName || !e.awayName || !kambiKept(sport, e)) continue;
     const offers = item.betOffers || [];
     const match = offers.find(o => o.betOfferType?.englishName === 'Match' || /match odds|moneyline/i.test(o.criterion?.englishLabel || ''));
     const one = outcome(match || { outcomes: [] }, 'OT_ONE');

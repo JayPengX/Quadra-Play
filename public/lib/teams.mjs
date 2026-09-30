@@ -23,13 +23,15 @@ export const LEAGUES = Object.fromEntries(
         if (l.data === 'asia') league.schedule = { asia: l.asia };
         else if (l.data === 'espn') league.schedule = { espn: l.espn, kind: l.kind };
       }
-      for (const k of ['logo', 'icon', 'badge', 'neutral', 'sets', 'results', 'scores', 'cap', 'players', 'top']) if (l[k] !== undefined) league[k] = l[k];
+      for (const k of ['logo', 'icon', 'badge', 'neutral', 'sets', 'results', 'scores', 'cap', 'players', 'top', 'retired']) if (l[k] !== undefined) league[k] = l[k];
       return [l.bet, league];
     })
 );
 
+// The leagues on sale: a retired one (catalog.mjs) is only read to settle the slips already on it.
+export const onSale = key => Boolean(LEAGUES[key]) && !LEAGUES[key].retired;
 // Leagues from Kambi.
-export const KAMBI_LEAGUES = Object.keys(LEAGUES).filter(key => LEAGUES[key].kambi);
+export const KAMBI_LEAGUES = Object.keys(LEAGUES).filter(key => LEAGUES[key].kambi && onSale(key));
 export const isSets = sport => LEAGUES[sport]?.family === 'sets';
 // Played at a neutral venue by players, not home and away clubs.
 export const isNeutral = sport => Boolean(LEAGUES[sport]?.neutral);

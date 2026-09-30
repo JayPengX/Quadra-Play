@@ -138,13 +138,16 @@ test('Kambi\'s matches in play: its live prices, open ones only', async () => {
   const { parseKambiInPlay } = await import('../public/lib/kambi.mjs');
   const offer = (type, label, outcomes) => ({ betOfferType: { englishName: type }, criterion: { englishLabel: label }, outcomes });
   const data = { events: [
-    { event: { id: 1, homeName: 'A Player', awayName: 'B Player', start: '2026-09-29T15:00:00Z', state: 'STARTED' },
+    { event: { id: 1, homeName: 'A Player', awayName: 'B Player', start: '2026-09-29T15:00:00Z', state: 'STARTED', group: 'WTT Champions', path: ['table_tennis', 'wtt_champions'] },
       betOffers: [offer('Match', 'Match Odds', [{ type: 'OT_ONE', odds: 1400, status: 'OPEN' }, { type: 'OT_TWO', odds: 2900, status: 'OPEN' }])],
       liveData: { score: { home: '4', away: '2' }, statistics: { sets: { home: [11, 5, -1], away: [8, 11, -1] } } } },
-    { event: { id: 2, homeName: 'C Player', awayName: 'D Player', start: '2026-09-29T15:10:00Z', state: 'STARTED' },
+    { event: { id: 2, homeName: 'C Player', awayName: 'D Player', start: '2026-09-29T15:10:00Z', state: 'STARTED', group: 'WTT Star Contender', path: ['table_tennis', 'wtt_star_contender'] },
       betOffers: [offer('Match', 'Match Odds', [{ type: 'OT_ONE', odds: 16000, status: 'OPEN' }, { type: 'OT_TWO', odds: null, status: 'SUSPENDED' }])],
       liveData: { score: { home: '1', away: '0' } } },
-    { event: { id: 3, homeName: 'E', awayName: 'F', start: '2026-09-29T19:00:00Z', state: 'NOT_STARTED' }, betOffers: [] }
+    { event: { id: 3, homeName: 'E', awayName: 'F', start: '2026-09-29T19:00:00Z', state: 'NOT_STARTED' }, betOffers: [] },
+    // Table tennis's betting leagues aren't the pro tour: left off.
+    { event: { id: 5, homeName: 'G', awayName: 'H', start: '2026-09-29T15:20:00Z', state: 'STARTED', group: 'Czech Liga Pro', path: ['table_tennis', 'czech_republic', 'czech_liga_pro'] },
+      betOffers: [offer('Match', 'Match Odds', [{ type: 'OT_ONE', odds: 1800, status: 'OPEN' }, { type: 'OT_TWO', odds: 2000, status: 'OPEN' }])] }
   ] };
   const [a, b, ...rest] = parseKambiInPlay(data, 'tabletennis');
   assert.equal(rest.length, 0);
@@ -198,4 +201,30 @@ test('第N分: who scores the next runs, at the lottery\'s price', async () => {
   assert.equal(legResult({ kind: 'nextrun', line: 1, side: 'away' }, final), 'lost');
   assert.equal(legResult({ kind: 'nextrun', line: 4, side: 'none' }, final), 'won');
   assert.equal(legResult({ kind: 'nextrun', line: 4, side: 'none' }, { status: 'final', awayScore: 2, homeScore: 1 }), null);
+});
+
+test('NASCAR and IndyCar: the next race of each from Kambi, settled on ESPN\'s order', async () => {
+  const { parseKambiSeriesRaces, parseEspnRace } = await import('../public/lib/sources.mjs');
+  const { legResult } = await import('../public/lib/account.mjs');
+  const drivers = Array.from({ length: 12 }, (_, i) => ({ participant: `Driver ${String.fromCharCode(65 + i)}`, odds: 3000 + i * 2000 }));
+  const race = (id, name, start, path, label = 'Finishing Position') => ({ event: { id, name, start, state: 'NOT_STARTED', path: path.map(termKey => ({ termKey })) }, betOffers: [{ from: 1, to: 1, criterion: { englishLabel: label }, outcomes: drivers }] });
+  const list = { events: [
+    race(1, 'Qualifying: South Point 400', '2026-10-03T21:35:00Z', ['motorsports', 'nascar', 'cup_series'], 'Qualifying Finishing Position'),
+    race(2, 'Focused Health 302', '2026-10-03T23:30:00Z', ['motorsports', 'nascar', 'oreilly_auto_parts_series']),
+    race(3, 'South Point 400', '2026-10-04T21:30:00Z', ['motorsports', 'nascar', 'cup_series']),
+    race(4, 'NASCAR Cup Series Championship 2026', '2026-11-08T20:00:00Z', ['motorsports', 'nascar', 'cup_series'], 'Championship Finishing Position'),
+    race(5, 'Bathurst 1000', '2026-10-11T03:00:00Z', ['motorsports', 'supercars'])
+  ] };
+  const races = parseKambiSeriesRaces(list, new Date('2026-09-30T00:00:00Z'));
+  assert.deepEqual(races.map(r => [r.series, r.title]), [['nascar', 'South Point 400']]);
+  assert.equal(races[0].drivers[0].name, 'Driver A');
+  assert.ok(Math.abs(races[0].drivers.reduce((s, d) => s + d.fair, 0) - 1) < 1e-6);
+  // ESPN's NASCAR scoreboard: the race alone, no session type.
+  const who = (order, name) => ({ order, winner: order === 1, athlete: { displayName: name } });
+  const espn = { events: [{ competitions: [{ date: '2026-10-04T21:30Z', status: { type: { completed: true, state: 'post', name: 'STATUS_FINAL' } }, competitors: [who(2, 'A.J. Allmendinger'), who(1, 'Driver B'), who(3, 'Driver C')] }] }] };
+  const outcome = parseEspnRace(espn, '2026-10-04T21:30:00Z', { anyType: true });
+  assert.equal(parseEspnRace(espn, '2026-10-04T21:30:00Z'), null);
+  assert.equal(legResult({ kind: 'race', driver: 'Driver B' }, outcome), 'won');
+  assert.equal(legResult({ kind: 'racepodium', driver: 'AJ Allmendinger' }, outcome), 'won');
+  assert.equal(legResult({ kind: 'race', driver: 'Driver C' }, outcome), 'lost');
 });
