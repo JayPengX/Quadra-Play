@@ -479,7 +479,8 @@ function seasonLabel(event, sport) {
   if (span) return `${span[1]}/${span[2]}`;
   const year = Number(/\d{4}/.exec(event.title)?.[0]);
   if (!year) return '';
-  return sport === 'mlb' ? String(year) : `${year - 1}/${String(year).slice(2)}`;
+  // Seasons inside one calendar year (baseball, the WNBA, MLS, racing): the year alone.
+  return ['mlb', 'wnba', 'mls', 'f1', 'cpbl', 'npb', 'kbo', 'nascar', 'indycar'].includes(sport) ? String(year) : `${year - 1}/${String(year).slice(2)}`;
 }
 
 // "Will (the) Los Angeles Dodgers win the 2026 World Series?" -> the team.
