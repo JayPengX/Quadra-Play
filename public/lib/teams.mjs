@@ -1,7 +1,7 @@
 // Logos, flags and the F1 grid: the shared kit's (lib/logos.mjs).
 import { CATALOG, familyOfSport } from './catalog.mjs';
 import { normalizeTeamName, MLB_ABBR, NBA_ABBR, EPL_ESPN_ID, TEAM_BADGES, rememberLogo, teamLogo } from './logos.mjs';
-export { normalizeTeamName, rememberLogo, teamLogo, leagueLogo, teamBadge, f1Driver, f1Constructor, countryFlag } from './logos.mjs';
+export { normalizeTeamName, rememberLogo, teamLogo, leagueLogo, teamBadge, f1Driver, f1Constructor, countryFlag, playerFlag, playerNation, flagEmoji } from './logos.mjs';
 
 // MLB team names as Taiwan Sports Lottery writes them. Astros/Athletics weren't
 // in any captured lottery page, so those two are the usual Taiwanese names.
@@ -124,7 +124,7 @@ export const LEAGUES = Object.fromEntries(
       const league = { family: familyOfSport(l.sport) };
       if (l.odds === 'espn') league.path = l.espn;
       else league.kambi = l.kambi;
-      for (const k of ['logo', 'icon', 'badge', 'neutral', 'sets', 'results', 'cap']) if (l[k] !== undefined) league[k] = l[k];
+      for (const k of ['logo', 'icon', 'badge', 'neutral', 'sets', 'results', 'scores', 'cap', 'players', 'top']) if (l[k] !== undefined) league[k] = l[k];
       return [l.bet, league];
     })
 );
@@ -134,6 +134,8 @@ export const KAMBI_LEAGUES = Object.keys(LEAGUES).filter(key => LEAGUES[key].kam
 export const isSets = sport => LEAGUES[sport]?.family === 'sets';
 // Played at a neutral venue by players, not home and away clubs.
 export const isNeutral = sport => Boolean(LEAGUES[sport]?.neutral);
+// Sides are people (a nation's flag as their picture).
+export const isPlayers = sport => Boolean(LEAGUES[sport]?.players);
 
 // Asian baseball clubs as Taiwan writes them, keyed by normalizeTeamName().
 const ASIA_TEAM_ZH = {

@@ -239,9 +239,12 @@ function sideOptions(game, base, probs) {
   const homeWin = probs.home / (probs.home + probs.away);
   let markets = [];
   if (family === 'baseball') markets = baseballMarkets({ homeWin, total: game.total });
-  else if (family === 'football' || family === 'basketball') {
+  else if (family === 'football' || family === 'basketball' || family === 'rugby' || family === 'aussie') {
     const model = pointsModel(game.sport, { homeWin, spread: game.spread, total: game.total });
     if (model) markets = pointsMarkets(model, { spreadLine: game.spread?.awayLine ?? null, totalLine: game.total?.line ?? null });
+    // Rugby league plays halves, Aussie rules quarters: their period scores
+    // aren't read back reliably, so only whole-game markets.
+    if (family === 'rugby' || family === 'aussie') markets = markets.filter(m => !['half', 'htotal', 'q1'].includes(m.kind));
   } else if (family === 'hockey') markets = goalMarkets(fitHockey(homeWin, game.total), { family, totalLine: game.total?.line ?? null });
   else if (family === 'sets') {
     const spec = LEAGUES[game.sport]?.sets ?? {};

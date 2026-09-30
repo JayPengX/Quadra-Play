@@ -21,7 +21,8 @@ import {
 import { pack, unpack } from './lib/codec.mjs';
 import { historyStats, funFacts, crowdPercentile } from './lib/history.mjs';
 import { detectLocale, makeT } from './lib/i18n.mjs';
-import { f1Driver, f1Constructor, findTeamLogo, countryFlag, leagueLogo, teamLogo, teamZh, LEAGUES, familyOf, isSoccer, isNeutral, normalizeTeamName } from './lib/teams.mjs';
+import { f1Driver, f1Constructor, findTeamLogo, countryFlag, leagueLogo, teamLogo, teamZh, LEAGUES, familyOf, isSoccer, isNeutral, isPlayers, normalizeTeamName, playerNation, flagEmoji } from './lib/teams.mjs';
+import { flagUrl } from './lib/logos.mjs';
 import { logoPicture, raceName } from './lib/logos.mjs';
 import { houseRule, houseCut, minLegsProblem, leagueTier } from './lib/rules.mjs';
 import { gameOptions, crowdPool, f1Podium, f1Markets, f1PoleFromWinner } from './lib/board.mjs';
@@ -178,7 +179,9 @@ function matchupText(game) {
 // event (Kambi's group: "Chengdu", "Italy Serie A" …).
 function gameSeries(game) {
   const league = state.t(`sport_${game.sport}`);
-  const event = game.group && normalizeTeamName(game.group) !== normalizeTeamName(league) ? game.group : null;
+  // Leagues whose Kambi group is only the league again ("Chinese Professional Baseball", "UFC").
+  const plain = ['baseball', 'basketball', 'rugby', 'aussie', 'mma'].includes(familyOf(game.sport));
+  const event = game.group && !plain && normalizeTeamName(game.group) !== normalizeTeamName(league) ? game.group : null;
   return event ? `${league} · ${event}` : league;
 }
 
@@ -406,6 +409,10 @@ function dayKey(iso) {
   return taipeiDayKey(iso);
 }
 
+// Where a league sits on screen: the catalogue's headline leagues (CPBL
+// among them) with the majors, whatever the house's risk tier says about its cut.
+const shownTier = sport => (LEAGUES[sport]?.top ? 'major' : leagueTier(sport));
+
 // The sport filter: everything, a kind of sport (g:<group>), or one league.
 const SPORT_GROUPS = {
   baseball: { icon: '⚾', leagues: ['mlb', 'npb', 'kbo', 'cpbl'] },
@@ -413,6 +420,9 @@ const SPORT_GROUPS = {
   soccer: { icon: '⚽', leagues: Object.keys(LEAGUES).filter(key => LEAGUES[key].family === 'soccer') },
   football: { icon: '🏈', leagues: ['nfl', 'ncaaf'] },
   hockey: { icon: '🏒', leagues: ['nhl'] },
+  mma: { icon: '🥊', leagues: ['ufc'] },
+  rugby: { icon: '🏉', leagues: ['nrl'] },
+  aussie: { icon: '🏉', leagues: ['afl'] },
   tennis: { icon: '🎾', leagues: ['tennis', 'wta'] },
   badminton: { icon: '🏸', leagues: ['badminton'] },
   tabletennis: { icon: '🏓', leagues: ['tabletennis'] },
@@ -427,7 +437,17 @@ function inSport(sport) {
   return state.sport.startsWith('g:') && SPORT_GROUPS[state.sport.slice(2)]?.leagues.includes(sport);
 }
 
+// Why the games tab opened on a league instead of the game asked for; gone once another sport is picked.
+function renderWantedNote() {
+  const note = $('wanted-note');
+  if (!note) return;
+  note.hidden = !state.wantedNote;
+  note.textContent = state.wantedNote || '';
+}
+
 function rerenderFiltered() {
+  state.wantedNote = '';
+  renderWantedNote();
   renderSportFilter();
   renderTabs();
   renderDayFilter();
@@ -545,8 +565,32 @@ function renderDayFilter() {
   );
 }
 
+// Where Kambi filed each player's match (its group and path words): their
+// country when the kit's table doesn't know them. Rebuilt when the games change.
+const whereIndex = { games: null, live: null, map: new Map() };
+function whereFor(sport, en) {
+  const games = state.data?.games;
+  const live = state.liveGames;
+  if (whereIndex.games !== games || whereIndex.live !== live) {
+    whereIndex.map = new Map();
+    for (const g of [...(games || []), ...(live || [])]) for (const side of ['home', 'away']) if (g.where?.length && g[side]?.en) whereIndex.map.set(`${g.sport}|${g[side].en}`, g.where);
+    Object.assign(whereIndex, { games, live });
+  }
+  return whereIndex.map.get(`${sport}|${en}`) || [];
+}
+
 // A team logo, or its initials in a circle when there's no logo (or it fails).
+// Players (tennis, table tennis, badminton, snooker, fighters): their nation's flag.
 function logoImg(sport, enName, label, size = '') {
+  if (isPlayers(sport)) {
+    // A flag ESPN gave for them (fighters' cards), else the kit's table or where the match is filed.
+    const seen = teamLogo(sport, enName);
+    const nation = playerNation(enName, whereFor(sport, enName));
+    const initial = () => el('span', { class: `logo logo-fallback ${size}`, 'aria-hidden': 'true', text: (label || '?').trim().slice(0, 1) });
+    const emoji = () => (nation ? el('span', { class: `logo logo-flag ${size}`, 'aria-hidden': 'true', text: flagEmoji(nation) }) : initial());
+    if (seen || nation) return logoPicture(seen || flagUrl(nation), null, `logo player-flag ${size}`, emoji);
+    return initial();
+  }
   // A national team's flag; else one character: a Chinese name's first
   // character, or an English initial.
   const flag = countryFlag(enName);
@@ -667,9 +711,9 @@ function renderGames() {
   // the thinly traded ones (table tennis, lower tennis tours…) fold away
   // behind one row, so the board opens on the games people know.
   const TIER = { major: 0, minor: 1, thin: 2 };
-  const ordered = searching ? listed : [...listed].sort((a, b) => TIER[leagueTier(a.sport)] - TIER[leagueTier(b.sport)] || a.startUtc.localeCompare(b.startUtc));
-  const fold = !searching && state.sport === 'all' && !state.showThin && ordered.some(g => leagueTier(g.sport) !== 'thin');
-  const shown = fold ? ordered.filter(g => leagueTier(g.sport) !== 'thin') : ordered;
+  const ordered = searching ? listed : [...listed].sort((a, b) => TIER[shownTier(a.sport)] - TIER[shownTier(b.sport)] || a.startUtc.localeCompare(b.startUtc));
+  const fold = !searching && state.sport === 'all' && !state.showThin && ordered.some(g => shownTier(g.sport) !== 'thin');
+  const shown = fold ? ordered.filter(g => shownTier(g.sport) !== 'thin') : ordered;
   const rest = ordered.length - shown.length;
   container.replaceChildren(
     ...shown.map(game => gameCard(game, byGame.get(game.id))),
@@ -721,7 +765,7 @@ function gameCard(game, bets) {
         : el('span', { class: 'game-time', text: state.query ? `${dayKey(game.startUtc).slice(5).replace('-', '/')} ${hhmm(game.startUtc)}` : hhmm(game.startUtc) })
     ]),
     el('div', { class: 'team-rows' }, rows),
-    open ? gameMore(game, others) : null,
+    open && (others.length || !game.live) ? gameMore(game, others) : null,
     others.length === 0 ? null : el('button', { class: 'more-toggle', type: 'button', 'aria-expanded': String(open), onclick: toggle }, [
       document.createTextNode(open ? t('lessMarkets') : t('moreMarkets'))
     ])
@@ -1010,6 +1054,8 @@ function buildLiveBets(data) {
       startUtc: g.startUtc,
       away: { en: g.away, zh: teamZh(g.sport, g.away) },
       home: { en: g.home, zh: teamZh(g.sport, g.home) },
+      group: g.group || '',
+      where: g.where || [],
       live: { ...g, book: 'kambi' }
     };
     games.push(game);
@@ -1085,7 +1131,7 @@ function renderLive() {
   const t = state.t;
   // The big leagues first, then by start.
   const TIER = { major: 0, minor: 1, thin: 2 };
-  const games = state.liveGames.filter(g => inSport(g.sport)).sort((a, b) => TIER[leagueTier(a.sport)] - TIER[leagueTier(b.sport)] || a.startUtc.localeCompare(b.startUtc));
+  const games = state.liveGames.filter(g => inSport(g.sport)).sort((a, b) => TIER[shownTier(a.sport)] - TIER[shownTier(b.sport)] || a.startUtc.localeCompare(b.startUtc));
   $('live').hidden = !games.length;
   if (!games.length) return;
   const byGame = groupBy(state.liveBets, b => b.gameId);
@@ -1102,7 +1148,9 @@ async function refreshLive() {
   if (liveBusy) return void (liveAgain = true);
   liveBusy = true;
   try {
-    const data = await loadLive(new Date(), LIVE_MIN_LIQUIDITY);
+    // The league of a game Fixtures sent here, read even if the board didn't list it.
+    const wantedSport = String(state.wantedGame || '').split('_')[0];
+    const data = await loadLive(new Date(), LIVE_MIN_LIQUIDITY, LEAGUES[wantedSport] ? [wantedSport] : []);
     const { games, bets } = buildLiveBets(data);
     state.liveRecs = recommend(bets);
     state.liveGames = games;
@@ -1114,6 +1162,7 @@ async function refreshLive() {
     renderLive();
     renderParlay();
     renderTabs();
+    if (state.tab === 'home') renderHome(homeCtx());
     // A game Fixtures asked for that's already on.
     if (state.wantedGame) openWantedGame();
   } catch (error) {
@@ -1128,7 +1177,7 @@ async function refreshLive() {
 }
 
 setInterval(() => {
-  if (document.visibilityState === 'visible' && (state.tab === 'games' || (state.tab === 'slip' && state.parlay.some(id => id.startsWith('live|'))))) refreshLive();
+  if (document.visibilityState === 'visible' && (state.tab === 'games' || state.tab === 'home' || (state.tab === 'slip' && state.parlay.some(id => id.startsWith('live|'))))) refreshLive();
 }, LIVE_REFRESH_MS);
 
 // ---- Championships and F1: one board each -------------------------------------
@@ -1610,7 +1659,7 @@ function commitAccount(next) {
 
 // While Play is closed: when an open slip's last game should be over, a
 // notice to come and see how it went (it settles when Play is opened).
-const GAME_HOURS = { baseball: 3.3, football: 3.5, basketball: 2.6, hockey: 2.7, soccer: 2.1, sets: 2.5, racing: 2.2 };
+const GAME_HOURS = { baseball: 3.3, football: 3.5, basketball: 2.6, hockey: 2.7, soccer: 2.1, sets: 2.5, racing: 2.2, mma: 5, rugby: 2, aussie: 3 };
 function syncPush(profile) {
   const now = Date.now();
   const items = [];
@@ -2943,7 +2992,10 @@ async function load() {
     const fresh = await loadOdds(now, saved ? undefined : onProgress);
     const extraGames = loadExtraLeagues(now).catch(error => (console.error(error), []));
     // Their scoreboards tell which leagues have a game on: the live board again.
-    extraGames.then(() => refreshLive());
+    extraGames.then(() => {
+      state.boardComplete = true;
+      refreshLive();
+    });
     const extraFutures = loadExtraFutures().catch(error => (console.error(error), []));
     if (saved) {
       // Swapped in whole (every league's games at once), so the list doesn't
@@ -3126,15 +3178,45 @@ window.addEventListener('hashchange', () => {
   state.wantedGame = wanted;
   openWantedGame();
 });
+// "game=<id>" (a game, or f1 / f1pole), or "league=<key>" (a league's board:
+// a fight card, a tennis draw), as the wanted game ("league:<key>" for the latter).
 function hashGame(hash) {
-  const part = String(hash || '').split('&').find(p => p.startsWith('game='));
-  return part ? decodeURIComponent(part.slice(5)) : null;
+  const parts = String(hash || '').split('&');
+  const game = parts.find(p => p.startsWith('game='));
+  if (game) return decodeURIComponent(game.slice(5));
+  const league = parts.find(p => p.startsWith('league='));
+  return league ? `league:${decodeURIComponent(league.slice(7))}` : null;
 }
 
 // Opens the game asked for in the address: its day and sport, its card
 // open with every market, scrolled into view.
+// The games tab on one league (the wanted game's, when it can't be found),
+// its live games first, with a line saying why (`note`).
+function showLeague(key, note = '') {
+  state.wantedGame = null;
+  state.wantedNote = note;
+  state.tab = 'games';
+  state.sport = LEAGUES[key] || key === 'f1' ? key : 'all';
+  state.dayPicked = false;
+  state.query = '';
+  renderAll();
+  renderWantedNote();
+  showTab('games');
+  const live = state.liveGames.some(g => g.sport === key);
+  requestAnimationFrame(() => $(live ? 'live' : 'games')?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+}
+
 function openWantedGame() {
   const id = state.wantedGame;
+  if (!id || !state.data) return;
+  if (id.startsWith('league:')) {
+    // Once its games are on the board (the other leagues come in after the main board).
+    const key = id.slice(7);
+    const has = state.data.games.some(g => g.sport === key) || state.liveGames.some(g => g.sport === key);
+    if (has) return showLeague(key);
+    if (state.boardComplete && state.liveAt) return showLeague('all', state.t('wantedGone', { league: state.t(`sport_${key}`) }));
+    return;
+  }
   // F1 from Quadra Fixtures ("f1", or "f1pole" for qualifying): the race's board.
   if (/^f1(pole)?$/.test(id || '') && state.data?.f1) {
     state.wantedGame = null;
@@ -3158,14 +3240,19 @@ function openWantedGame() {
     const flat = key.replace(/\s+/g, '');
     return Boolean(want) && (flat === want || want.includes(flat) || flat.includes(want) || key.split(' ').some(w => w.length >= 4 && want.includes(w)));
   };
-  const alike = g => g.sport === sport && near(g.away.en, away) && near(g.home.en, home) && (!hour || Math.abs(Date.parse(g.startUtc) - Date.parse(`${hour}:00:00Z`)) < 12 * 3_600_000);
+  // Players (tennis, fights…) in either order: the two sources list them differently.
+  const sides = g => (near(g.away.en, away) && near(g.home.en, home)) || (isNeutral(sport) && near(g.away.en, home) && near(g.home.en, away));
+  // Within half a day of the id's hour: the same clubs meet again the next
+  // day in a baseball series, and that's another game.
+  const near12 = g => !hour || Math.abs(Date.parse(g.startUtc) - Date.parse(`${hour}:00:00Z`)) < 12 * 3_600_000;
+  const alike = g => g.sport === sport && sides(g) && near12(g);
   const game =
     id &&
     (state.data?.games.find(g => g.id === id || g.id.toLowerCase() === id.toLowerCase()) ||
-      state.data?.games.find(g => g.sport === sport && g.id.endsWith(`_${away}_${home}`)) ||
+      state.data?.games.find(g => g.sport === sport && g.id.endsWith(`_${away}_${home}`) && near12(g)) ||
       state.data?.games.find(alike));
-  // Already under way: its live card.
-  const live = !game && id ? state.liveGames.find(alike) : null;
+  // Under way: its live card (the board can still hold it from before the start).
+  const live = id ? state.liveGames.find(alike) : null;
   if (live) {
     state.wantedGame = null;
     state.tab = 'games';
@@ -3176,8 +3263,16 @@ function openWantedGame() {
     requestAnimationFrame(() => document.querySelector(`[data-game="${CSS.escape(live.id)}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
     return;
   }
-  if (!game) return;
+  if (!game) {
+    // Every league and the games in play read, and still not there (over,
+    // not on sale yet, or no live price right now): its league's board, and why.
+    if (!state.boardComplete || !state.liveAt) return;
+    const league = state.t(`sport_${sport}`);
+    const started = hour && Date.parse(`${hour}:00:00Z`) < Date.now();
+    return showLeague(LEAGUES[sport] ? sport : 'all', state.t(started ? 'wantedNoLive' : 'wantedGone', { league: LEAGUES[sport] ? league : '' }));
+  }
   state.wantedGame = null;
+  state.wantedNote = '';
   state.tab = 'games';
   state.day = dayKey(game.startUtc);
   state.dayPicked = true;
@@ -3277,7 +3372,17 @@ function homeCtx() {
     renderParlay();
     showTab('slip');
   };
-  return { state, q, el, fmtMoney, fmtOdds, fmtTime, pickTitle, pickButton, teamName, gameSeries, matchupText, logoImg, leagueImg, toggleLeg, takeParlay, showTab, openGame: id => ((state.wantedGame = id), openWantedGame()), betKeys, track, funds, slipRange, cashOutPrice, doCashOut, leagueTier, isSoccer, isNeutral, parlayPays, boostPct: n => Math.round(boostRate(n, boostX()) * 100) };
+  // A live game's card on the games tab, open with its markets (null: the live list's top).
+  const openLive = id => {
+    state.tab = 'games';
+    state.sport = 'all';
+    state.query = '';
+    if (id) state.open.add(id);
+    renderAll();
+    showTab('games');
+    requestAnimationFrame(() => (id ? document.querySelector(`[data-game="${CSS.escape(id)}"]`) : $('live'))?.scrollIntoView({ block: id ? 'center' : 'start', behavior: 'smooth' }));
+  };
+  return { state, q, el, fmtMoney, fmtOdds, fmtTime, pickTitle, pickButton, teamName, gameSeries, matchupText, logoImg, leagueImg, toggleLeg, takeParlay, showTab, openGame: id => ((state.wantedGame = id), openWantedGame()), openLive, liveStateText, betKeys, track, funds, slipRange, cashOutPrice, doCashOut, leagueTier: shownTier, isSoccer, isNeutral, parlayPays, boostPct: n => Math.round(boostRate(n, boostX()) * 100) };
 }
 statsUi = mountStats({ state, el, svgEl, fmtMoney, fmtInt, fmtPctShort, fmtOdds, fmtTime, showTab, sportName: key => (key === 'mixed' ? state.t('sportMixed') : state.t(`sport_${key}`) === `sport_${key}` ? String(key).toUpperCase() : state.t(`sport_${key}`)), youCard, crowdCard, funCard, picksCard, breakdownCard });
 lotteryUi = mountLottery({ state, q, el, fmtMoney, funds, commitAccount, track, getAccount: () => state.account, syncNow, showTickets });

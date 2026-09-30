@@ -31,7 +31,10 @@ export const SCORE_SPREAD = {
   wnba: { margin: 11, total: 14, bands: [[1, 5], [6, 10], [11, 15], [16, null]], step: 4 },
   // EuroLeague and B.League: shorter games (40 minutes), lower scoring than the NBA.
   euroleague: { margin: 11, total: 15, bands: [[1, 5], [6, 10], [11, 15], [16, null]], step: 4 },
-  bleague: { margin: 11.5, total: 16, bands: [[1, 5], [6, 10], [11, 15], [16, null]], step: 4 }
+  bleague: { margin: 11.5, total: 16, bands: [[1, 5], [6, 10], [11, 15], [16, null]], step: 4 },
+  // Rugby league and Aussie rules: the margins' usual spread against the line.
+  nrl: { margin: 15, total: 13, bands: [[1, 6], [7, 12], [13, 18], [19, null]], step: 3 },
+  afl: { margin: 34, total: 28, bands: [[1, 12], [13, 24], [25, 39], [40, null]], step: 6 }
 };
 
 export function normalCdf(z) {

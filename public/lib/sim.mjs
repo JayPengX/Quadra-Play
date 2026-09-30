@@ -821,6 +821,13 @@ export const SIM_SPORTS = {
   wcqeurope: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
   leaguecup: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
   copadelrey: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
+  // FA Cup: the first round in November (40 ties) to the final in May.
+  facup: { family: 'soccer', kind: 'soccer', pop: 0.2, games: w => ({ 44: 40, 48: 20, 1: 32, 5: 16, 9: 8, 11: 4, 16: 2, 20: 1 })[w] ?? 0 },
+  // UFC: a card most weeks (about 12 bouts), a few weeks off a year.
+  ufc: { family: 'mma', kind: 'mma', pop: 0.4, games: w => (w % 6 === 5 || w === 51 ? 0 : 12) },
+  // NRL: March to the grand final in early October; AFL: March to late September.
+  nrl: { family: 'rugby', kind: 'rugby', pop: 0.1, games: w => (between(w, 9, 38) ? 8 : between(w, 39, 40) ? 2 : 0) },
+  afl: { family: 'aussie', kind: 'aussie', pop: 0.1, games: w => (between(w, 10, 35) ? 9 : between(w, 36, 38) ? 2 : 0) },
   // Tennis: ATP and WTA main-draw singles, about 60 and 50 matches a week.
   tennis: { family: 'sets', kind: 'tennis', pop: 2, headline: true, games: tourWeek(60) },
   wta: { family: 'sets', kind: 'tennis', pop: 1, games: tourWeek(50) },
@@ -880,7 +887,7 @@ export function weekOfYear(date) {
 // (board.mjs), so they get the same markets, the same house cut for the
 // league and the same locks. A sport off the board is then no cheaper, or
 // dearer, to bet on than one on it. Seeded, so it's the same every time.
-const TEMPLATE_WIN = { baseball: [0.35, 0.65], basketball: [0.15, 0.85], football: [0.2, 0.8], hockey: [0.35, 0.65], sets: [0.12, 0.88] };
+const TEMPLATE_WIN = { baseball: [0.35, 0.65], basketball: [0.15, 0.85], football: [0.2, 0.8], hockey: [0.35, 0.65], sets: [0.12, 0.88], mma: [0.2, 0.8], rugby: [0.2, 0.8], aussie: [0.15, 0.85] };
 // Each sport's usual total line (none: its own model sets one).
 const TEMPLATE_TOTAL = { mlb: 8.5, npb: 7.5, kbo: 9.5, cpbl: 9.5, nfl: 44.5, ncaaf: 52.5, nba: 224.5, wnba: 162.5, ncaam: 143.5, ncaaw: 136.5, euroleague: 160.5, bleague: 158.5, nhl: 5.5 };
 // An F1 field as the market usually prices it: the average shape of two real
@@ -890,7 +897,7 @@ const TEMPLATE_TOTAL = { mlb: 8.5, npb: 7.5, kbo: 9.5, cpbl: 9.5, nfl: 44.5, nca
 const F1_FIELD = [0.5165, 0.1703, 0.105, 0.077, 0.0431, 0.0323, 0.0261, 0.0095, 0.0041, 0.0018, 0.0014, 0.0012, 0.0012, 0.0012, 0.0012, 0.0009, 0.0009, 0.0009, 0.0009, 0.0009, 0.0009, 0.0009, 0.0009, 0.0007, 0.0002];
 // Matches in sets: the bookmaker's handicap and total in games (tennis),
 // points or frames, as it lists them.
-const TEMPLATE_UNITS = { tennis: [3.5, 22.5], wta: [3.5, 21.5], badminton: [4.5, 80.5], tabletennis: [3.5, 75.5], volleyball: [4.5, 180.5], snooker: [1.5, 8.5] };
+const TEMPLATE_UNITS = { tennis: [3.5, 22.5], wta: [3.5, 21.5], badminton: [4.5, 80.5], tabletennis: [3.5, 75.5], volleyball: [4.5, 180.5], snooker: [1.5, 8.5], nrl: [6.5, 44.5], afl: [12.5, 165.5] };
 const templates = new Map();
 export function sportTemplate(sport, seed = 7) {
   const key = `${sport}|${seed}`;

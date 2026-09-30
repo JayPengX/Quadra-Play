@@ -732,6 +732,55 @@ export function parseEspnTennis(data, home, away) {
   return null;
 }
 
+// A fight on ESPN's card (every bout of the event), by the two fighters in
+// either order: the winner as 1-0 from the leg's home and away. A draw, a no
+// contest or a bout called off is void.
+const sameName = (a, b) => {
+  const x = normalizeTeamName(a);
+  const y = normalizeTeamName(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  // "Jiří Procházka" / "Jiri Prochazka"; "Alatengheili" / "Heili Alateng": the same surname and first letter.
+  const [xs, ys] = [x.split(' '), y.split(' ')];
+  return xs.length > 1 && ys.length > 1 && xs.at(-1) === ys.at(-1) && xs[0][0] === ys[0][0];
+};
+export function parseEspnFight(data, home, away) {
+  for (const event of data?.events || []) {
+    for (const comp of event.competitions || []) {
+      const fighters = comp.competitors || [];
+      if (fighters.length !== 2) continue;
+      const name = c => c.athlete?.displayName || c.athlete?.fullName || '';
+      const h = fighters.find(c => sameName(name(c), home));
+      const a = fighters.find(c => c !== h && sameName(name(c), away));
+      if (!h || !a) continue;
+      const type = comp.status?.type || {};
+      if (/CANCEL|POSTPONED|NO_CONTEST|ABANDONED/.test(type.name || '')) return { status: 'void' };
+      if (!type.completed) return { status: 'pending', state: type.state === 'in' ? 'in' : null, detail: '' };
+      if (!h.winner && !a.winner) return { status: 'void' };
+      return { status: 'final', homeScore: h.winner ? 1 : 0, awayScore: a.winner ? 1 : 0 };
+    }
+  }
+  return null;
+}
+
+// A team game Kambi priced, from the league's ESPN scoreboard (NRL, AFL):
+// the clubs by a shared name word, sides turned round if ESPN has them the
+// other way, within half a day of the pick's start.
+const clubWords = name => normalizeTeamName(name).split(' ').filter(w => w.length >= 4);
+const sameClub = (a, b) => {
+  const x = normalizeTeamName(a);
+  const y = normalizeTeamName(b);
+  return x === y || x.includes(y) || y.includes(x) || clubWords(a).some(w => clubWords(b).includes(w));
+};
+export function findEspnGame(games, leg) {
+  for (const g of games) {
+    if (Math.abs(Date.parse(g.startUtc) - Date.parse(leg.start)) > 12 * 3_600_000) continue;
+    if (sameClub(g.home, leg.home) && sameClub(g.away, leg.away)) return g;
+    if (sameClub(g.home, leg.away) && sameClub(g.away, leg.home)) return { ...g, home: g.away, away: g.home, homeScore: g.awayScore, awayScore: g.homeScore, homeInnings: g.awayInnings, awayInnings: g.homeInnings };
+  }
+  return null;
+}
+
 // ESPN files games under the US Eastern date.
 function espnDates(startUtc) {
   const t = Date.parse(startUtc);
@@ -793,11 +842,28 @@ export async function fetchOutcomes(legs, now = new Date()) {
       }
       const league = LEAGUES[leg.sport];
       if (league?.results) {
-        const data = await page(`${ESPN}/${league.results}/scoreboard?dates=${yyyymmdd(new Date(leg.start))}`);
-        const result = data && parseEspnTennis(data, leg.home, leg.away);
-        if (result && result.status !== 'pending') {
-          out.set(leg.id, result);
-          return;
+        // Tennis: the tournament's matches; fights: the card, filed under its
+        // US date (a night card's bouts start past midnight UTC).
+        const fight = league.family === 'mma';
+        for (const back of fight ? [0, 1] : [0]) {
+          const data = await page(`${ESPN}/${league.results}/scoreboard?dates=${yyyymmdd(new Date(Date.parse(leg.start) - back * DAY_MS))}`);
+          const result = data && (fight ? parseEspnFight(data, leg.home, leg.away) : parseEspnTennis(data, leg.home, leg.away));
+          if (result && (result.status !== 'pending' || fight)) {
+            out.set(leg.id, result);
+            return;
+          }
+        }
+      }
+      // NRL, AFL: priced by Kambi, scored by ESPN.
+      if (league?.scores) {
+        const t = Date.parse(leg.start);
+        for (const date of [...new Set([...espnDates(leg.start), yyyymmdd(new Date(t)), yyyymmdd(new Date(t + DAY_MS))])]) {
+          const data = await page(`${ESPN}/${league.scores}/scoreboard?dates=${date}`);
+          const game = data && findEspnGame(parseEspnResults(data, leg.sport), leg);
+          if (game) {
+            out.set(leg.id, game);
+            return;
+          }
         }
       }
       // Kambi's sports: the result from the match's own live data, once the
@@ -939,9 +1005,10 @@ const LIVE_HOURS = { baseball: 5, soccer: 2.5, football: 4.5, basketball: 3, hoc
 // The ESPN leagues that may have a game on now: MLB and the Premier League
 // always, every other one whose scoreboard (read for the board) had a game
 // starting within its sport's length.
-export function liveLeagues(now = new Date()) {
+// `extra`: leagues asked for anyway (a game Quadra Fixtures sent here that's on now).
+export function liveLeagues(now = new Date(), extra = []) {
   const t = now.getTime();
-  const out = new Set(['mlb', 'epl']);
+  const out = new Set(['mlb', 'epl', ...extra.filter(k => ESPN_PATH[k])]);
   for (const [sport, starts] of seenStarts) {
     const hours = LIVE_HOURS[familyOf(sport)];
     if (!hours || !ESPN_PATH[sport]) continue;
@@ -959,9 +1026,9 @@ export function liveLeagues(now = new Date()) {
 // (MLB with Polymarket's live price too) and Kambi's, with Kambi's own live
 // prices (`kambi`). Pregame lines come from the board's scoreboards or, for a
 // game that had started before the page opened, its summary (once per game).
-export async function loadLive(now = new Date(), minLiquidity = 5000) {
+export async function loadLive(now = new Date(), minLiquidity = 5000, extra = []) {
   const [espn, kambi] = await Promise.all([
-    Promise.all(liveLeagues(now).map(key => getJson(`${ESPN}/${ESPN_PATH[key]}/scoreboard`).then(d => parseEspnLive(d, key)).catch(() => []))),
+    Promise.all(liveLeagues(now, extra).map(key => getJson(`${ESPN}/${ESPN_PATH[key]}/scoreboard`).then(d => parseEspnLive(d, key)).catch(() => []))),
     Promise.all(KAMBI_LEAGUES.map(key => getJson(kambiUrl(LEAGUES[key].kambi, 'in-play'), 'kambi-events').then(d => parseKambiInPlay(d, key)).catch(() => [])))
   ]);
   const games = espn.flat();
@@ -1003,7 +1070,21 @@ export async function loadExtraLeagues(now = new Date()) {
     Promise.allSettled(KAMBI_LEAGUES.map(key => fetchKambiLeague(key, now, getJson)))
   ]);
   const ok = results => results.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
+  await rememberFighterFlags(ok(kambi).filter(g => g.sport === 'ufc')).catch(() => {});
   return lotteryGames([...mergeGames(ok(espn), []), ...ok(kambi)], now);
+}
+
+// Fighters' flags from ESPN's cards (Kambi names no country): each card's
+// fighters, remembered as their pictures (teamLogo('ufc', name)).
+export function parseFighterFlags(data) {
+  const out = [];
+  for (const event of data?.events || []) for (const comp of event.competitions || []) for (const c of comp.competitors || []) if (c.athlete?.displayName && c.athlete.flag?.href) out.push([c.athlete.displayName, c.athlete.flag.href]);
+  return out;
+}
+async function rememberFighterFlags(games) {
+  const dates = [...new Set(games.flatMap(g => [yyyymmdd(new Date(Date.parse(g.startUtc) - 5 * 3_600_000)), yyyymmdd(new Date(g.startUtc))]))].slice(0, 6);
+  const pages = await Promise.all(dates.map(d => getJson(`${ESPN}/mma/ufc/scoreboard?dates=${d}`).catch(() => null)));
+  for (const [name, flag] of pages.flatMap(parseFighterFlags)) rememberLogo('ufc', name, flag);
 }
 
 // A league's clubs, logos and nicknames from ESPN's team list (for the
@@ -1059,7 +1140,7 @@ async function storeTeams(url, teams) {
 // lottery does with a match that has no official result. That's once the
 // kept copy is marked gone, or, with nothing kept at all, once the match is
 // surely over (its sport's longest usual length, plus two hours).
-const KAMBI_LONGEST_H = { tabletennis: 2, badminton: 3, volleyball: 4, tennis: 6, wta: 5, snooker: 10, npb: 6, kbo: 6, cpbl: 6, euroleague: 4, bleague: 4 };
+const KAMBI_LONGEST_H = { tabletennis: 2, badminton: 3, volleyball: 4, tennis: 6, wta: 5, snooker: 10, npb: 6, kbo: 6, cpbl: 6, euroleague: 4, bleague: 4, ufc: 10, nrl: 30, afl: 30 };
 export function kambiUnresolvable(leg, entry, now = new Date(), watchReachable = true) {
   if (entry?.gone) return true;
   const past = now.getTime() - Date.parse(leg.start);

@@ -55,7 +55,9 @@ export function parseKambiEvents(data, sport, now = new Date(), limit = Infinity
       spread: null,
       book: 'kambi',
       kambiId: e.id,
-      group: e.group || ''
+      group: e.group || '',
+      // Where Kambi files it ("table_tennis/czech_republic/…"): a player's country when the kit's table doesn't know them.
+      where: kambiWhere(e)
     };
     const handicap = offers.find(o => o.betOfferType?.englishName === 'Handicap');
     if (handicap) {
@@ -74,6 +76,9 @@ export function parseKambiEvents(data, sport, now = new Date(), limit = Infinity
   }
   return games.sort((a, b) => a.startUtc.localeCompare(b.startUtc)).slice(0, limit);
 }
+
+// The event's group and path words, for playerNation (the proxy's trim keeps path as words).
+export const kambiWhere = e => [e.group, ...(e.path || []).map(p => (typeof p === 'string' ? p : p?.termKey))].filter(Boolean);
 
 export async function fetchKambiLeague(key, now = new Date(), getJson) {
   const league = LEAGUES[key];
@@ -94,7 +99,8 @@ const PART = /\b(\d(st|nd|rd|th)|set|frame|game \d|quarter|half|inning|period|by
 // (between points, a review): `ml` null, shown without bets.
 export function parseKambiInPlay(data, sport) {
   const league = LEAGUES[sport];
-  const team = league?.family === 'baseball' || league?.family === 'basketball';
+  // Team sports with a main handicap and total worth selling live.
+  const team = ['baseball', 'basketball', 'rugby', 'aussie'].includes(league?.family);
   const games = [];
   for (const item of data?.events || []) {
     const e = item.event;
@@ -110,6 +116,8 @@ export function parseKambiInPlay(data, sport) {
       startUtc: new Date(e.start).toISOString(),
       away: e.awayName,
       home: e.homeName,
+      group: e.group || '',
+      where: kambiWhere(e),
       ml: win ? { home: win[0], away: win[1] } : null,
       spread: null,
       total: null

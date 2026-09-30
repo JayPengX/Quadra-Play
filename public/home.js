@@ -2,6 +2,8 @@
 //
 // - The balance, with what's out in open bets and what they could cash out
 //   for right now.
+// - 場中焦點: games on now with live prices (the same ranking), a tap on a
+//   price puts it on the slip, the card opens the game's live markets.
 // - 焦點賽事: the games worth betting on, as the board shows them (the win
 //   prices, a tap puts one on the slip). Ranked by the shared recommender
 //   (quadra.mjs's rank): what's followed in Quadra Fixtures weighs most (the
@@ -18,6 +20,7 @@ import { familyOfSport } from './lib/catalog.mjs';
 const TXT = {
   zh: {
     balance: 'Quadra 餘額', atStake: '投注中', slipsN: '{n} 張', cashNow: '可兌現', most: '全中最多',
+    live: '場中焦點', liveSub: '正在進行，賠率隨比分即時更新', allLive: '全部場中 {n} 場',
     featured: '焦點賽事', featuredSub: '依你追蹤和常玩的聯盟排序', allGames: '全部賽事', following: '追蹤中', markets: '{n} 種玩法',
     mine: '你的投注', seeAll: '全部', legs: '{n} 場', cashOut: '兌現', paused: '兌現暫停',
     lottery: '彩券', drawIn: '{when} 開獎', none: '賽事載入中，或目前沒有開賣的比賽。', draw: '和',
@@ -26,6 +29,7 @@ const TXT = {
   },
   en: {
     balance: 'Quadra balance', atStake: 'In play', slipsN: '{n} slips', cashNow: 'Cash out now', most: 'Most to win',
+    live: 'Live now', liveSub: 'On now: prices move with the score', allLive: 'All {n} live',
     featured: 'Featured', featuredSub: 'By what you follow and play', allGames: 'All games', following: 'Following', markets: '{n} markets',
     mine: 'Your bets', seeAll: 'See all', legs: '{n} picks', cashOut: 'Cash out', paused: 'Suspended',
     lottery: 'Lottery', drawIn: 'Draw {when}', none: 'Games are loading, or none are on sale right now.', draw: 'Draw',
@@ -101,6 +105,38 @@ export function renderHome(ctx) {
     return { id: `game:${g.id}`, game: g, keys, quality, group: g.sport };
   });
   const featured = rank(items, { wallet: state.wallet, n: 4, aff, now, diversity: 0.2, explore: 0 });
+
+  // ---- 場中焦點: games on now with a live win price, ranked the same way
+  const liveBetsOf = new Map();
+  for (const b of state.liveBets || []) {
+    if (!liveBetsOf.has(b.gameId)) liveBetsOf.set(b.gameId, []);
+    liveBetsOf.get(b.gameId).push(b);
+  }
+  const onNow = (state.liveGames || []).filter(g => (liveBetsOf.get(g.id) || []).some(b => b.kind === 'ml' && !b.lock));
+  const liveItems = onNow.map(g => ({ id: `live:${g.id}`, game: g, keys: [`league:${g.sport}`, `sport:${g.sport}`, teamKey(g, 'away'), teamKey(g, 'home')], quality: TIER_WEIGHT[ctx.leagueTier(g.sport)] + 0.3, group: g.sport }));
+  const liveTop = rank(liveItems, { wallet: state.wallet, n: 3, aff, now, diversity: 0.2, explore: 0 });
+  const liveCard = ({ game: g }) => {
+    const bets = liveBetsOf.get(g.id) || [];
+    const ml = bets.filter(b => b.kind === 'ml');
+    const sides = ctx.isSoccer(g.sport) ? ['home', 'draw', 'away'] : ctx.isNeutral(g.sport) ? ['home', 'away'] : ['away', 'home'];
+    return el('article', { class: 'feature live' }, [
+      el('button', { class: 'feature-top', type: 'button', onclick: () => ctx.openLive(g.id) }, [
+        ctx.leagueImg(g.sport, 'logo-xs'),
+        el('span', { class: 'feature-series', text: ctx.gameSeries(g) }),
+        el('span', { class: 'feature-live' }, [el('span', { class: 'live-dot', text: ctx.state.t('tagLive') }), document.createTextNode(ctx.liveStateText(g.live))])
+      ]),
+      el('div', { class: 'feature-rows' }, sides.map(side => {
+        const bet = ml.find(b => b.side === side);
+        return el('div', { class: 'feature-row' }, [
+          side === 'draw' ? el('span', { class: 'feature-draw', 'aria-hidden': 'true', text: '=' }) : ctx.logoImg(g.sport, g[side].en, ctx.teamName(g[side])),
+          el('span', { class: 'feature-team', text: side === 'draw' ? T.draw : ctx.teamName(g[side]) }),
+          side === 'draw' ? el('span') : el('strong', { class: 'feature-score num', text: String(g.live?.[`${side}Score`] ?? '') }),
+          bet ? ctx.pickButton(bet, '') : el('span')
+        ]);
+      })),
+      bets.length > ml.length ? el('button', { class: 'feature-more', type: 'button', onclick: () => ctx.openLive(g.id), text: `${f('markets', { n: bets.length })} ›` }) : null
+    ]);
+  };
 
   const featureCard = ({ game: g }) => {
     const bets = betsOf.get(g.id) || [];
@@ -200,10 +236,12 @@ export function renderHome(ctx) {
 
   // ---- The balance
   const member = plusMember(state.wallet);
+  const cash = state.account ? ctx.funds() : null;
   const header = el('section', { class: 'wallet-card' }, [
     el('div', { class: 'wallet-top' }, [el('span', { class: 'wallet-label', text: T.balance }), member ? el('span', { class: 'wallet-plus', text: '✦ PLUS' }) : null]),
-    el('strong', { class: `wallet-balance num${ctx.funds() < 0 ? ' neg' : ''}`, text: fmtMoney(ctx.funds(), { sign: ctx.funds() < 0 }) }),
-    ctx.funds() < 0
+    // Drawn from the saved board before the account has loaded: the balance a moment later.
+    el('strong', { class: `wallet-balance num${cash < 0 ? ' neg' : ''}`, text: cash == null ? '…' : fmtMoney(cash, { sign: cash < 0 }) }),
+    cash < 0
       ? el('button', { class: 'wallet-od', type: 'button', onclick: () => ctx.q.go('stock', 'portfolio') }, [el('span', { text: T.overdrawn }), el('strong', { text: `${T.cover} ›` })])
       : null,
     open.length
@@ -220,6 +258,12 @@ export function renderHome(ctx) {
   root.replaceChildren(
     ...[
       header,
+      liveTop.length
+        ? el('section', { class: 'home-block home-live' }, [
+            head(`● ${T.live}`, { sub: T.liveSub, action: el('button', { class: 'home-link', type: 'button', text: `${f('allLive', { n: onNow.length })} ›`, onclick: () => ctx.openLive(null) }) }),
+            el('div', { class: 'features' }, liveTop.map(liveCard))
+          ])
+        : null,
       el('section', { class: 'home-block' }, [
         head(T.featured, { sub: follow || Object.keys(habits).length ? T.featuredSub : '', action: el('button', { class: 'home-link', type: 'button', text: `${T.allGames} ›`, onclick: () => ctx.showTab('games') }) }),
         featured.length ? el('div', { class: 'features' }, featured.map(featureCard)) : el('p', { class: 'empty', text: T.none })
