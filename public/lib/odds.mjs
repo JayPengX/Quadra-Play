@@ -468,7 +468,8 @@ export const SLIP_RULES = {
 // Parlay boost: the winnings (payout less stake) of any winning combination
 // of 3 or more picks are raised by this share, by its size (7+ the most).
 // A slip keeps its `boost` multiplier from when it was bought: 1, or
-// PLUS.odds.boost (2) for a Quadra Plus member; slips before it have none.
+// PLUS.odds.boost for a Quadra Plus member (2 until v7, 1 since); slips
+// before it have none.
 // Even doubled, a parlay keeps most of the house's cut: every pick carries
 // its own (about 15%), and they multiply.
 export const PARLAY_BOOST = [0, 0, 0, 0.05, 0.08, 0.12, 0.15, 0.2];

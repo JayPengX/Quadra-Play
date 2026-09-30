@@ -11,7 +11,7 @@ cards, all with the one Quadra balance.
 | **Quadra Securities** | Where money lives and grows |
 | **Quadra Play** | A place to play: sports bets and the lottery |
 | **Quadra Fixtures** | The sports data centre, and the way into Play |
-| **Quadra Rewards** | The centre of Quadra: earning, goals and every app's guide |
+| **Quadra Rewards** | The centre of Quadra: points, goals and every app's guide |
 | Orbit Class | A related add-on: the class schedule |
 
 - **Quadra Pass required**, one app at a time, one money pool: see the
@@ -85,20 +85,22 @@ Calm on purpose: no banners, no one-tap "hot" parlays, no nags.
   ("其他 N 場").
 - **Parlay boost** (`PARLAY_BOOST` in `odds.mjs`): the winnings of any
   winning combination of 3+ picks grow by 5% (3), 8%, 12%, 15%, up to 20%
-  (7+); Quadra Plus doubles it. The slip shows the ladder and where the
-  ticket stands. A slip keeps its `boost` (1 or 2) from when it was bought;
-  older slips have none. Even doubled, a parlay keeps most of the house's
-  cut, since every pick carries its own and they multiply.
+  (7+), the same for everyone (Quadra Plus doubled it until v7). The slip
+  shows the ladder and where the ticket stands. A slip keeps its `boost`
+  (1, or 2 for a member's slip before v7) from when it was bought; older
+  slips have none. Even doubled, a parlay keeps most of the house's cut,
+  since every pick carries its own and they multiply.
 - **Plus daily boost** (kit `PLUS.odds.lift`, the slip's `lift`): one paid
-  slip a Taiwan day costing up to NT$1,000 wins 10% more of its winnings
+  slip a Taiwan day costing up to NT$500 (v7; was 1,000) wins 10% more of its winnings
   (`liftUsedToday`, `liftFits` in `account.mjs`; on the first of several
   singles). 10% is under every market's cut (1.158 and up), so a boosted
   slip still keeps the house ahead at any price (tested). The extra is paid
   as its own entry, `plus-<slip>` (kind `plusboost`), so the statement and
   the Plus sheet show it. Non-members see what the slip would win more.
-- **Free bets** come from Rewards' missions, Plus's weekly NT$100
-  (`eco:fb:<Monday>`) and the welcome NT$200 after a first paid bet
-  (`eco:fb:welcome`), both written by the Worker.
+- **Free bets** come from Plus's weekly NT$100 (`eco:fb:<Monday>`) and the
+  welcome NT$200 after a first paid bet (`eco:fb:welcome`), both written by
+  the Worker. Rewards' missions gave them before v7 (`vocab:fb:…`; the
+  Worker takes no new ones).
 - **VIP** (kit `VIP`, `vipStatus`): the balance card on home shows this
   month's tier from its gaming stakes, the cashback so far and the next
   tier; the Worker pays it after the month (`eco:vip:<month>`).

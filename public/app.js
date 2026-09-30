@@ -1326,7 +1326,8 @@ function renderParlay() {
   const mode = state.slipMode;
   const chosen = [...state.slipSizes].map(k => (k === 'all' ? n : k));
   const sizes = slipSizes(mode, n, chosen);
-  // A free bet (from Rewards): one slip, its value the stake, nothing paid.
+  // A free bet (Plus's weekly one, the welcome offer; Rewards' missions gave
+  // them before v7): one slip, its value the stake, nothing paid.
   const tokens = freeBetList();
   const free = tokens.find(x => x.id === state.useFree) || null;
   const freeOn = Boolean(free) && (mode === 'parlay' || (mode === 'single' && n === 1));
@@ -1577,7 +1578,8 @@ function payoutBox(legs, sizes, stake, mode, plusLift = 0) {
   ]);
 }
 
-// The parlay boost's multiplier for a slip bought now: doubled for Quadra Plus.
+// The parlay boost's multiplier for a slip bought now: PLUS.odds.boost for
+// a Quadra Plus member (1 since v7: the same as everyone's).
 function boostX() {
   return plusMember(q.wallet) ? PLUS.odds.boost : 1;
 }
@@ -1608,7 +1610,8 @@ function liftRow(legs, sizes, stake, mode, each, lift, multi) {
   return el('button', { class: 'q-plus-hint', type: 'button', onclick: () => openPlus(q), text: t('liftPlusOff', { v: fmtMoney(Math.floor(more), { sign: false }) }) });
 }
 // The parlay boost as a ladder: 3 picks and up, the share the winnings grow
-// by at each size, where this slip stands, and what Plus makes of it.
+// by at each size, where this slip stands, and what Plus makes of it (when
+// Plus changes it at all).
 function boostLadder(size) {
   const t = state.t;
   const x = boostX();
@@ -1621,9 +1624,11 @@ function boostLadder(size) {
   return el('div', { class: `boost${now > 0 ? ' on' : ''}` }, [
     el('div', { class: 'boost-head' }, [el('strong', { text: line }), el('small', { text: more })]),
     el('ol', { class: 'boost-steps' }, steps.map(k => el('li', { class: k <= size ? 'hit' : '' }, [el('span', { text: k === steps.at(-1) ? `${k}+` : String(k) }), el('b', { class: 'num', text: pct(boostRate(k, x)) })]))),
-    x > 1
-      ? el('p', { class: 'boost-plus', text: t('boostPlusOn') })
-      : el('button', { class: 'q-plus-hint', type: 'button', onclick: () => openPlus(q), text: t('boostPlusOff', { v: pct(boostRate(Math.max(size, 3), PLUS.odds.boost)) }) })
+    PLUS.odds.boost <= 1
+      ? null
+      : x > 1
+        ? el('p', { class: 'boost-plus', text: t('boostPlusOn') })
+        : el('button', { class: 'q-plus-hint', type: 'button', onclick: () => openPlus(q), text: t('boostPlusOff', { v: pct(boostRate(Math.max(size, 3), PLUS.odds.boost)) }) })
   ]);
 }
 
@@ -1640,7 +1645,7 @@ function payLine(label, value, cls = '') {
 // Signing in is required (quadra.mjs's sign-in screen). The account is this
 // app's data on the pass (a copy on the device under the pass, so it opens
 // at once); its ledger's entries go to the pass's wallet, the one Quadra
-// money pool, and the rest of the pool (Securities' cash, Rewards' earnings,
+// money pool, and the rest of the pool (Securities' cash, Rewards' shop,
 // Quadra's pay) is money to bet with here too.
 
 const q = quadraSession('odds', { lang: state.locale });
@@ -1914,7 +1919,7 @@ function legRecord(bet) {
   };
 }
 
-// The free bets Rewards gave that aren't spent (on this device either).
+// The free bets not yet spent (on this device either).
 function freeBetList() {
   if (!state.accountReady) return [];
   return freeBets(state.wallet, Date.now(), state.account.ledger.filter(e => e.kind === 'freebet').map(e => e.id.slice(3)));
