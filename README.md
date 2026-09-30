@@ -90,14 +90,15 @@ Calm on purpose: no banners, no one-tap "hot" parlays, no nags.
   (1, or 2 for a member's slip before v7) from when it was bought; older
   slips have none. Even doubled, a parlay keeps most of the house's cut,
   since every pick carries its own and they multiply.
-- **Plus daily boost** (kit `PLUS.odds.lift`, the slip's `lift`): one paid
-  slip a Taiwan day costing up to NT$500 (v7; was 1,000) wins 10% more of its winnings
+- **Plus daily boost** (kit `PLUS.odds.lift`, the slip's `lift`; 0 since v8,
+  so the slip shows nothing): one paid slip a Taiwan day costing up to
+  NT$500 (v7; was 1,000) won 10% more of its winnings
   (`liftUsedToday`, `liftFits` in `account.mjs`; on the first of several
   singles). 10% is under every market's cut (1.158 and up), so a boosted
   slip still keeps the house ahead at any price (tested). The extra is paid
   as its own entry, `plus-<slip>` (kind `plusboost`), so the statement and
   the Plus sheet show it. Non-members see what the slip would win more.
-- **Free bets** come from Plus's weekly NT$100 (`eco:fb:<Monday>`) and the
+- **Free bets** come from Plus's weekly NT$200 (`eco:fb:<Monday>`) and the
   welcome NT$200 after a first paid bet (`eco:fb:welcome`), both written by
   the Worker. Rewards' missions gave them before v7 (`vocab:fb:…`; the
   Worker takes no new ones).

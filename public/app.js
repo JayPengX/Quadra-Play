@@ -1593,6 +1593,8 @@ function liftFor(each) {
 // anyone else) what Plus would add to it if every pick wins.
 function liftRow(legs, sizes, stake, mode, each, lift, multi) {
   const t = state.t;
+  // No daily lift in Plus since v8 (PLUS.odds.lift 0): nothing to show.
+  if (!(PLUS.odds.lift > 0)) return null;
   const pct = `${Math.round(PLUS.odds.lift * 100)}%`;
   if (lift > 0) return el('p', { class: 'boost-plus lift-on', text: t(multi ? 'liftOnFirst' : 'liftOn', { v: pct }) });
   if (plusMember(q.wallet)) {
