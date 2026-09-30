@@ -21,7 +21,7 @@ import {
 import { pack, unpack } from './lib/codec.mjs';
 import { historyStats, funFacts, crowdPercentile } from './lib/history.mjs';
 import { detectLocale, makeT } from './lib/i18n.mjs';
-import { f1Driver, f1Constructor, findTeamLogo, countryFlag, leagueLogo, teamLogo, teamZh, LEAGUES, familyOf, isSoccer, isNeutral, isPlayers, normalizeTeamName, playerNation, flagEmoji } from './lib/teams.mjs';
+import { f1Driver, f1Constructor, findTeamLogo, countryFlag, countryCode, leagueLogo, teamLogo, teamZh, LEAGUES, familyOf, isSoccer, isNeutral, isPlayers, normalizeTeamName, playerNation, flagEmoji } from './lib/teams.mjs';
 import { flagUrl } from './lib/logos.mjs';
 import { logoPicture, raceName } from './lib/logos.mjs';
 import { houseRule, houseCut, minLegsProblem, leagueTier } from './lib/rules.mjs';
@@ -81,6 +81,10 @@ const state = {
   // The simulated account (play money) and its sync.
   account: null,
   accountReady: false,
+  // Resolves once the account is read and merged with the pass (boot).
+  accountIn: null,
+  // Resolves once the account is read and merged with the pass (boot).
+  accountIn: null,
   sync: { busy: false, error: '', at: null },
   // The Quadra Pass's wallet (the shared money pool), when the code is a pass.
   wallet: null,
@@ -605,8 +609,10 @@ function logoImg(sport, enName, label, size = '') {
     flag ? el('span', { class: `logo logo-flag ${size}`, 'aria-hidden': 'true', text: flag }) : el('span', { class: `logo logo-fallback ${size}`, 'aria-hidden': 'true', text: (label || '?').trim().slice(0, 1) });
   // A side not decided yet ("Yankees/Red Sox"): no one team's logo.
   if (/\//.test(enName || '')) return fallback();
-  const url = teamLogo(sport, enName) ?? findTeamLogo(futureTeamLeagues(sport), enName);
-  return logoPicture(url, url === teamLogo(sport, enName) ? teamLogo(sport, enName, true) : null, `logo ${size}`, fallback);
+  // No club logo for a national side (rugby, a Kambi friendly): its round flag.
+  const code = countryCode(enName);
+  const url = teamLogo(sport, enName) ?? findTeamLogo(futureTeamLeagues(sport), enName) ?? (code ? flagUrl(code) : null);
+  return logoPicture(url, url === teamLogo(sport, enName) ? teamLogo(sport, enName, true) : null, `logo ${code && url === flagUrl(code) ? 'player-flag ' : ''}${size}`, fallback);
 }
 
 // The league's own logo on a small white disc, the same for every league in
@@ -2930,7 +2936,10 @@ function renderAll() {
 const BOOT_LIMIT_MS = 45_000;
 // The whole board (every league) before the loading screen goes, at most.
 const BOOT_FULL_MS = 9_000;
-const BOOT_IMAGES_MS = 1_200;
+// The first screen's logos (only those in view), at most.
+const BOOT_IMAGES_MS = 2_500;
+// A saved board waits this long at most for the balance and the live games.
+const SNAPSHOT_WAIT_MS = 3_000;
 const within = (promise, ms, fallback) => Promise.race([Promise.resolve(promise).catch(() => fallback), new Promise(resolve => setTimeout(() => resolve(fallback), ms))]);
 // Every picture on screen in `root` loaded (or failed): no logo pops in as
 // the page opens. Pictures further down wait for their turn (lazy), then
@@ -3034,10 +3043,18 @@ async function load() {
   // The last board saved opens the page at once (boot drew it while signing
   // in); today's replaces it below.
   const saved = booting && state.fromSnapshot ? state.data : null;
+  // The first screen is the balance and the games on now as well as the
+  // board: the loading screen waits for the account (read and merged with
+  // the pass) and the live games too.
+  const firstScreen = () => Promise.all([state.accountIn, refreshLive()]);
   if (saved) {
-    clearTimeout(limit);
-    open();
-    refreshLive();
+    // The saved board opens once those are in (a second or so, never more
+    // than SNAPSHOT_WAIT_MS), while today's board loads behind it.
+    within(firstScreen(), SNAPSHOT_WAIT_MS).then(() => {
+      clearTimeout(limit);
+      if (state.tab === 'home') renderHome(homeCtx());
+      open();
+    });
   }
   try {
     // The main board first (the request queue serves it before anything else).
@@ -3117,7 +3134,7 @@ async function load() {
       // and the games in play (each league drawn as it arrives, behind it),
       // then the logos of the first screen; past BOOT_FULL_MS it opens with
       // what has come and the rest keeps joining.
-      await within(Promise.all([extraGames, refreshLive()]), Math.max(1_000, BOOT_FULL_MS - (Date.now() - startedAt)));
+      await within(Promise.all([extraGames, firstScreen()]), Math.max(1_000, BOOT_FULL_MS - (Date.now() - startedAt)));
       clearTimeout(drawTimer);
       renderAll();
       openWantedGame();
@@ -3462,6 +3479,8 @@ function drawSnapshot() {
   }
 }
 async function boot() {
+  let accountDone;
+  state.accountIn = new Promise(resolve => (accountDone = resolve));
   drawSnapshot();
   const first = await q.start();
   state.wallet = first.wallet || q.wallet;
@@ -3477,6 +3496,8 @@ async function boot() {
   renderAccount();
   renderSaved();
   lotteryUi.render();
+  if (state.tab === 'home' && state.data) renderHome(homeCtx());
+  accountDone();
   syncNow();
   await loading;
   checkResults();
