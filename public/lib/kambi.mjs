@@ -28,6 +28,14 @@ function fairPair(a, b) {
   return devigProportional([1 / pa, 1 / pb]);
 }
 
+// Fair chances of a three-way winner (soccer): { home, draw, away }.
+function fairThree(one, cross, two) {
+  const [a, b, c] = [odds(one), odds(cross), odds(two)];
+  if (!a || !b || !c) return null;
+  const [home, draw, away] = devigProportional([1 / a, 1 / b, 1 / c]);
+  return { home, draw, away };
+}
+
 // Upcoming matches of one league: games shaped like the rest of the page's
 // ({ id, sport, startUtc, away, home, draftKings: fair win chances, total,
 // spread }), with `book: 'kambi'`. `unpriced`: a match Kambi lists without a
@@ -42,8 +50,11 @@ export function parseKambiEvents(data, sport, now = new Date(), { unpriced = fal
     if (!e.homeName || !e.awayName || !kambiKept(sport, e)) continue;
     const offers = item.betOffers || [];
     const match = offers.find(o => o.betOfferType?.englishName === 'Match' || /match odds|moneyline/i.test(o.criterion?.englishLabel || ''));
-    // Two-way winner; a three-way one (a draw after regulation) is split between the two.
-    const win = match && fairPair(outcome(match, 'OT_ONE'), outcome(match, 'OT_TWO'));
+    // Two-way winner; a three-way one (a draw after regulation) is split
+    // between the two, but soccer keeps its draw.
+    const soccer = LEAGUES[sport]?.family === 'soccer';
+    const three = soccer && match && fairThree(outcome(match, 'OT_ONE'), outcome(match, 'OT_CROSS'), outcome(match, 'OT_TWO'));
+    const win = three ? [three.home, three.away] : match && !soccer && fairPair(outcome(match, 'OT_ONE'), outcome(match, 'OT_TWO'));
     if (!win && !unpriced) continue;
     const game = {
       id: `${sport}_${e.start.slice(0, 13)}_${normalizeTeamName(e.awayName)}_${normalizeTeamName(e.homeName)}`.replaceAll(' ', ''),
@@ -51,7 +62,7 @@ export function parseKambiEvents(data, sport, now = new Date(), { unpriced = fal
       startUtc: new Date(e.start).toISOString(),
       away: { en: e.awayName, zh: teamZh(sport, e.awayName) },
       home: { en: e.homeName, zh: teamZh(sport, e.homeName) },
-      draftKings: win ? { home: win[0], away: win[1] } : null,
+      draftKings: three || (win ? { home: win[0], away: win[1] } : null),
       house: win ? null : housePrices(sport, e.awayName, e.homeName, null, { neutral: Boolean(LEAGUES[sport]?.neutral) }),
       polymarket: null,
       polymarketLiquidity: null,
@@ -61,7 +72,9 @@ export function parseKambiEvents(data, sport, now = new Date(), { unpriced = fal
       kambiId: e.id,
       group: e.group || '',
       // Where Kambi files it ("table_tennis/czech_republic/…"): a player's country when the kit's table doesn't know them.
-      where: kambiWhere(e)
+      where: kambiWhere(e),
+      // Soccer from Kambi settles on the final score alone: no halves.
+      ...(soccer ? { scoreOnly: true } : {})
     };
     const handicap = offers.find(o => o.betOfferType?.englishName === 'Handicap');
     if (handicap) {
@@ -113,7 +126,8 @@ export function parseKambiInPlay(data, sport) {
     const match = offers.find(o => o.betOfferType?.englishName === 'Match' || /match odds|moneyline/i.test(o.criterion?.englishLabel || ''));
     const one = outcome(match || { outcomes: [] }, 'OT_ONE');
     const two = outcome(match || { outcomes: [] }, 'OT_TWO');
-    const win = open(one) && open(two) ? fairPair(one, two) : null;
+    // Soccer's live winner has a draw: not sold live from Kambi (the score only).
+    const win = league?.family !== 'soccer' && open(one) && open(two) ? fairPair(one, two) : null;
     const game = {
       kambiId: e.id,
       sport,
@@ -281,7 +295,7 @@ const TIE_INNINGS = { npb: 12, cpbl: 12, kbo: 11 };
 // /kambi watch), so the game is over whenever its score says it can be.
 export function decidedTeamGame(live, sport, start, now = new Date(), { ended = false } = {}) {
   const family = LEAGUES[sport]?.family;
-  if (!live || (family !== 'baseball' && family !== 'basketball')) return null;
+  if (!live || (family !== 'baseball' && family !== 'basketball' && family !== 'soccer')) return null;
   const { home, away } = live.score;
   const n = live.periods.home.length;
   const t = now.getTime();
@@ -292,6 +306,8 @@ export function decidedTeamGame(live, sport, start, now = new Date(), { ended = 
   const quiet = ended || (changed ? t - changed >= KAMBI_QUIET_MS : began && t - began >= (family === 'baseball' ? 5 : 3.5) * 3_600_000);
   let over = false;
   if (family === 'baseball') over = n >= 9 && quiet && (home !== away || n >= (TIE_INNINGS[sport] ?? 99));
+  // Soccer: a draw stands; over once Kambi has dropped it, or quiet well past full time.
+  else if (family === 'soccer') over = ended || (quiet && began && t - began >= 2.5 * 3_600_000);
   else {
     const clockDone = live.clock && !live.clock.running && live.clock.left === 0 && /QUARTER4|OVERTIME|OT/i.test(live.clock.period);
     over = n >= 4 && home !== away && (ended || (clockDone ? t - (changed ?? 0) >= 5 * 60_000 : quiet));

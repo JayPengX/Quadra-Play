@@ -45,7 +45,7 @@ const LOPSIDED_EXTRA = { nba: 3, wnba: 2, euroleague: 2, bleague: 2, nfl: 1, nca
 // average. Checked against the bookmakers' totals (MLS, Liga MX).
 const SOCCER_SCALE = 1.12;
 const SOCCER_LEAGUE_WEIGHT = 0.3;
-const SOCCER_TOTALS = { epl: 2.95, laliga: 2.6, seriea: 2.7, bundesliga: 3.15, ligue1: 2.85, ucl: 3.1, uel: 2.9, eredivisie: 3.2, primeira: 2.7, mls: 3.2, ligamx: 2.9, jleague: 2.6, brasileirao: 2.45, argentina: 2.2, superlig: 2.9, scotland: 2.8, belgium: 2.9, saudi: 3.0, uecl: 2.9, libertadores: 2.4, sudamericana: 2.4, nationsleague: 2.6, wcqeurope: 2.7, leaguecup: 2.9, copadelrey: 2.8, acl: 2.9, asiancup: 2.5, friendly: 2.5 };
+const SOCCER_TOTALS = { epl: 2.95, laliga: 2.6, seriea: 2.7, bundesliga: 3.15, ligue1: 2.85, ucl: 3.1, uel: 2.9, eredivisie: 3.2, primeira: 2.7, mls: 3.2, ligamx: 2.9, jleague: 2.6, brasileirao: 2.45, argentina: 2.2, superlig: 2.9, scotland: 2.8, belgium: 2.9, saudi: 3.0, uecl: 2.9, libertadores: 2.4, sudamericana: 2.4, nationsleague: 2.6, wcqeurope: 2.7, leaguecup: 2.9, copadelrey: 2.8, acl: 2.9, asiancup: 2.5, friendly: 2.5, kleague: 2.6, worldcup: 2.6, euro: 2.4, copaamerica: 2.3, clubworldcup: 2.9 };
 
 const halfLine = x => Math.floor(x) + 0.5;
 

@@ -35,6 +35,9 @@ export const SCORE_SPREAD = {
   // Spain's ACB and Australia's NBL: 40 minutes, like the EuroLeague.
   acb: { margin: 11, total: 15, bands: [[1, 5], [6, 10], [11, 15], [16, null]], step: 4 },
   nbl: { margin: 12, total: 16, bands: [[1, 5], [6, 10], [11, 15], [16, null]], step: 4 },
+  // China's CBA and Korea's KBL: 48 and 40 minutes, the CBA scoring more.
+  cba: { margin: 12.5, total: 17, bands: [[1, 5], [6, 10], [11, 15], [16, null]], step: 4 },
+  kbl: { margin: 11, total: 15, bands: [[1, 5], [6, 10], [11, 15], [16, null]], step: 4 },
   // Rugby union (tests and the Champions Cup): the margin's usual spread against the line.
   rugbyunion: { margin: 13, total: 12, bands: [[1, 7], [8, 14], [15, 21], [22, null]], step: 3 }
 };

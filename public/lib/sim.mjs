@@ -769,6 +769,8 @@ export const SIM_SPORTS = {
   euroleague: { family: 'basketball', kind: 'basketball', pop: 1, games: w => (between(w, 40, 20) ? 14 : 0) },
   bleague: { family: 'basketball', kind: 'basketball', pop: 1.5, games: w => (between(w, 40, 18) ? 26 : 0) },
   acb: { family: 'basketball', kind: 'basketball', pop: 0.3, games: w => (between(w, 39, 23) ? 9 : 0) },
+  cba: { family: 'basketball', kind: 'basketball', pop: 0.4, games: w => (between(w, 42, 15) ? 20 : 0) },
+  kbl: { family: 'basketball', kind: 'basketball', pop: 0.2, games: w => (between(w, 41, 14) ? 14 : 0) },
   nbl: { family: 'basketball', kind: 'basketball', pop: 0.3, games: w => (between(w, 38, 8) ? 5 : 0) },
   // NHL: 1,312 games, 7 October (week 40) to mid-April (week 15), then the playoffs.
   nhl: { family: 'hockey', kind: 'hockey', pop: 1, headline: true, games: w => (between(w, 40, 15) ? 47 : between(w, 16, 24) ? 10 : 0) },
@@ -800,10 +802,16 @@ export const SIM_SPORTS = {
   libertadores: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
   sudamericana: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
   nationsleague: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
+  kleague: { family: 'soccer', kind: 'soccer', pop: 0.3, games: w => (between(w, 9, 48) ? 6 : 0) },
   acl: { family: 'soccer', kind: 'soccer', pop: 0.3, games: w => UEFA_WEEKS[w] ? 8 : 0 },
   // The Asian Cup every four years (January); friendlies in the international windows.
   asiancup: { family: 'soccer', kind: 'soccer', pop: 0.3, games: w => (between(w, 1, 6) ? 9 : 0) },
   friendly: { family: 'soccer', kind: 'soccer', pop: 0.2, games: w => ([12, 23, 37, 41, 46].includes(w) ? 20 : 0) },
+  // The World Cup, the Euro and the Copa América every four years (June-July), the Club World Cup.
+  worldcup: { family: 'soccer', kind: 'soccer', pop: 0.5, games: w => (between(w, 24, 29) ? 17 : 0) },
+  euro: { family: 'soccer', kind: 'soccer', pop: 0.3, games: w => (between(w, 24, 28) ? 10 : 0) },
+  copaamerica: { family: 'soccer', kind: 'soccer', pop: 0.2, games: w => (between(w, 25, 28) ? 8 : 0) },
+  clubworldcup: { family: 'soccer', kind: 'soccer', pop: 0.2, games: w => (between(w, 25, 28) ? 12 : 0) },
   wcqeurope: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
   leaguecup: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
   copadelrey: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },

@@ -1238,7 +1238,7 @@ async function storeTeams(url, teams) {
 // lottery does with a match that has no official result. That's once the
 // kept copy is marked gone, or, with nothing kept at all, once the match is
 // surely over (its sport's longest usual length, plus two hours).
-const KAMBI_LONGEST_H = { tabletennis: 2, badminton: 3, volleyball: 4, tennis: 6, wta: 5, snooker: 10, npb: 6, kbo: 6, cpbl: 6, euroleague: 4, bleague: 4, ufc: 10, rugbyunion: 30, acb: 4, nbl: 4 };
+const KAMBI_LONGEST_H = { tabletennis: 2, badminton: 3, volleyball: 4, tennis: 6, wta: 5, snooker: 10, npb: 6, kbo: 6, cpbl: 6, euroleague: 4, bleague: 4, ufc: 10, rugbyunion: 30, acb: 4, nbl: 4, cba: 4, kbl: 4, kleague: 4 };
 export function kambiUnresolvable(leg, entry, now = new Date(), watchReachable = true) {
   if (entry?.gone) return true;
   const past = now.getTime() - Date.parse(leg.start);

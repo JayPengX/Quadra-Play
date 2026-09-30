@@ -416,7 +416,7 @@ const shownTier = sport => (LEAGUES[sport]?.top ? 'major' : leagueTier(sport));
 // The sport filter: everything, a kind of sport (g:<group>), or one league.
 const SPORT_GROUPS = {
   baseball: { icon: '⚾', leagues: ['mlb', 'npb', 'kbo', 'cpbl'] },
-  basketball: { icon: '🏀', leagues: ['nba', 'wnba', 'euroleague', 'bleague'] },
+  basketball: { icon: '🏀', leagues: Object.keys(LEAGUES).filter(key => LEAGUES[key].family === 'basketball') },
   soccer: { icon: '⚽', leagues: Object.keys(LEAGUES).filter(key => LEAGUES[key].family === 'soccer') },
   football: { icon: '🏈', leagues: ['nfl', 'ncaaf'] },
   hockey: { icon: '🏒', leagues: ['nhl'] },
