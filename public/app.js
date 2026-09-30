@@ -417,7 +417,7 @@ const shownTier = sport => (LEAGUES[sport]?.top ? 'major' : leagueTier(sport));
 const SPORT_GROUPS = {
   baseball: { icon: '⚾', leagues: ['mlb', 'npb', 'kbo', 'cpbl'] },
   basketball: { icon: '🏀', leagues: ['nba', 'wnba', 'euroleague', 'bleague'] },
-  soccer: { icon: '⚽', leagues: Object.keys(LEAGUES).filter(key => LEAGUES[key].family === 'soccer' && !LEAGUES[key].retired) },
+  soccer: { icon: '⚽', leagues: Object.keys(LEAGUES).filter(key => LEAGUES[key].family === 'soccer') },
   football: { icon: '🏈', leagues: ['nfl', 'ncaaf'] },
   hockey: { icon: '🏒', leagues: ['nhl'] },
   mma: { icon: '🥊', leagues: ['ufc'] },
@@ -1004,9 +1004,8 @@ function liveStateText(live) {
   if (isSoccer(live.sport)) return live.minute >= 45 && /half/i.test(live.detail) ? t('liveHalfTime') : `${live.minute}'`;
   if (live.period != null) {
     if (/^half/i.test(live.detail)) return t('liveHalfTime');
-    const regulation = live.halves ? 2 : (PERIODS[live.sport]?.[0] ?? 4);
+    const regulation = PERIODS[live.sport]?.[0] ?? 4;
     if (live.period > regulation) return t('liveOT', { clock: live.clock }).trim();
-    if (live.halves) return t(live.period === 1 ? 'liveFirstHalf' : 'liveSecondHalf', { clock: live.clock }).trim();
     return t('livePeriodN', { n: live.period, clock: live.clock }).trim();
   }
   const text = t(`liveHalf_${live.half}`, { n: live.inning });
@@ -2878,15 +2877,16 @@ function renderAll() {
   warmImages();
 }
 
-// Start-up shows the first screen as soon as it is ready: the main odds,
-// then the other leagues and the games in play (both on the first screen,
-// fetched side by side, each within BOOT_PART_MS) and the logos in view.
+// Start-up keeps the loading screen until the board is really there: the
+// main odds, every other league (each drawn as it arrives) and the games in
+// play, within BOOT_FULL_MS, then the logos in view.
 // Everything a scroll or a tab away (championship boards, their club logos,
 // the other tabs' pictures) loads in the background after the page opens.
 // The page never opens empty: past BOOT_LIMIT_MS (a very slow connection)
 // it opens with whatever has arrived.
 const BOOT_LIMIT_MS = 45_000;
-const BOOT_PART_MS = 6_000;
+// The whole board (every league) before the loading screen goes, at most.
+const BOOT_FULL_MS = 9_000;
 const BOOT_IMAGES_MS = 1_200;
 const within = (promise, ms, fallback) => Promise.race([Promise.resolve(promise).catch(() => fallback), new Promise(resolve => setTimeout(() => resolve(fallback), ms))]);
 // Every picture on screen in `root` loaded (or failed): no logo pops in as
@@ -2969,6 +2969,7 @@ function saveSnapshot() {
 }
 
 async function load() {
+  const startedAt = Date.now();
   renderStatus('loading');
   const booting = state.booting;
   const onProgress = booting ? () => showLoading() : undefined;
@@ -2999,7 +3000,26 @@ async function load() {
     // The main board first (the request queue serves it before anything else).
     const now = new Date();
     const fresh = await loadOdds(now, saved ? undefined : onProgress);
-    const extraGames = loadExtraLeagues(now).catch(error => (console.error(error), []));
+    const addGames = games => {
+      if (!games.length || !state.data) return;
+      const ids = new Set(state.data.games.map(g => g.id));
+      state.data.games = [...state.data.games, ...games.filter(g => !ids.has(g.id))].sort((a, b) => a.startUtc.localeCompare(b.startUtc));
+    };
+    // The other leagues join one by one as each is read (a slow one holds
+    // back no other), drawn together a moment after the last to arrive.
+    const pending = [];
+    let joining = false;
+    let drawTimer = 0;
+    const join = () => {
+      if (!joining || !pending.length) return;
+      addGames(pending.splice(0));
+      clearTimeout(drawTimer);
+      drawTimer = setTimeout(() => {
+        renderAll();
+        openWantedGame();
+      }, 250);
+    };
+    const extraGames = loadExtraLeagues(now, games => (pending.push(...games), join())).catch(error => (console.error(error), []));
     // Their scoreboards tell which leagues have a game on: the live board again.
     extraGames.then(() => {
       state.boardComplete = true;
@@ -3037,56 +3057,36 @@ async function load() {
       return;
     }
     state.data = fresh;
+    joining = true;
+    join();
     // A tab asked for in the address (#sim) that needed the odds opens now.
     if (state.wantedTab && state.tab !== state.wantedTab && tabAvailable(state.wantedTab)) state.tab = state.wantedTab;
     state.wantedTab = null;
-    const addGames = games => {
-      if (!games.length || !state.data) return;
-      const ids = new Set(state.data.games.map(g => g.id));
-      state.data.games = [...state.data.games, ...games.filter(g => !ids.has(g.id))].sort((a, b) => a.startUtc.localeCompare(b.startUtc));
-    };
     const addFutures = futures => {
       if (!futures.length || !state.data) return;
       const keys = new Set(state.data.futures.map(f => f.key));
       state.data.futures = [...state.data.futures, ...futures.filter(f => !keys.has(f.key))];
     };
-    let gamesIn = false;
+    renderAll();
+    openWantedGame();
     if (booting) {
-      // The page opens as soon as the main board is drawn (it used to wait
-      // up to 6 s more for the other leagues and the games in play, and 4 s
-      // for the logos: Play opened about twice as slowly as the other
-      // apps). Those join a moment later, a short wait for the logos first
-      // so they don't pop in.
+      // The loading screen stays until the whole board is in: every league
+      // and the games in play (each league drawn as it arrives, behind it),
+      // then the logos of the first screen; past BOOT_FULL_MS it opens with
+      // what has come and the rest keeps joining.
+      await within(Promise.all([extraGames, refreshLive()]), Math.max(1_000, BOOT_FULL_MS - (Date.now() - startedAt)));
+      clearTimeout(drawTimer);
       renderAll();
       openWantedGame();
       await within(imagesReady($('panel-' + state.tab)), BOOT_IMAGES_MS);
       clearTimeout(limit);
       open();
-      const [games] = await Promise.all([within(extraGames, BOOT_PART_MS, null), within(refreshLive(), BOOT_PART_MS)]);
-      if (games) {
-        addGames(games);
-        gamesIn = true;
-      }
-      renderAll();
-      openWantedGame();
-      saveSnapshot();
-    } else {
-      renderAll();
-      openWantedGame();
     }
-    // The rest, in the background: the other leagues (if they missed the
-    // first screen), the championship boards and their clubs' logos.
-    if (!gamesIn)
-      extraGames.then(games => {
-        const before = state.data.games.length;
-        addGames(games);
-        if (state.data.games.length !== before) {
-          renderAll();
-          openWantedGame();
-          warmImages();
-          saveSnapshot();
-        }
-      });
+    // Once every league is in: kept for the next visit.
+    extraGames.then(() => {
+      warmImages();
+      saveSnapshot();
+    });
     extraFutures.then(async futures => {
       addFutures(futures);
       renderAll();

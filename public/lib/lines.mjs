@@ -31,8 +31,6 @@ export const LEAGUE_TOTALS = {
   // Basketball (points).
   nba: 230,
   wnba: 167,
-  ncaam: 144,
-  ncaaw: 137,
   euroleague: 166,
   bleague: 168,
   // Hockey (goals, overtime included).
@@ -40,14 +38,14 @@ export const LEAGUE_TOTALS = {
 };
 // A one-sided game's extra points: at a 90% favourite, this much more than
 // an even game (garbage time, blowout pace), scaled by how far from even.
-const LOPSIDED_EXTRA = { nba: 3, wnba: 2, ncaam: 3, ncaaw: 3, euroleague: 2, bleague: 2, nfl: 1, ncaaf: 4 };
+const LOPSIDED_EXTRA = { nba: 3, wnba: 2, euroleague: 2, bleague: 2, nfl: 1, ncaaf: 4 };
 // Soccer: goals fitted from the draw chance alone come out low (real games
 // draw more often than independent goal counts say, so a likely draw reads
 // as fewer goals than it is): scaled up, and blended with the league's own
 // average. Checked against the bookmakers' totals (MLS, Liga MX).
 const SOCCER_SCALE = 1.12;
 const SOCCER_LEAGUE_WEIGHT = 0.3;
-const SOCCER_TOTALS = { epl: 2.95, laliga: 2.6, seriea: 2.7, bundesliga: 3.15, ligue1: 2.85, ucl: 3.1, uel: 2.9, eredivisie: 3.2, primeira: 2.7, championship: 2.55, mls: 3.2, ligamx: 2.9, jleague: 2.6, brasileirao: 2.45, argentina: 2.2, superlig: 2.9, scotland: 2.8, bundesliga2: 2.9, laliga2: 2.3, serieb: 2.4, ligue2: 2.5, league1: 2.6, belgium: 2.9, saudi: 3.0, usl: 2.8, uecl: 2.9, libertadores: 2.4, sudamericana: 2.4, nationsleague: 2.6, wcqeurope: 2.7, leaguecup: 2.9, copadelrey: 2.8, acl: 2.9, asiancup: 2.5, friendly: 2.5 };
+const SOCCER_TOTALS = { epl: 2.95, laliga: 2.6, seriea: 2.7, bundesliga: 3.15, ligue1: 2.85, ucl: 3.1, uel: 2.9, eredivisie: 3.2, primeira: 2.7, mls: 3.2, ligamx: 2.9, jleague: 2.6, brasileirao: 2.45, argentina: 2.2, superlig: 2.9, scotland: 2.8, belgium: 2.9, saudi: 3.0, uecl: 2.9, libertadores: 2.4, sudamericana: 2.4, nationsleague: 2.6, wcqeurope: 2.7, leaguecup: 2.9, copadelrey: 2.8, acl: 2.9, asiancup: 2.5, friendly: 2.5 };
 
 const halfLine = x => Math.floor(x) + 0.5;
 

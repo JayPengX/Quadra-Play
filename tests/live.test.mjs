@@ -85,14 +85,14 @@ test('every league with a game on is read live, with the pregame line from its s
   const now = new Date('2026-09-29T18:00:00Z');
   const side = (homeAway, name, score = '0') => ({ homeAway, score, team: { displayName: name } });
   // A Championship game kicked off an hour ago; an NBA game tomorrow.
-  parseEspnScoreboard({ events: [{ id: '77', date: '2026-09-29T17:00Z', competitions: [{ status: { type: { state: 'pre' } }, competitors: [side('home', 'Leeds United'), side('away', 'Hull City')], odds: [{ moneyline: { home: { close: { odds: '-150' } }, draw: { close: { odds: '+280' } }, away: { close: { odds: '+400' } } } }] }] }] }, 'championship');
+  parseEspnScoreboard({ events: [{ id: '77', date: '2026-09-29T17:00Z', competitions: [{ status: { type: { state: 'pre' } }, competitors: [side('home', 'Ajax'), side('away', 'PSV Eindhoven')], odds: [{ moneyline: { home: { close: { odds: '-150' } }, draw: { close: { odds: '+280' } }, away: { close: { odds: '+400' } } } }] }] }] }, 'eredivisie');
   parseEspnScoreboard({ events: [{ id: '78', date: '2026-09-30T23:00Z', competitions: [{ status: { type: { state: 'pre' } }, competitors: [side('home', 'Boston Celtics'), side('away', 'New York Knicks')] }] }] }, 'nba');
   const leagues = liveLeagues(now);
-  assert.ok(leagues.includes('championship'));
+  assert.ok(leagues.includes('eredivisie'));
   assert.ok(leagues.includes('mlb') && leagues.includes('epl'));
   assert.ok(!leagues.includes('nba'));
   // Two hours later the game is over: no longer read.
-  assert.ok(!liveLeagues(new Date('2026-09-29T20:00:00Z')).includes('championship'));
+  assert.ok(!liveLeagues(new Date('2026-09-29T20:00:00Z')).includes('eredivisie'));
 });
 
 test('hockey, football and basketball in progress', async () => {
@@ -101,7 +101,7 @@ test('hockey, football and basketball in progress', async () => {
   assert.equal(shareLeft('nba', 1, 720), 1);
   assert.equal(shareLeft('nba', 3, 360), 0.375);
   assert.equal(shareLeft('nba', 4, 0), 0);
-  assert.equal(shareLeft('ncaam', 2, 600), 0.25);
+  assert.equal(shareLeft('nfl', 4, 450), 0.125);
   assert.ok(shareLeft('nba', 5, 300) < 0.11);
   const board = { events: [{ id: '9', date: '2026-10-20T23:30Z', competitions: [{ status: { period: 3, clock: 360, displayClock: '6:00', type: { state: 'in', shortDetail: '6:00 - 3rd' } }, competitors: [
     { homeAway: 'home', score: '80', team: { displayName: 'Boston Celtics' } },
@@ -120,8 +120,6 @@ test('hockey, football and basketball in progress', async () => {
   assert.equal(spread.line, spread.awayLine);
   assert.ok(spread.awayLine > 5 && spread.awayLine < 15, spread.awayLine);
   assert.deepEqual(livePoints({ sport: 'nba', pre: { homeWin: 0.5 }, awayScore: 0, homeScore: 0, left: 0.01 }), []);
-  // College basketball has no pregame spread table: its own.
-  assert.ok(livePoints({ sport: 'ncaam', pre: { homeWin: 0.6 }, awayScore: 30, homeScore: 30, left: 0.5 }).length > 2);
   // Hockey: level in the third with little left leans on the stronger team, never a draw.
   const dist = liveGoals({ means: fitHockey(0.6, { line: 6.5, overFair: 0.5 }), awayScore: 2, homeScore: 2, share: 0.1 });
   assert.ok(Math.abs(dist.reduce((s, x) => s + x.p, 0) - 1) < 1e-6);
@@ -130,7 +128,7 @@ test('hockey, football and basketball in progress', async () => {
   const hockey = liveMarkets(dist, { sport: 'nhl', awayScore: 2, homeScore: 2 });
   assert.deepEqual(hockey.filter(m => m.kind === 'ml').map(m => m.side), ['away', 'home']);
   // Any soccer league gets the three-way winner.
-  const soccer = liveMarkets(liveSoccer({ means: fitGoals(0.45, 0.28), awayScore: 0, homeScore: 0, minutesLeft: 60 }), { sport: 'championship', awayScore: 0, homeScore: 0 });
+  const soccer = liveMarkets(liveSoccer({ means: fitGoals(0.45, 0.28), awayScore: 0, homeScore: 0, minutesLeft: 60 }), { sport: 'eredivisie', awayScore: 0, homeScore: 0 });
   assert.deepEqual(soccer.filter(m => m.kind === 'ml').map(m => m.side), ['home', 'draw', 'away']);
 });
 

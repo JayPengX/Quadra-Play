@@ -764,8 +764,6 @@ export const SIM_SPORTS = {
   // WNBA: mid-May (week 19) to mid-September, then the playoffs.
   wnba: { family: 'basketball', kind: 'basketball', pop: 1, games: w => (between(w, 19, 37) ? 10 : between(w, 38, 41) ? 4 : 0) },
   // College basketball: November (week 45) to the March tournaments (week 14).
-  ncaam: { family: 'basketball', kind: 'basketball', pop: 0.3, games: w => (between(w, 45, 14) ? 40 : 0) },
-  ncaaw: { family: 'basketball', kind: 'basketball', pop: 0.1, games: w => (between(w, 45, 14) ? 25 : 0) },
   // EuroLeague (20 clubs, double rounds some weeks) and Japan's B1 League:
   // October to May.
   euroleague: { family: 'basketball', kind: 'basketball', pop: 1, games: w => (between(w, 40, 20) ? 14 : 0) },
@@ -783,7 +781,6 @@ export const SIM_SPORTS = {
   ligue1: { family: 'soccer', kind: 'soccer', pop: 1, games: euroLeague(9) },
   eredivisie: { family: 'soccer', kind: 'soccer', pop: 0.3, games: euroLeague(9) },
   primeira: { family: 'soccer', kind: 'soccer', pop: 0.3, games: euroLeague(9) },
-  championship: { family: 'soccer', kind: 'soccer', pop: 0.3, games: w => (between(w, 31, 18) && !EURO_BREAKS.has(w) ? 12 : 0) },
   ucl: { family: 'soccer', kind: 'soccer', pop: 3, headline: true, games: w => UEFA_WEEKS[w] ?? 0 },
   uel: { family: 'soccer', kind: 'soccer', pop: 1, games: w => UEFA_WEEKS[w] ?? 0 },
   // MLS: late February (week 8) to October, then the playoffs.
@@ -797,14 +794,8 @@ export const SIM_SPORTS = {
   argentina: { family: 'soccer', kind: 'soccer', pop: 0.2, games: w => (between(w, 5, 49) ? 12 : 0) },
   superlig: { family: 'soccer', kind: 'soccer', pop: 0.3, games: euroLeague(9) },
   scotland: { family: 'soccer', kind: 'soccer', pop: 0.2, games: euroLeague(6) },
-  bundesliga2: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(9) },
-  laliga2: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(11) },
-  serieb: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(10) },
-  ligue2: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(9) },
-  league1: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(12) },
   belgium: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(8) },
   saudi: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(9) },
-  usl: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(12) },
   uecl: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
   libertadores: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
   sudamericana: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
@@ -884,7 +875,7 @@ export function weekOfYear(date) {
 // dearer, to bet on than one on it. Seeded, so it's the same every time.
 const TEMPLATE_WIN = { baseball: [0.35, 0.65], basketball: [0.15, 0.85], football: [0.2, 0.8], hockey: [0.35, 0.65], sets: [0.12, 0.88], mma: [0.2, 0.8], rugby: [0.2, 0.8] };
 // Each sport's usual total line (none: its own model sets one).
-const TEMPLATE_TOTAL = { mlb: 8.5, npb: 7.5, kbo: 9.5, cpbl: 9.5, nfl: 44.5, ncaaf: 52.5, nba: 224.5, wnba: 162.5, ncaam: 143.5, ncaaw: 136.5, euroleague: 160.5, bleague: 158.5, nhl: 5.5 };
+const TEMPLATE_TOTAL = { mlb: 8.5, npb: 7.5, kbo: 9.5, cpbl: 9.5, nfl: 44.5, ncaaf: 52.5, nba: 224.5, wnba: 162.5, euroleague: 160.5, bleague: 158.5, nhl: 5.5 };
 // An F1 field as the market usually prices it: the average shape of two real
 // 2026 boards (Polymarket, one flat before qualifying, one with a 64%
 // favourite after), so a typical race returns what a real one does

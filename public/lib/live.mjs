@@ -222,7 +222,7 @@ export function liveMarkets(dist, { sport, awayScore, homeScore, pm = null }) {
 // ---- Hockey, football, basketball ------------------------------------------------
 
 // Regulation periods and their minutes, by league.
-export const PERIODS = { nfl: [4, 15], ncaaf: [4, 15], nba: [4, 12], wnba: [4, 10], ncaam: [2, 20], ncaaw: [4, 10], nhl: [3, 20] };
+export const PERIODS = { nfl: [4, 15], ncaaf: [4, 15], nba: [4, 12], wnba: [4, 10], nhl: [3, 20] };
 
 // The share of regulation still to play, from ESPN's period and the seconds
 // left in it; in overtime, what's left of the extra period against a whole game.
@@ -259,9 +259,6 @@ export function liveGoals({ means, awayScore, homeScore, share }) {
   return out;
 }
 
-// College basketball has no spread of its own in markets.mjs: close to the WNBA's.
-const POINTS_SPREAD = { ncaam: { margin: 11, total: 15, bands: [], step: 3.5 }, ncaaw: { margin: 11, total: 14, bands: [], step: 3.5 } };
-
 // Football and basketball in progress: the pregame model of the final margin
 // and total (normal, markets.mjs), the part still to play scaled to the
 // share of the clock left, added to the score. The winner, the handicaps and
@@ -269,7 +266,7 @@ const POINTS_SPREAD = { ncaam: { margin: 11, total: 15, bands: [], step: 3.5 }, 
 // Nothing once under 2% of the game is left (the last minute of an NBA game).
 export function livePoints({ sport, pre, awayScore, homeScore, left }) {
   if (!(left >= 0.02)) return [];
-  const spec = SCORE_SPREAD[sport] ?? POINTS_SPREAD[sport];
+  const spec = SCORE_SPREAD[sport];
   if (!spec) return [];
   const total = pre.totalLine ? { line: pre.totalLine, overFair: pre.overFair ?? 0.5 } : null;
   const full = pointsModel(sport, { homeWin: pre.homeWin, spread: null, total }) ?? { margin: spec.margin * normalQuantile(pre.homeWin), total: total ? total.line + spec.total * normalQuantile(total.overFair) : null };

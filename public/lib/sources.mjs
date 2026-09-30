@@ -7,7 +7,7 @@ import { americanToProbability, devigProportional, devigPower } from './odds.mjs
 import { normalizeTeamName, teamZh, LEAGUES, familyOf, isSoccer, rememberLogo, rememberTeams, hasTeams } from './teams.mjs';
 import { runOrder, shareLeft } from './live.mjs';
 import { KAMBI, kambiUrl, parseKambiInPlay, useKambiToken, fetchKambiLeague, decidedFromLive, decidedTeamGame, parseKambiLiveData, kambiLiveDataUrl, setsWon, watchKambiMatches, fetchKeptKambi } from './kambi.mjs';
-import { KAMBI_LEAGUES, onSale } from './teams.mjs';
+import { KAMBI_LEAGUES } from './teams.mjs';
 import { withHousePrices, sameSide, pointsStrengths } from './house.mjs';
 import { SOLD_DAYS, ASIA_URL, asiaMonth, asiaMonthOf } from './catalog.mjs';
 import { parseAsiaSchedule, parseEspnCard, parseEspnDraw, parseRankings } from './schedules.mjs';
@@ -221,12 +221,6 @@ export function parseEspnScoreboard(data, sport) {
   return games;
 }
 
-async function fetchEspnDays(sport, path, days) {
-  const pages = await Promise.all(days.map(day => getJson(`${ESPN}/${path}/scoreboard?dates=${yyyymmdd(day)}`).catch(() => null)));
-  if (pages.every(p => p === null)) throw new Error(`ESPN ${sport} unreachable`);
-  return pages.filter(Boolean).flatMap(page => parseEspnScoreboard(page, sport));
-}
-
 // Past the daily pages (football's: its current week, so from now), up to
 // DAYS_AHEAD: the games on the months' pages (ESPN answers `dates=YYYYMM`
 // with the whole month), none already listed.
@@ -253,55 +247,32 @@ async function withLaterGames(sport, path, listed, now, fromDay = DAILY_DAYS) {
   return withHousePrices([...listed, ...later], sport, path, getJson);
 }
 
-// Daily pages: yesterday (US dates run behind Taiwan's) to a week ahead.
-function dailyDays(now) {
-  const days = [];
-  for (let d = -1; d <= DAILY_DAYS; d++) days.push(new Date(now.getTime() + d * DAY_MS));
-  return days;
-}
+const fetchEspnMlb = now => fetchMonths('mlb', 'baseball/mlb', now);
+const fetchEspnEpl = now => fetchMonths('epl', LEAGUES.epl.path, now);
 
-// The league calendar lists every matchday, so only those dates get fetched.
-export function eplMatchdays(scoreboard, now) {
-  const calendar = scoreboard?.leagues?.[0]?.calendar || [];
-  const from = now.getTime() - DAY_MS;
-  const to = now.getTime() + DAYS_AHEAD * DAY_MS;
-  return calendar
-    .map(entry => new Date(typeof entry === 'string' ? entry : entry?.startDate))
-    .filter(d => Number.isFinite(d.getTime()) && d.getTime() >= from && d.getTime() <= to);
-}
-
-async function fetchEspnMlb(now) {
-  return withLaterGames('mlb', 'baseball/mlb', await fetchEspnDays('mlb', 'baseball/mlb', dailyDays(now)), now);
-}
-
-async function fetchEspnEpl(now) {
-  return fetchSoccer('epl', now);
-}
-
-// Soccer leagues: their calendar's matchdays within the board's reach (DAYS_AHEAD).
-async function fetchSoccer(key, now) {
-  const path = LEAGUES[key].path;
-  const scoreboard = await getJson(`${ESPN}/${path}/scoreboard`);
-  const days = eplMatchdays(scoreboard, now);
-  const games = days.length === 0 ? parseEspnScoreboard(scoreboard, key) : await fetchEspnDays(key, path, days);
+// A league's games from the months' pages (ESPN answers `dates=YYYYMM` with
+// the whole month, odds and all) within the board's reach: one or two
+// requests a league where day pages took nine. Cups and national teams too
+// (their default page can be a round long past, their calendar lists stages).
+async function fetchMonths(key, path, now) {
+  const pages = await Promise.all(monthsAhead(now, -1).map(m => getJson(`${ESPN}/${path}/scoreboard?dates=${m}&limit=1000`).catch(() => null)));
+  if (pages.every(p => p === null)) throw new Error(`ESPN ${key} unreachable`);
+  const games = laterGames(pages.filter(Boolean).flatMap(page => parseEspnScoreboard(page, key)), [], now, -1);
   return withHousePrices(games, key, path, getJson);
 }
 
-// Every other league: football's current week (its default scoreboard),
-// daily sports' daily pages, then the month pages up to DAYS_AHEAD.
+// Every other league: its months' pages; football its current week (the
+// default page: college football's month pages list only ranked teams) and
+// the months after.
 async function fetchLeague(key, now) {
   const { family, path } = LEAGUES[key];
-  if (family === 'soccer') return fetchSoccer(key, now);
-  const listed =
-    family === 'football'
-      ? parseEspnScoreboard(await getJson(`${ESPN}/${path}/scoreboard`), key)
-      : await fetchEspnDays(key, path, dailyDays(now));
-  return withLaterGames(key, path, listed, now, family === 'football' ? 0 : DAILY_DAYS);
+  if (family !== 'football') return fetchMonths(key, path, now);
+  return withLaterGames(key, path, parseEspnScoreboard(await getJson(`${ESPN}/${path}/scoreboard`), key), now, 0);
 }
 
 // Leagues fetched from ESPN alone (DraftKings); MLB and the Premier League
 // also have Polymarket.
-export const EXTRA_LEAGUES = Object.keys(LEAGUES).filter(key => LEAGUES[key].path && onSale(key) && !['mlb', 'epl'].includes(key));
+export const EXTRA_LEAGUES = Object.keys(LEAGUES).filter(key => LEAGUES[key].path && !['mlb', 'epl'].includes(key));
 
 // ---- Polymarket ---------------------------------------------------------------
 
@@ -1017,7 +988,7 @@ export function parseEspnLive(data, sport) {
       const period = Number(comp.status.period) || 0;
       const left = shareLeft(sport, period, comp.status.clock);
       if (left == null) continue;
-      Object.assign(game, { period, clock: comp.status.displayClock || '', left, halves: sport === 'ncaam' });
+      Object.assign(game, { period, clock: comp.status.displayClock || '', left });
     } else {
       // "67'" or "45'+2'"; half time counts as 45 played.
       const minute = /^(\d+)/.exec(comp.status.displayClock || '')?.[1];
@@ -1075,7 +1046,7 @@ const LIVE_HOURS = { baseball: 5, soccer: 2.5, football: 4.5, basketball: 3, hoc
 // `extra`: leagues asked for anyway (a game Quadra Fixtures sent here that's on now).
 export function liveLeagues(now = new Date(), extra = []) {
   const t = now.getTime();
-  const out = new Set(['mlb', 'epl', ...extra.filter(k => ESPN_PATH[k] && onSale(k))]);
+  const out = new Set(['mlb', 'epl', ...extra.filter(k => ESPN_PATH[k])]);
   for (const [sport, starts] of seenStarts) {
     const hours = LIVE_HOURS[familyOf(sport)];
     if (!hours || !ESPN_PATH[sport]) continue;
@@ -1093,9 +1064,19 @@ export function liveLeagues(now = new Date(), extra = []) {
 // (MLB with Polymarket's live price too) and Kambi's, with Kambi's own live
 // prices (`kambi`). Pregame lines come from the board's scoreboards or, for a
 // game that had started before the page opened, its summary (once per game).
+// A league's pages with its games on now: the default scoreboard, but for
+// soccer today's dated pages (US dates run up to six hours behind): a cup's
+// default page can be a round long past.
+function liveEspnPages(key, now) {
+  if (familyOf(key) !== 'soccer') return Promise.all([getJson(`${ESPN}/${ESPN_PATH[key]}/scoreboard`)]);
+  const dates = [...new Set([now, new Date(now.getTime() - 6 * 3_600_000)].map(yyyymmdd))];
+  return Promise.all(dates.map(d => getJson(`${ESPN}/${ESPN_PATH[key]}/scoreboard?dates=${d}`).catch(() => ({ events: [] }))));
+}
+const dedupe = games => [...new Map(games.map(g => [g.espnId, g])).values()];
+
 export async function loadLive(now = new Date(), minLiquidity = 5000, extra = []) {
   const [espn, kambi] = await Promise.all([
-    Promise.all(liveLeagues(now, extra).map(key => getJson(`${ESPN}/${ESPN_PATH[key]}/scoreboard`).then(d => parseEspnLive(d, key)).catch(() => []))),
+    Promise.all(liveLeagues(now, extra).map(key => liveEspnPages(key, now).then(pages => dedupe(pages.flatMap(d => parseEspnLive(d, key)))).catch(() => []))),
     Promise.all(KAMBI_LEAGUES.map(key => getJson(kambiUrl(LEAGUES[key].kambi, 'in-play'), 'kambi-events').then(d => parseKambiInPlay(d, key)).catch(() => [])))
   ]);
   const games = espn.flat();
@@ -1149,9 +1130,8 @@ async function fetchSchedule(key, now) {
     const [board, ranks] = await Promise.all([getJson(`${ESPN}/${schedule.espn}/scoreboard`), getJson(`${ESPN}/${schedule.espn}/rankings`).catch(() => null)]);
     return parseEspnDraw(board, key, pointsStrengths(parseRankings(ranks)), now);
   }
-  // Matches (NRL, AFL): like any ESPN league, the house pricing from ESPN's standings.
-  const listed = await fetchEspnDays(key, schedule.espn, dailyDays(now)).catch(() => []);
-  return withLaterGames(key, schedule.espn, listed, now);
+  // Matches: like any ESPN league, the house pricing from ESPN's standings.
+  return fetchMonths(key, schedule.espn, now).catch(() => []);
 }
 
 // A schedule's game Kambi prices already (the two sides, either order, near its start).
@@ -1168,17 +1148,28 @@ export function pricedByKambi(game, kambiGames) {
 // Every other league (ESPN / DraftKings, Kambi, Kambi leagues' own
 // schedules), fetched after the page opens so they don't hold it up. A league
 // that fails is left out.
-export async function loadExtraLeagues(now = new Date()) {
-  const [espn, kambi, schedules] = await Promise.all([
-    Promise.allSettled(EXTRA_LEAGUES.map(key => fetchLeague(key, now))),
-    Promise.allSettled(KAMBI_LEAGUES.map(key => fetchKambiLeague(key, now, getJson))),
-    Promise.allSettled(KAMBI_LEAGUES.map(key => fetchSchedule(key, now)))
-  ]);
-  const ok = results => results.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
-  const priced = ok(kambi);
-  const scheduled = mergeGames(ok(schedules).filter(g => !pricedByKambi(g, priced)), []);
-  await rememberFighterFlags([...priced, ...scheduled].filter(g => g.sport === 'ufc')).catch(() => {});
-  return lotteryGames([...mergeGames(ok(espn), []), ...priced, ...scheduled], now);
+// Every other league, each handed to `onPart` (its games) the moment it's
+// read, so one slow league never holds back the rest; resolves to them all.
+export async function loadExtraLeagues(now = new Date(), onPart) {
+  const part = promise =>
+    promise.then(games => {
+      const listed = lotteryGames(games, now);
+      onPart?.(listed);
+      return listed;
+    });
+  const espn = EXTRA_LEAGUES.map(key => part(fetchLeague(key, now).then(games => mergeGames(games, []))));
+  const kambi = KAMBI_LEAGUES.map(key =>
+    part(
+      Promise.allSettled([fetchKambiLeague(key, now, getJson), fetchSchedule(key, now)]).then(async ([p, s]) => {
+        const priced = p.status === 'fulfilled' ? p.value : [];
+        const scheduled = mergeGames((s.status === 'fulfilled' ? s.value : []).filter(g => !pricedByKambi(g, priced)), []);
+        if (key === 'ufc') await rememberFighterFlags([...priced, ...scheduled]).catch(() => {});
+        return [...priced, ...scheduled];
+      })
+    )
+  );
+  const results = await Promise.allSettled([...espn, ...kambi]);
+  return results.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
 }
 
 // Fighters' flags from ESPN's cards (Kambi names no country): each card's

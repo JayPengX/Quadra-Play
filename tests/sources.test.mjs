@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseEspnScoreboard, parsePolymarketMlb, parsePolymarketEpl, mergeGames, parseF1RaceWinner, eplMatchdays } from '../public/lib/sources.mjs';
+import { parseEspnScoreboard, parsePolymarketMlb, parsePolymarketEpl, mergeGames, parseF1RaceWinner } from '../public/lib/sources.mjs';
 
 const NOW = new Date('2026-09-25T12:00:00Z');
 
@@ -163,11 +163,6 @@ test('soccer games merge across name styles and get Chinese names', () => {
   assert.equal(game.home.zh, '兵工廠');
   assert.equal(game.away.zh, '利茲聯');
   assert.ok(game.draftKings.draw > 0 && game.polymarket.draw > 0);
-});
-
-test('eplMatchdays keeps calendar dates within the board\'s reach (two weeks)', () => {
-  const days = eplMatchdays({ leagues: [{ calendar: ['2026-09-20T07:00Z', '2026-10-03T07:00Z', '2026-10-04T07:00Z', '2026-10-10T07:00Z'] }] }, NOW);
-  assert.deepEqual(days.map(d => d.toISOString().slice(0, 10)), ['2026-10-03', '2026-10-04']);
 });
 
 test('lottery window ends at the end of tomorrow, Taiwan time', async () => {
