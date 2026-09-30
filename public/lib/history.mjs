@@ -10,7 +10,7 @@ export const chanceOf = leg => (leg.fairChance >= 0 && leg.fairChance <= 1 ? leg
 const outlooks = new Map();
 // A slip's outlook when bought, from the chances and odds saved with it.
 export function outlookOf(slip) {
-  if (!outlooks.has(slip.id)) outlooks.set(slip.id, slipOutlook({ legs: slip.legs.map(leg => ({ gameId: leg.gameId, market: leg.market, odds: leg.odds, fairChance: chanceOf(leg) })), sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0 }));
+  if (!outlooks.has(slip.id)) outlooks.set(slip.id, slipOutlook({ legs: slip.legs.map(leg => ({ gameId: leg.gameId, market: leg.market, odds: leg.odds, fairChance: chanceOf(leg) })), sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0, lift: slip.lift ?? 0 }));
   return outlooks.get(slip.id);
 }
 

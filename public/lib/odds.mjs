@@ -473,7 +473,11 @@ export const SLIP_RULES = {
 // its own (about 15%), and they multiply.
 export const PARLAY_BOOST = [0, 0, 0, 0.05, 0.08, 0.12, 0.15, 0.2];
 export const boostRate = (size, x = 1) => (x > 0 ? (PARLAY_BOOST[Math.min(size, PARLAY_BOOST.length - 1)] || 0) * x : 0);
-const boosted = (stake, product, size, x) => (x > 0 && size >= 3 ? stake * (1 + (product - 1) * (1 + boostRate(size, x))) : stake * product);
+// Quadra Plus's daily boost (`lift`, kept with the slip: 0.1 = +10%) raises
+// the winnings of every winning combination on the slip, singles too, on
+// top of any parlay boost. It's under every market's cut (BASE_CUT, 1.158
+// and up), so a boosted slip still keeps the house ahead at any price.
+const boosted = (stake, product, size, x, lift = 0) => stake * (1 + (product - 1) * (1 + (x > 0 && size >= 3 ? boostRate(size, x) : 0) + (lift > 0 ? lift : 0)));
 
 // What a winning combination actually pays out after Taiwan's withholding.
 export function afterTax(pay) {
@@ -580,7 +584,7 @@ export function slipErrors({ mode, legs, sizes, stake }) {
 // Everything about one ticket, exactly: every way the legs can land (2^n, at
 // most 4,096), and for each one every winning combination, taxed one by one.
 // Fair chances are treated as independent (different games).
-export function evaluateSlip({ legs, sizes, stake, boost = 0 }) {
+export function evaluateSlip({ legs, sizes, stake, boost = 0, lift = 0 }) {
   const n = legs.length;
   const sizeSet = new Set(sizes);
   const masks = clashMasks(legs);
@@ -606,7 +610,7 @@ export function evaluateSlip({ legs, sizes, stake, boost = 0 }) {
       let product = 1;
       for (let i = 0; i < n; i++) if (pick & (1 << i)) (size++, (product *= legs[i].odds));
       if (!sizeSet.has(size)) continue;
-      const pay = boosted(stake, product, size, boost);
+      const pay = boosted(stake, product, size, boost, lift);
       gross += pay;
       net += afterTax(pay);
     }
@@ -630,7 +634,7 @@ export function evaluateSlip({ legs, sizes, stake, boost = 0 }) {
 // What a ticket pays for every way its legs can land: index = bit mask of the
 // legs that won. Gross is capped per ticket; net also takes Taiwan's tax off
 // each combination over NT$5,000.
-export function slipPayoutTable({ legs, sizes, stake, boost = 0 }) {
+export function slipPayoutTable({ legs, sizes, stake, boost = 0, lift = 0 }) {
   const n = legs.length;
   const sizeSet = new Set(sizes);
   const masks = clashMasks(legs);
@@ -646,7 +650,7 @@ export function slipPayoutTable({ legs, sizes, stake, boost = 0 }) {
       let product = 1;
       for (let i = 0; i < n; i++) if (pick & (1 << i)) (size++, (product *= legs[i].odds));
       if (!sizeSet.has(size)) continue;
-      const pay = boosted(stake, product, size, boost);
+      const pay = boosted(stake, product, size, boost, lift);
       g += pay;
       t += afterTax(pay);
     }
@@ -663,8 +667,8 @@ export function slipPayoutTable({ legs, sizes, stake, boost = 0 }) {
 // A ticket's outlook when bought: average payout after tax, its spread
 // (standard deviation) and the chance of any payout, over every way its legs
 // can land. Used to tell luck from the lottery's cut in the slip history.
-export function slipOutlook({ legs, sizes, stake, boost = 0 }) {
-  const { net } = slipPayoutTable({ legs, sizes, stake, boost });
+export function slipOutlook({ legs, sizes, stake, boost = 0, lift = 0 }) {
+  const { net } = slipPayoutTable({ legs, sizes, stake, boost, lift });
   const groups = exclusiveMasks(legs);
   let mean = 0;
   let square = 0;
@@ -681,8 +685,8 @@ export function slipOutlook({ legs, sizes, stake, boost = 0 }) {
 // What a finished ticket pays. Each leg is 'won', 'lost' or 'void' (called
 // off: the lottery counts it at odds 1.00, so a single gets its stake back
 // and a parlay goes on without it). Gross is before tax, net after.
-export function settleSlip({ legs, sizes, stake, boost = 0 }) {
-  const { gross, net } = slipPayoutTable({ legs: legs.map(l => ({ gameId: l.gameId, odds: l.result === 'void' ? 1 : l.odds })), sizes, stake, boost });
+export function settleSlip({ legs, sizes, stake, boost = 0, lift = 0 }) {
+  const { gross, net } = slipPayoutTable({ legs: legs.map(l => ({ gameId: l.gameId, odds: l.result === 'void' ? 1 : l.odds })), sizes, stake, boost, lift });
   const mask = legs.reduce((m, l, i) => (l.result === 'lost' ? m : m | (1 << i)), 0);
   return { gross: gross[mask], net: net[mask] };
 }
@@ -693,9 +697,9 @@ export function settleSlip({ legs, sizes, stake, boost = 0 }) {
 // - each leg's own value and what the ticket would return without it;
 // - how rare the top payout is, and which results still make a profit;
 // - the heartbreak: the chance of missing by exactly one pick, and by which.
-export function analyzeSlip({ legs, sizes, stake, boost = 0 }) {
+export function analyzeSlip({ legs, sizes, stake, boost = 0, lift = 0 }) {
   const n = legs.length;
-  const { gross, net } = slipPayoutTable({ legs, sizes, stake, boost });
+  const { gross, net } = slipPayoutTable({ legs, sizes, stake, boost, lift });
   const cost = comboCount(legs, sizes) * stake;
   const chance = new Float64Array(1 << n);
   const groups = exclusiveMasks(legs);
