@@ -9,7 +9,7 @@ import { runOrder, shareLeft } from './live.mjs';
 import { KAMBI, kambiUrl, parseKambiInPlay, useKambiToken, fetchKambiLeague, decidedFromLive, decidedTeamGame, parseKambiLiveData, kambiLiveDataUrl, setsWon, watchKambiMatches, fetchKeptKambi } from './kambi.mjs';
 import { KAMBI_LEAGUES } from './teams.mjs';
 import { withHousePrices, sameSide, pointsStrengths } from './house.mjs';
-import { SOLD_DAYS, ASIA_URL, asiaMonth, asiaMonthOf, tsdbBoxingDays, notableFight, boxingResult } from './catalog.mjs';
+import { SOLD_DAYS, ASIA_URL, asiaMonth, asiaMonthOf, tsdbBoxingDays, notableFight, boxingResult, learnFighterNations } from './catalog.mjs';
 import { parseAsiaSchedule, parseEspnCard, parseEspnDraw, parseRankings } from './schedules.mjs';
 
 export const PROXY_URL = 'https://sports-proxy.pengzjay.workers.dev';
@@ -1149,6 +1149,8 @@ async function fetchSchedule(key, now) {
   }
   if (schedule.kind === 'draw') {
     const [board, ranks] = await Promise.all([getJson(`${ESPN}/${schedule.espn}/scoreboard`), getJson(`${ESPN}/${schedule.espn}/rankings`).catch(() => null)]);
+    // Every player's flag in the draw (Kambi names no country): their pictures.
+    for (const [name, flag] of parseFighterFlags(board)) rememberLogo(key, name, flag);
     return parseEspnDraw(board, key, pointsStrengths(parseRankings(ranks)), now);
   }
   // Matches: like any ESPN league, the house pricing from ESPN's standings.
@@ -1201,7 +1203,10 @@ async function notableOnly(games, now = new Date()) {
   const dayOf = g => [day(Date.parse(g.startUtc)), day(Date.parse(g.startUtc) - DAY_MS)];
   const soon = lotteryGames(games, now);
   const cards = await tsdbBoxingDays([...new Set(soon.flatMap(dayOf))].slice(0, 16));
-  return soon.filter(g => dayOf(g).some(d => notableFight(g.home.en, g.away.en, cards[d])));
+  const kept = soon.filter(g => dayOf(g).some(d => notableFight(g.home.en, g.away.en, cards[d])));
+  // The fighters' nations for their flags (looked up once a month), a moment at most.
+  await Promise.race([learnFighterNations(kept.flatMap(g => [g.home.en, g.away.en])), new Promise(r => setTimeout(r, 2_500))]);
+  return kept;
 }
 
 // Cricket's results from ESPN's score panel for a day: games shaped like
@@ -1229,7 +1234,11 @@ export function parseCricketPanel(data) {
 // fighters, remembered as their pictures (teamLogo('ufc', name)).
 export function parseFighterFlags(data) {
   const out = [];
-  for (const event of data?.events || []) for (const comp of event.competitions || []) for (const c of comp.competitors || []) if (c.athlete?.displayName && c.athlete.flag?.href) out.push([c.athlete.displayName, c.athlete.flag.href]);
+  for (const event of data?.events || []) {
+    // A card's bouts, or a tennis tournament's draws (its groupings).
+    const comps = [...(event.competitions || []), ...(event.groupings || []).flatMap(g => g.competitions || [])];
+    for (const comp of comps) for (const c of comp.competitors || []) if (c.athlete?.displayName && c.athlete.flag?.href) out.push([c.athlete.displayName, c.athlete.flag.href]);
+  }
   return out;
 }
 async function rememberFighterFlags(games) {
