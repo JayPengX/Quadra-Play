@@ -13,7 +13,7 @@
 // - 你的投注: the open slips, each with its cash-out price.
 // - The lottery's jackpots.
 // - Quadra Plus, once, for someone who isn't a member.
-import { rank, affinity, setting, plusMember, plusCard } from './lib/quadra.mjs';
+import { rank, affinity, setting, plusMember, plusCard, vipStatus, vipName, VIP, tell, welcomeDue, WELCOME } from './lib/quadra.mjs';
 import { GAMES, nextDraw, latestResults, gameName } from './lib/lottery.mjs';
 import { familyOfSport } from './lib/catalog.mjs';
 
@@ -25,6 +25,9 @@ const TXT = {
     mine: '你的投注', seeAll: '全部', legs: '{n} 場', cashOut: '兌現', paused: '兌現暫停',
     lottery: '彩券', drawIn: '{when} 開獎', none: '賽事載入中，或目前沒有開賣的比賽。', draw: '和',
     overdrawn: '透支 · 月息 1%', cover: '賣出持股補足',
+    vipNone: 'VIP 回饋', vipNoneSub: '本月投注滿 {v} 起，最高回饋 {top}', vipBack: '本月回饋 {p} · 約 {v}', vipNext: '再投注 {v} 升{name}', vipTop: '最高等級', vipPaid: '上月回饋 {v} 已入帳',
+    vipTitle: 'VIP 投注回饋', vipBody: '每個月的投注（運彩、彩券、刮刮樂，退款不算）決定當月等級，下個月 1 日起第一次打開 App 時，依等級回饋當月投注額：{tiers}。免費加入，不用報名。',
+    welcome: '🎁 第一次下注，就送 {v} 免費投注',
     combos: '精選串關', comboSafe: '穩膽 3 串', comboBold: '高賠 3 串', comboTag: '{n} 串 1', comboTagBoost: '{n} 串 1 · 加成 +{b}%', comboStake: '投注 {v} · 賠率 ×{x}', comboGo: '加入投注單'
   },
   en: {
@@ -34,6 +37,9 @@ const TXT = {
     mine: 'Your bets', seeAll: 'See all', legs: '{n} picks', cashOut: 'Cash out', paused: 'Suspended',
     lottery: 'Lottery', drawIn: 'Draw {when}', none: 'Games are loading, or none are on sale right now.', draw: 'Draw',
     overdrawn: 'Overdrawn · 1% a month', cover: 'Sell to cover',
+    vipNone: 'VIP cashback', vipNoneSub: 'From {v} staked this month, up to {top} back', vipBack: '{p} back this month · about {v}', vipNext: '{v} more for {name}', vipTop: 'Top tier', vipPaid: 'Last month’s {v} paid in',
+    vipTitle: 'VIP cashback', vipBody: 'What you stake in a month (bets, lottery and scratch cards; refunds don’t count) sets that month’s tier, and a share of it comes back the first time you open an app after the month ends: {tiers}. Nothing to sign up for.',
+    welcome: '🎁 Place your first bet and get a {v} free bet',
     combos: 'Parlays of the day', comboSafe: 'Favourites treble', comboBold: 'Big-price treble', comboTag: '{n}-pick parlay', comboTagBoost: '{n}-pick · +{b}% boost', comboStake: 'Stake {v} · odds ×{x}', comboGo: 'Add to slip'
   }
 };
@@ -234,6 +240,26 @@ export function renderHome(ctx) {
     ]);
   });
 
+  // ---- VIP: this month's tier, its cashback so far, the next step
+  const pct = x => `${Math.round(x * 1000) / 10}%`;
+  function vipRow() {
+    if (!state.wallet) return null;
+    const v = vipStatus(state.wallet, now);
+    const explain = () =>
+      tell({ lang, icon: '◆', title: T.vipTitle, body: f('vipBody', { tiers: VIP.tiers.map(x => `${vipName(x, lang)} ${money(x.min)}+ ${pct(x.back)}`).join('、') }) });
+    const top = VIP.tiers.at(-1);
+    const share = v.next ? Math.min(1, v.stakes / v.next.min) : 1;
+    const paidNow = v.paid && Date.now() - v.paid.t < 7 * 86_400_000 ? f('vipPaid', { v: money(v.paid.amount) }) : '';
+    return el('button', { class: `wallet-vip${v.tier ? ` vip-${v.tier.id}` : ''}`, type: 'button', onclick: explain }, [
+      el('span', { class: 'vip-line' }, [
+        el('strong', { text: v.tier ? vipName(v.tier, lang) : T.vipNone }),
+        el('small', { class: 'num', text: v.tier ? f('vipBack', { p: pct(v.tier.back), v: money(v.back) }) : f('vipNoneSub', { v: money(VIP.tiers[0].min), top: pct(top.back) }) })
+      ]),
+      el('span', { class: 'vip-bar', 'aria-hidden': 'true' }, [el('i', { style: `width:${Math.round(share * 100)}%` })]),
+      el('small', { class: 'vip-next num', text: paidNow || (v.next ? f('vipNext', { v: money(v.toNext), name: vipName(v.next, lang) }) : T.vipTop) })
+    ]);
+  }
+
   // ---- The balance
   const member = plusMember(state.wallet);
   const cash = state.account ? ctx.funds() : null;
@@ -244,6 +270,8 @@ export function renderHome(ctx) {
     cash < 0
       ? el('button', { class: 'wallet-od', type: 'button', onclick: () => ctx.q.go('stock', 'portfolio') }, [el('span', { text: T.overdrawn }), el('strong', { text: `${T.cover} ›` })])
       : null,
+    vipRow(),
+    state.wallet && welcomeDue(state.wallet) ? el('p', { class: 'wallet-welcome', text: f('welcome', { v: money(WELCOME.bet) }) }) : null,
     open.length
       ? el('div', { class: 'wallet-stats' }, [
           el('div', {}, [el('small', { text: T.atStake }), el('strong', { class: 'num', text: `${money(atStake)} · ${f('slipsN', { n: open.length })}` })]),

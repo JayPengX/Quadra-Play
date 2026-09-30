@@ -97,7 +97,12 @@ export function placeSlip(account, slip, now = new Date(), { extra = 0 } = {}) {
   return { account: touched({ ...account, ledger: [...account.ledger, entry], slips: [saved, ...account.slips] }, now) };
 }
 
-// Buys a slip with a free bet (a Rewards token, kit freeBets): the token's
+// Quadra Plus's daily boost: one paid slip a Taiwan day, costing at most
+// `max`, wins `lift` more (kept with the slip). Whether today's is used.
+export const liftUsedToday = (account, now = new Date()) => account.slips.some(s => s.lift > 0 && s.t && taipeiDayKey(new Date(s.t)) === taipeiDayKey(now));
+export const liftFits = (cost, max) => cost > 0 && cost <= max;
+
+// Buys a slip with a free bet (a Rewards token or Plus's weekly bonus bet, kit freeBets): the token's
 // value is the stake, nothing comes off the balance, and the token is marked
 // spent ('fb-<token id>', so the same token is never staked twice). Winning
 // pays the winnings only (applyResults), never the stake back.
@@ -293,14 +298,21 @@ export function applyResults(account, slipId, results, now = new Date(), finals 
   let updated = { ...slip, legs };
   let ledger = account.ledger;
   if (legs.every(leg => leg.result)) {
-    const { gross, net } = settleSlip({ legs, sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0 });
+    const { gross, net } = settleSlip({ legs, sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0, lift: slip.lift ?? 0 });
     // A free bet pays what it won, less the stake it never cost.
     const payout = slip.free ? Math.max(0, Math.round(net) - slip.stake) : Math.round(net);
-    updated = { ...updated, status: 'settled', settledAt: now.toISOString(), gross: Math.round(gross), payout };
+    // Quadra Plus's daily boost is paid as its own entry ('plus-<slip>', kind
+    // 'plusboost'), so the statement and the Plus sheet show what it gave.
+    const plain = slip.lift ? Math.round(settleSlip({ legs, sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0 }).net) : payout;
+    const extra = Math.max(0, payout - plain);
+    updated = { ...updated, status: 'settled', settledAt: now.toISOString(), gross: Math.round(gross), payout, ...(extra ? { lifted: extra } : {}) };
     // (A slip refunded while it was lost, then found on another device, has
     // had its cost back already.)
     const refunded = ledger.some(e => e.id === `refund-${slip.id}`) ? slip.cost : 0;
-    if (!ledger.some(e => e.id === `payout-${slip.id}`)) ledger = [...ledger, { id: `payout-${slip.id}`, t: now.toISOString(), kind: 'payout', amount: payout - refunded, slipId: slip.id }];
+    if (!ledger.some(e => e.id === `payout-${slip.id}`)) {
+      ledger = [...ledger, { id: `payout-${slip.id}`, t: now.toISOString(), kind: 'payout', amount: payout - extra - refunded, slipId: slip.id }];
+      if (extra) ledger = [...ledger, { id: `plus-${slip.id}`, t: now.toISOString(), kind: 'plusboost', amount: extra, slipId: slip.id }];
+    }
   }
   return touched({ ...account, ledger, slips: account.slips.map(s => (s.id === slipId ? updated : s)) }, now);
 }
@@ -358,7 +370,7 @@ export function mergeDistinct(a, b) {
   if (!b) return a;
   const tag = `m${Date.parse(b.created).toString(36)}`;
   const have = new Set(a.ledger.map(e => e.id));
-  const ledger = b.ledger.map(e => (have.has(e.id) && !/^(stake|payout|refund|game)-/.test(e.id) ? { ...e, id: `${e.id}-${tag}` } : e));
+  const ledger = b.ledger.map(e => (have.has(e.id) && !/^(stake|payout|refund|game|plus)-/.test(e.id) ? { ...e, id: `${e.id}-${tag}` } : e));
   return mergeAccounts(a, { ...b, created: a.created, ledger });
 }
 

@@ -9,7 +9,7 @@ import { useSourcesSession, loadOdds, loadExtraLeagues, loadExtraFutures, taipei
 import { inningsLeft, liveBaseball, liveSoccer, liveGoals, livePoints, fitGoals, liveMarkets, liveOdds, pregameRuns, nextRunChances, nextRunOdds, LIVE_MIN_LIQUIDITY, LIVE_THREE_WAY, PERIODS } from './lib/live.mjs';
 import { fitHockey } from './lib/markets.mjs';
 import {
-  WEEKLY_GRANT, newAccount, balance, canClaim, claimGrant, newSlipId, placeSlip, placeFreeSlip, legResult, applyResults, mergeAccounts, recoverFromWallet, refundLost, mergeDistinct, poolEntries, compactAccount, cashOut, isAccount
+  WEEKLY_GRANT, newAccount, balance, canClaim, claimGrant, newSlipId, placeSlip, placeFreeSlip, legResult, applyResults, mergeAccounts, recoverFromWallet, refundLost, mergeDistinct, poolEntries, compactAccount, cashOut, isAccount, liftUsedToday, liftFits
 } from './lib/account.mjs';
 import { cashOutValue, CASHOUT_KEEP } from './lib/cashout.mjs';
 import { renderHome } from './home.js';
@@ -1450,7 +1450,15 @@ function renderParlay() {
     ticket.push(el('ul', { class: 'slip-errors' }, errors.map(e => el('li', { text: t(`slipError_${e}`, { max: SLIP_RULES.maxLegs, min: fmtMoney(SLIP_RULES.minTicket, { sign: false }), maxTicket: fmtMoney(SLIP_RULES.maxTicket, { sign: false }), unit: SLIP_RULES.unit, need: minLegsProblem(slip, sizes) }) }))));
   }
   const cost = freeOn ? 0 : comboCount(slip, sizes) * stake;
-  if (sizes.length && !errors.includes('stakeUnit') && (cost > 0 || freeOn)) ticket.push(payoutBox(slip, sizes, stake, mode));
+  // Quadra Plus's daily boost: on this slip (or the first of several singles).
+  const multi = mode === 'single' && n > 1;
+  const each = multi ? stake : cost;
+  const lift = freeOn ? 0 : liftFor(each);
+  if (!freeOn && cost > 0 && sizes.length && !errors.length) {
+    const row = liftRow(slip, sizes, stake, mode, each, lift, multi);
+    if (row) ticket.push(row);
+  }
+  if (sizes.length && !errors.includes('stakeUnit') && (cost > 0 || freeOn)) ticket.push(payoutBox(slip, sizes, stake, mode, multi ? 0 : lift));
   if (mode !== 'single' && n >= 2 && !errors.includes('stakeUnit')) ticket.push(boostLadder(mode === 'parlay' ? n : Math.max(...sizes, 0)));
   ticket.push(placeButton(legs, sizes, cost, errors, freeOn ? free : null));
   ticket.push(el('details', { class: 'info' }, [el('summary', { text: t('slipRulesTitle') }), el('p', { text: t('slipRulesNote') })]));
@@ -1522,13 +1530,13 @@ function legMain(leg) {
 // Payout at a glance: for a parlay the odds multiplied out, for singles each
 // pick's return, for a system each size; then cost, what all correct pays
 // (after tax) and the least a winning ticket pays.
-function payoutBox(legs, sizes, stake, mode) {
+function payoutBox(legs, sizes, stake, mode, plusLift = 0) {
   const t = state.t;
   const n = legs.length;
   const combos = comboCount(legs, sizes);
   const bySize = combosBySize(legs);
   const cost = combos * stake;
-  const { gross, net } = slipPayoutTable({ legs, sizes, stake, boost: mode === 'single' ? 0 : boostX() });
+  const { gross, net } = slipPayoutTable({ legs, sizes, stake, boost: mode === 'single' ? 0 : boostX(), lift: plusLift });
   const all = (1 << n) - 1;
   let least = Infinity;
   for (let won = 1; won < gross.length; won++) if (gross[won] > 0) least = Math.min(least, net[won]);
@@ -1541,12 +1549,13 @@ function payoutBox(legs, sizes, stake, mode) {
     ]));
     rows.push(payLine(t('payStake'), fmtMoney(stake, { sign: false })));
   } else if (mode === 'single') {
-    legs.forEach((l, i) => rows.push(payLine(`${t('payEach', { i: i + 1 })} ${fmtMoney(stake, { sign: false })} × ${fmtOdds(l.odds)}`, fmtMoney(afterTax(stake * l.odds), { sign: false }))));
+    legs.forEach((l, i) => rows.push(payLine(`${t('payEach', { i: i + 1 })} ${fmtMoney(stake, { sign: false })} × ${fmtOdds(l.odds)}`, fmtMoney(afterTax(stake * (1 + (l.odds - 1) * (1 + plusLift))), { sign: false }))));
   } else {
     for (const k of sizes) rows.push(payLine(t('paySize', { size: sizeName(k, n), c: fmtInt(bySize[k] ?? 0) }), fmtMoney((bySize[k] ?? 0) * stake, { sign: false })));
   }
   const lift = mode === 'single' ? 0 : boostRate(Math.max(...sizes, 0), boostX());
   if (lift > 0) rows.push(payLine(t('payBoost'), `+${Math.round(lift * 100)}%`, 'pay-boost'));
+  if (plusLift > 0) rows.push(payLine(t('payLift'), `+${Math.round(plusLift * 100)}%`, 'pay-boost'));
   rows.push(payLine(t('payCost', { c: fmtInt(combos) }), fmtMoney(cost, { sign: false }), 'pay-cost'));
   const taxed = gross[all] - net[all] > 0.5;
   return el('div', { class: 'pay-box' }, [
@@ -1565,6 +1574,32 @@ function payoutBox(legs, sizes, stake, mode) {
 // The parlay boost's multiplier for a slip bought now: doubled for Quadra Plus.
 function boostX() {
   return plusMember(q.wallet) ? PLUS.odds.boost : 1;
+}
+// Quadra Plus's daily boost for a paid slip costing `each` bought now: its
+// share of the winnings, or 0 (not a member, today's used, or too big).
+function liftFor(each) {
+  if (!state.accountReady || !plusMember(q.wallet) || liftUsedToday(state.account)) return 0;
+  return liftFits(each, PLUS.odds.liftMax) ? PLUS.odds.lift : 0;
+}
+// Above the payout: the boost on this slip for a member, why not, or (for
+// anyone else) what Plus would add to it if every pick wins.
+function liftRow(legs, sizes, stake, mode, each, lift, multi) {
+  const t = state.t;
+  const pct = `${Math.round(PLUS.odds.lift * 100)}%`;
+  if (lift > 0) return el('p', { class: 'boost-plus lift-on', text: t(multi ? 'liftOnFirst' : 'liftOn', { v: pct }) });
+  if (plusMember(q.wallet)) {
+    if (liftUsedToday(state.account)) return el('p', { class: 'note muted', text: t('liftUsed') });
+    return el('p', { class: 'note muted', text: t('liftTooBig', { max: fmtMoney(PLUS.odds.liftMax, { sign: false }) }) });
+  }
+  if (!liftFits(each, PLUS.odds.liftMax)) return null;
+  // Not a member: what this slip (the first single) would win more with it.
+  const one = multi ? [legs[0]] : legs;
+  const oneSizes = multi ? [1] : sizes;
+  const all = (1 << one.length) - 1;
+  const boost = mode === 'single' ? 0 : boostX();
+  const more = slipPayoutTable({ legs: one, sizes: oneSizes, stake, boost, lift: PLUS.odds.lift }).net[all] - slipPayoutTable({ legs: one, sizes: oneSizes, stake, boost }).net[all];
+  if (!(more >= 1)) return null;
+  return el('button', { class: 'q-plus-hint', type: 'button', onclick: () => openPlus(q), text: t('liftPlusOff', { v: fmtMoney(Math.floor(more), { sign: false }) }) });
 }
 // The parlay boost as a ladder: 3 picks and up, the share the winnings grow
 // by at each size, where this slip stands, and what Plus makes of it.
@@ -1887,7 +1922,7 @@ function freeBetRow(tokens, free, freeOn, rerender) {
     el('div', { class: 'free-bets-row', role: 'group' }, tokens.map(x =>
       el('button', { type: 'button', class: 'free-bet', 'aria-pressed': String(free?.id === x.id), onclick: () => ((state.useFree = free?.id === x.id ? null : x.id), rerender()) }, [
         el('strong', { class: 'num', text: `🎁 ${fmtMoney(x.value, { sign: false })}` }),
-        el('small', { text: t('freeBetDays', { n: days(x) }) })
+        el('small', { text: x.id === 'eco:fb:welcome' ? `${t('freeBetWelcome')} · ${t('freeBetDays', { n: days(x) })}` : x.id.startsWith('eco:fb:') ? `✦ ${t('freeBetPlus')} · ${t('freeBetDays', { n: days(x) })}` : t('freeBetDays', { n: days(x) }) })
       ])
     )),
     free && !freeOn ? el('p', { class: 'note back-low', text: t('freeBetOneSlip') }) : free ? el('p', { class: 'note', text: t('freeBetNote') }) : null
@@ -1920,6 +1955,11 @@ function placeButton(legs, sizes, cost, errors, free = null) {
             ? records.map(leg => ({ id: newSlipId(), mode: 'single', sizes: [1], stake: state.slipStake, cost: cost / records.length, legs: [leg] }))
             : [{ id: newSlipId(), mode: state.slipMode, sizes, stake: state.slipStake, cost, legs: records, ...(state.slipMode !== 'single' ? { boost } : {}) }];
         if (!free && cost > funds()) return;
+        // Quadra Plus's daily boost goes with the first paid slip it fits.
+        if (!free) {
+          const lift = liftFor(slips[0].cost);
+          if (lift > 0) slips[0] = { ...slips[0], lift };
+        }
         let account = state.account;
         const now = new Date();
         if (free) {
@@ -2087,8 +2127,8 @@ function slipRange(slip) {
   // A free bet pays its winnings only, not the stake.
   const less = x => (slip.free ? Math.max(0, x - slip.stake) : x);
   return {
-    locked: less(settleSlip({ legs: as('lost'), sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0 }).net),
-    most: less(settleSlip({ legs: as('won'), sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0 }).net)
+    locked: less(settleSlip({ legs: as('lost'), sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0, lift: slip.lift ?? 0 }).net),
+    most: less(settleSlip({ legs: as('won'), sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0, lift: slip.lift ?? 0 }).net)
   };
 }
 
@@ -2180,7 +2220,7 @@ function slipNowLine(slip, states) {
   const count = x => slip.legs.filter((leg, k) => states[k] === 'live' && now[k] === x).length;
   const parts = [t('slipNowCount', { win: count('won'), lose: count('lost') })];
   if (now.every(Boolean)) {
-    const pay = settleSlip({ legs: slip.legs.map((leg, k) => ({ gameId: leg.gameId, odds: leg.odds, result: now[k] })), sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0 }).net;
+    const pay = settleSlip({ legs: slip.legs.map((leg, k) => ({ gameId: leg.gameId, odds: leg.odds, result: now[k] })), sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0, lift: slip.lift ?? 0 }).net;
     parts.push(pay > 0 ? t('slipNowPays', { v: fmtMoney(pay, { sign: false }) }) : t('slipNowNothing'));
   }
   return el('p', { class: 'slip-now' }, [el('span', { class: 'live-dot', text: t('tagLive') }), document.createTextNode(` ${parts.join(' · ')}`)]);
@@ -2301,6 +2341,7 @@ function savedSlipCard(slip) {
           payCell(decided ? t('slipMost') : t('payAll'), fmtMoney(range.most, { sign: false }), dead ? 'back-low' : '')
         ]),
     slip.boost && boostRate(Math.max(...slip.sizes), slip.boost) > 0 ? el('p', { class: 'saved-boost', text: t('slipBoosted', { v: `+${Math.round(boostRate(Math.max(...slip.sizes), slip.boost) * 100)}%` }) }) : null,
+    slip.lift > 0 ? el('p', { class: 'saved-boost', text: t('slipLifted', { v: `+${Math.round(slip.lift * 100)}%` }) }) : null,
     settled || dead || slip.free ? null : cashOutRow(slip),
   ]);
 }

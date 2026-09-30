@@ -89,6 +89,19 @@ Calm on purpose: no banners, no one-tap "hot" parlays, no nags.
   ticket stands. A slip keeps its `boost` (1 or 2) from when it was bought;
   older slips have none. Even doubled, a parlay keeps most of the house's
   cut, since every pick carries its own and they multiply.
+- **Plus daily boost** (kit `PLUS.odds.lift`, the slip's `lift`): one paid
+  slip a Taiwan day costing up to NT$1,000 wins 10% more of its winnings
+  (`liftUsedToday`, `liftFits` in `account.mjs`; on the first of several
+  singles). 10% is under every market's cut (1.158 and up), so a boosted
+  slip still keeps the house ahead at any price (tested). The extra is paid
+  as its own entry, `plus-<slip>` (kind `plusboost`), so the statement and
+  the Plus sheet show it. Non-members see what the slip would win more.
+- **Free bets** come from Rewards' missions, Plus's weekly NT$100
+  (`eco:fb:<Monday>`) and the welcome NT$200 after a first paid bet
+  (`eco:fb:welcome`), both written by the Worker.
+- **VIP** (kit `VIP`, `vipStatus`): the balance card on home shows this
+  month's tier from its gaming stakes, the cashback so far and the next
+  tier; the Worker pays it after the month (`eco:vip:<month>`).
 - **Cash out** (`lib/cashout.mjs`): an open slip can be sold back. Its price
   weighs every way the undecided picks can land by the board's current
   odds (1/odds, so the cut is in it), times what the slip would pay then

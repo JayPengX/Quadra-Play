@@ -14,9 +14,12 @@ import {
   mergeAccounts,
   topInning,
   placeFreeSlip,
-  cashOut
+  cashOut,
+  liftUsedToday,
+  liftFits
 } from '../public/lib/account.mjs';
-import { settleSlip, SLIP_RULES } from '../public/lib/odds.mjs';
+import { settleSlip, slipOutlook, SLIP_RULES } from '../public/lib/odds.mjs';
+import { BASE_CUT } from '../public/lib/rules.mjs';
 import { parseEspnResults, parseEspnRace, parseFutureResult } from '../public/lib/sources.mjs';
 
 const at = iso => new Date(iso);
@@ -118,6 +121,38 @@ test('a free bet: no cost, the token spent once, only the winnings paid, no cash
   assert.equal(balance(won), START_BALANCE + 200);
   const lost = applyResults(account, 'f', ['won', 'lost']);
   assert.equal(balance(lost), START_BALANCE);
+});
+
+test('Plus daily boost: +10% of the winnings, paid as its own entry, one slip a Taiwan day', () => {
+  let account = newAccount(at('2026-09-25T00:00:00Z'));
+  const now = at('2026-09-25T04:00:00Z');
+  assert.equal(liftUsedToday(account, now), false);
+  ({ account } = placeSlip(account, { ...slip('s', 100, [{ id: 'a', odds: 2 }, { id: 'b', odds: 1.5 }]), lift: 0.1 }, now));
+  assert.equal(liftUsedToday(account, now), true);
+  // The next Taiwan day it's back.
+  assert.equal(liftUsedToday(account, at('2026-09-25T16:30:00Z')), false);
+  const won = applyResults(account, 's', ['won', 'won'], now);
+  // 100 × 3.00: winnings 200, +10% = 220, paid 320: 300 as winnings, 20 as the boost.
+  assert.equal(won.slips[0].payout, 320);
+  assert.equal(won.ledger.find(e => e.id === 'payout-s').amount, 300);
+  assert.deepEqual(won.ledger.find(e => e.id === 'plus-s'), { id: 'plus-s', t: now.toISOString(), kind: 'plusboost', amount: 20, slipId: 's' });
+  assert.equal(balance(won), START_BALANCE - 100 + 320);
+  // A lost slip pays nothing, and no boost entry.
+  const lost = applyResults(account, 's', ['won', 'lost'], now);
+  assert.ok(!lost.ledger.some(e => e.id === 'plus-s'));
+  assert.equal(liftFits(1000, 1000), true);
+  assert.equal(liftFits(1010, 1000), false);
+  assert.equal(liftFits(0, 1000), false);
+});
+
+test('Plus daily boost keeps the house ahead at any price, on every market cut', () => {
+  for (const cut of Object.values(BASE_CUT)) {
+    for (const odds of [1.2, 1.85, 3, 8, 50]) {
+      const fairChance = 1 / (odds * cut);
+      const { mean } = slipOutlook({ legs: [{ gameId: 'g', odds, fairChance }], sizes: [1], stake: 100, lift: 0.1 });
+      assert.ok(mean < 100, `cut ${cut} odds ${odds}: returns ${mean}`);
+    }
+  }
 });
 
 test('two devices merge without counting anything twice', () => {
