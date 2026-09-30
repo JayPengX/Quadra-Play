@@ -1,12 +1,9 @@
-import { minLegsProblem } from './rules.mjs';
+import { minLegsProblem, BASE_CUT } from './rules.mjs';
 // Pure odds math, shared by the browser page and scripts/build-data.mjs.
 
-// Fitted on 2026-09-25 against real Taiwan Sports Lottery prices (14 MLB
-// games, 28 prices): lottery implied chance ~= fair chance x K. Separate K per
-// input because each source's own fair chance sits slightly differently.
-export const K_BOTH = 1.151;
-export const K_DRAFTKINGS = 1.153;
-export const K_POLYMARKET = 1.158;
+// A game's winner: lottery implied chance ~= fair chance x K, the lottery's
+// two-way cut (rules.mjs BASE_CUT), whatever priced the game.
+export const K_WIN = BASE_CUT.twoWay;
 // F1 race winner, drivers the lottery prices one by one. The lottery prices
 // the race twice: before qualifying and again once the grid is set.
 // - After qualifying: lottery implied chance ~= 1.17 x fair chance ^ 0.765.
@@ -415,14 +412,16 @@ export function combineParlay(legs) {
 }
 
 // Fair chance of every outcome for one game ({away, home} or {away, draw, home})
-// from whichever sources exist, plus the K to use.
-export function blendOutcomes(draftKings, polymarket) {
+// from whichever sources exist (the house's own last), plus the K to use (one
+// for all of them).
+export function blendOutcomes(draftKings, polymarket, house = null) {
   if (draftKings && polymarket) {
     const blended = Object.fromEntries(Object.keys(draftKings).map(k => [k, (draftKings[k] + polymarket[k]) / 2]));
-    return { probs: blended, k: K_BOTH, source: 'both' };
+    return { probs: blended, k: K_WIN, source: 'both' };
   }
-  if (draftKings) return { probs: draftKings, k: K_DRAFTKINGS, source: 'draftkings' };
-  if (polymarket) return { probs: polymarket, k: K_POLYMARKET, source: 'polymarket' };
+  if (draftKings) return { probs: draftKings, k: K_WIN, source: 'draftkings' };
+  if (polymarket) return { probs: polymarket, k: K_WIN, source: 'polymarket' };
+  if (house) return { probs: house, k: K_WIN, source: 'house' };
   return null;
 }
 

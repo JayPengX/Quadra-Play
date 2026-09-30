@@ -8,6 +8,8 @@ import { normalizeTeamName, teamZh, LEAGUES, familyOf, isSoccer, rememberLogo, r
 import { runOrder, shareLeft } from './live.mjs';
 import { KAMBI, kambiUrl, parseKambiInPlay, useKambiToken, fetchKambiLeague, decidedFromLive, decidedTeamGame, parseKambiLiveData, kambiLiveDataUrl, setsWon, watchKambiMatches, fetchKeptKambi } from './kambi.mjs';
 import { KAMBI_LEAGUES } from './teams.mjs';
+import { withHousePrices } from './house.mjs';
+import { SOLD_DAYS } from './catalog.mjs';
 
 export const PROXY_URL = 'https://sports-proxy.pengzjay.workers.dev';
 const ESPN = 'https://site.api.espn.com/apis/site/v2/sports';
@@ -15,9 +17,12 @@ const GAMMA = 'https://gamma-api.polymarket.com';
 const OPENF1 = 'https://api.openf1.org/v1';
 export const F1_FLAG_KINDS = new Set(['f1sc', 'f1vsc', 'f1red']);
 const POLYMARKET_TAG = { mlb: 100381, epl: 306, f1: 100389, nba: 745 };
-const MLB_DAYS_AHEAD = 8;
-// Soccer rounds can be two weeks apart (international breaks).
-const EPL_DAYS_AHEAD = 21;
+// Every game on the board starts within this many days (the kit's SOLD_DAYS),
+// whatever its league and whoever prices it: a bookmaker, a market, or the
+// house (house.mjs). Past the week of daily pages, the month pages (one
+// answer a month) fill in the rest.
+export const DAYS_AHEAD = SOLD_DAYS;
+const DAILY_DAYS = 7;
 const MATCH_TOLERANCE_MS = 6 * 60 * 60 * 1000;
 const DAY_MS = 86_400_000;
 const TAIPEI_OFFSET_MS = 8 * 60 * 60 * 1000;
@@ -65,10 +70,10 @@ export function nextMatchweek(games) {
 }
 
 // What the page lists: every game the sources have that hasn't started yet
-// (no cut-off at tomorrow or the next matchweek), in start order.
+// and starts within DAYS_AHEAD, in start order.
 export function lotteryGames(games, now) {
   const t = now.getTime();
-  return games.filter(g => Date.parse(g.startUtc) > t).sort((a, b) => a.startUtc.localeCompare(b.startUtc));
+  return games.filter(g => Date.parse(g.startUtc) > t && Date.parse(g.startUtc) <= t + DAYS_AHEAD * DAY_MS).sort((a, b) => a.startUtc.localeCompare(b.startUtc));
 }
 
 // Championship markets. Polymarket lists next season's market before this
@@ -126,6 +131,8 @@ function ttlFor(url) {
   if (url.includes('/in-play.json')) return 20_000;
   if (url.includes('/listView/')) return 2 * 60_000;
   if (url.includes('/summary?event=')) return 60 * 60_000;
+  if (url.includes('/standings')) return 6 * 60 * 60_000;
+  if (/scoreboard\?dates=\d{6}$/.test(url)) return 10 * 60_000;
   if (/scoreboard\?dates=/.test(url)) return 60_000;
   return 20_000;
 }
@@ -207,7 +214,7 @@ export function parseEspnScoreboard(data, sport) {
       if (Number.isFinite(awayLine) && (whole || awayLine % 1 !== 0) && fair) spread = { awayLine, awayFair: fair[0] };
     }
     if (outcomes) espnPregame.set(`${sport}|${event.id}`, { homeWin: outcomes.home, awayWin: outcomes.away, draw: outcomes.draw ?? 0, totalLine: total?.line ?? null, overFair: total?.overFair ?? 0.5 });
-    games.push({ sport, startUtc: new Date(event.date).toISOString(), away: teams.away, home: teams.home, outcomes, total, spread });
+    games.push({ sport, startUtc: new Date(event.date).toISOString(), away: teams.away, home: teams.home, neutral: Boolean(comp.neutralSite), preseason: event.season?.type === 1, outcomes, total, spread });
   }
   return games;
 }
@@ -218,9 +225,36 @@ async function fetchEspnDays(sport, path, days) {
   return pages.filter(Boolean).flatMap(page => parseEspnScoreboard(page, sport));
 }
 
-function mlbDays(now) {
+// Past the daily pages (football's: its current week, so from now), up to
+// DAYS_AHEAD: the games on the months' pages (ESPN answers `dates=YYYYMM`
+// with the whole month), none already listed.
+export function monthsAhead(now, fromDay = DAILY_DAYS) {
+  const months = new Set();
+  for (let d = fromDay; d <= DAYS_AHEAD; d++) months.add(yyyymmdd(new Date(now.getTime() + d * DAY_MS)).slice(0, 6));
+  return [...months];
+}
+export function laterGames(games, listed, now, fromDay = DAILY_DAYS) {
+  const from = now.getTime() + fromDay * DAY_MS;
+  const to = now.getTime() + DAYS_AHEAD * DAY_MS;
+  const key = g => `${g.startUtc}|${normalizeTeamName(g.away)}|${normalizeTeamName(g.home)}`;
+  const seen = new Set(listed.map(key));
+  return games.filter(g => {
+    const t = Date.parse(g.startUtc);
+    if (t <= from || t > to || seen.has(key(g))) return false;
+    seen.add(key(g));
+    return true;
+  });
+}
+async function withLaterGames(sport, path, listed, now, fromDay = DAILY_DAYS) {
+  const pages = await Promise.all(monthsAhead(now, fromDay).map(m => getJson(`${ESPN}/${path}/scoreboard?dates=${m}`).catch(() => null)));
+  const later = laterGames(pages.filter(Boolean).flatMap(page => parseEspnScoreboard(page, sport)), listed, now, fromDay);
+  return withHousePrices([...listed, ...later], sport, path, getJson);
+}
+
+// Daily pages: yesterday (US dates run behind Taiwan's) to a week ahead.
+function dailyDays(now) {
   const days = [];
-  for (let d = -1; d < MLB_DAYS_AHEAD; d++) days.push(new Date(now.getTime() + d * DAY_MS));
+  for (let d = -1; d <= DAILY_DAYS; d++) days.push(new Date(now.getTime() + d * DAY_MS));
   return days;
 }
 
@@ -228,32 +262,39 @@ function mlbDays(now) {
 export function eplMatchdays(scoreboard, now) {
   const calendar = scoreboard?.leagues?.[0]?.calendar || [];
   const from = now.getTime() - DAY_MS;
-  const to = now.getTime() + EPL_DAYS_AHEAD * DAY_MS;
+  const to = now.getTime() + DAYS_AHEAD * DAY_MS;
   return calendar
     .map(entry => new Date(typeof entry === 'string' ? entry : entry?.startDate))
     .filter(d => Number.isFinite(d.getTime()) && d.getTime() >= from && d.getTime() <= to);
+}
+
+async function fetchEspnMlb(now) {
+  return withLaterGames('mlb', 'baseball/mlb', await fetchEspnDays('mlb', 'baseball/mlb', dailyDays(now)), now);
 }
 
 async function fetchEspnEpl(now) {
   return fetchSoccer('epl', now);
 }
 
-// Soccer leagues: their calendar's matchdays in the next three weeks.
+// Soccer leagues: their calendar's matchdays within the board's reach (DAYS_AHEAD).
 async function fetchSoccer(key, now) {
   const path = LEAGUES[key].path;
   const scoreboard = await getJson(`${ESPN}/${path}/scoreboard`);
   const days = eplMatchdays(scoreboard, now);
-  if (days.length === 0) return parseEspnScoreboard(scoreboard, key);
-  return fetchEspnDays(key, path, days);
+  const games = days.length === 0 ? parseEspnScoreboard(scoreboard, key) : await fetchEspnDays(key, path, days);
+  return withHousePrices(games, key, path, getJson);
 }
 
 // Every other league: football's current week (its default scoreboard),
-// daily sports from yesterday to two days ahead (US dates run behind Taiwan's).
+// daily sports' daily pages, then the month pages up to DAYS_AHEAD.
 async function fetchLeague(key, now) {
   const { family, path } = LEAGUES[key];
   if (family === 'soccer') return fetchSoccer(key, now);
-  if (family === 'football') return parseEspnScoreboard(await getJson(`${ESPN}/${path}/scoreboard`), key);
-  return fetchEspnDays(key, path, [-1, 0, 1, 2, 3, 4, 5, 6, 7].map(d => new Date(now.getTime() + d * DAY_MS)));
+  const listed =
+    family === 'football'
+      ? parseEspnScoreboard(await getJson(`${ESPN}/${path}/scoreboard`), key)
+      : await fetchEspnDays(key, path, dailyDays(now));
+  return withLaterGames(key, path, listed, now, family === 'football' ? 0 : DAILY_DAYS);
 }
 
 // Leagues fetched from ESPN alone (DraftKings); MLB and the Premier League
@@ -557,9 +598,11 @@ export function mergeGames(dkGames, pmGames) {
       polymarket: pm?.outcomes ?? null,
       polymarketLiquidity: pm?.liquidity ?? null,
       total: dk?.total ?? null,
-      spread: dk?.spread ?? null
+      spread: dk?.spread ?? null,
+      // The house's own chances, where no bookmaker prices the game (house.mjs).
+      house: dk && !dk.outcomes && !pm ? (dk.house ?? null) : null
     }))
-    .filter(g => g.draftKings || g.polymarket)
+    .filter(g => g.draftKings || g.polymarket || g.house)
     .sort((a, b) => a.startUtc.localeCompare(b.startUtc));
 }
 
@@ -569,7 +612,7 @@ export async function loadOdds(now = new Date(), onProgress) {
   const track = (promise, _, all) => promise.finally(() => onProgress?.(++finished / all.length));
   const results = await Promise.allSettled(
     [
-      fetchEspnDays('mlb', 'baseball/mlb', mlbDays(now)),
+      fetchEspnMlb(now),
       fetchPolymarketEvents(POLYMARKET_TAG.mlb, 'polymarket-events'),
       fetchEspnEpl(now),
       fetchPolymarketEvents(POLYMARKET_TAG.epl, 'polymarket-events'),

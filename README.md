@@ -172,9 +172,9 @@ The page stays simple: odds, colours and the amounts that matter. What the numbe
 
 ### 賽事 Games
 
-- **What's listed** follows the lottery's own schedule:
-  - MLB games up to the end of tomorrow, Taiwan time; the Premier League's next matchweek once its first game is within 3 days.
-  - **More sports from ESPN** (DraftKings' lines): NFL and college football (5 days ahead), NBA, WNBA and NHL (to the end of tomorrow), and 12 more soccer leagues (3 days ahead).
+- **What's listed:** every game of every league starting within the next 14 days (one reach for all, see the house cut below):
+  - MLB and the Premier League (DraftKings and Polymarket).
+  - **More sports from ESPN** (DraftKings' lines, else the house's own prices): football, basketball, hockey and the soccer leagues.
   - **More sports from Kambi** (a European bookmaker's public odds, `public/lib/kambi.mjs`): NPB, KBO and CPBL baseball, EuroLeague and B.League basketball, tennis (ATP, WTA), badminton, table tennis, volleyball and snooker, whenever they have matches (busy table tennis and volleyball show the next 16).
   - The next F1 race winner, every driver named as the lottery writes them (G.羅素, AK.安東內利 …).
   - Championships (see Boards below).
@@ -202,7 +202,8 @@ The page stays simple: odds, colours and the amounts that matter. What the numbe
 - **House rules** (`public/lib/rules.mjs`), for you and the simulated crowd alike:
   - locked (🔒): odds of 1.05 or less, or 8+ on ordinary markets (80+ on correct scores, margins, set scores and the like). F1 and championships are priced one by one up to 500 and never locked;
   - parlay only: under 1.30 only in parlays of 2+ games (限2關), under 1.15 of 3+ (限3關). The slip refuses a ticket with any combination too small for one of its picks. These thresholds are the house's usual shape, not measured on the lottery's board.
-- **A cut by the house's risk:** each market's overround starts from what the lottery was measured taking on that kind of market (1.158 on MLB's two-way markets, 1.20 three-way, 1.35 bands, 1.50 correct scores, 1.92 the top inning) and grows with the house's risk: the sources disagreeing beyond the usual 1 point (point for point), a league it knows less (+1.5%) or one with a single bookmaker's line (+3%), and each line step away from the main one (+0.6%), at most +8%. With no extra risk it's the measured cut, so MLB prices exactly as before.
+- **One house cut:** every market takes what the lottery was measured taking on that kind of market (1.158 two-way, 1.20 three-way, 1.35 bands, 1.50 correct scores, 1.92 the top inning, 1.16 live), whatever the league and whoever priced the game, so Play stays close to 運彩's prices (1.72-1.73 each side of a coin flip).
+- **Every game, two weeks ahead** (`SOLD_DAYS` in the kit's `leagues.mjs`, shared with Fixtures' 投注): every league's games up to 14 days out. A game no bookmaker prices yet (preseason, a game past DraftKings' posting, a small league) is priced by the house (`public/lib/house.mjs`): each team's share of wins in ESPN's standings (last season, pulled a third of the way to even, weighted like 30% of a season, this season's games on top), log5 between the two, plus the home side's edge; soccer takes a draw out (27% between even sides); preseason pulled halfway to even. A bookmaker's line replaces it as soon as one is posted.
 - **Recommendations** (`public/lib/recommend.mjs`), shown on each pick instead of a separate list: every pick is judged by its average back per NT$100 against the others. The day's top 10% get 划算; picks of 65%+ that return at least the median get 穩; picks of 30% or less in the top quarter get 值博. Locked picks, picks over 85% or under 5%, and lots of under 10 picks get none. The simulator's value hunters bet exactly these picks.
 
 ### 投注單 Bet slip
@@ -284,7 +285,7 @@ The simulator tab itself was removed.
 | Top-scoring inning | The lottery's own fixed table (about a 48% take) |
 | F1 winner, after qualifying | `1 ÷ (1.17 × fair^0.765)`, at least 1.05; drivers under 1% get the lottery's fixed 65 (0.4–1%) / 275 (0.15–0.4%) / 500. About 10% off on 8 drivers the eve of the 2026 Azerbaijan GP (`tests/fixtures/lottery-f1-2026-09-26.json`) |
 | F1 winner, before qualifying | `1 ÷ fair^0.692`; 65 (0.4–1%) / 325 (0.1–0.4%) / 500. About 8% off on 9 prices from the same race's board the morning before qualifying. The phase comes from ESPN's F1 schedule (qualifying start + 90 minutes); without it, over 21 hours before the race counts as before |
-| House cut | The measured cut of the market's kind × (1 + risk): sources' extra disagreement, the league's tier (0 / 1.5% / 3%), 0.6% per line step, at most 8% |
+| House cut | The measured cut of the market's kind, the same for every league and source |
 | Sets (tennis …) | Per-set chance q from the match chance (best of 3 or 5); set scores `C(need−1+lost, lost) q^need (1−q)^lost` |
 | Extra lines | Totals from the same negative binomial; run lines and team totals from the per-team score grid; odds `1 ÷ (p × 1.158)` (totals × 1.153), never above halfway from p to 1 in implied chance, at least 1.01. Not checked against the lottery |
 | Championships | Implied chance ∝ `fair^0.7`, scaled to the lottery's total (MLB 200%, EPL 160%, others 180%, unchecked); longshots 133 / 300 |
@@ -353,7 +354,8 @@ The account lives on the Quadra Pass: Shared-Proxy's `orbit-workers-proxy`, rout
 | `public/lib/scratch.mjs` | Scratch cards: prize tables and faces |
 | `public/home.js`, `public/lottery-ui.js` | The home and lottery tabs |
 | `public/lib/audit.mjs` | The fairness audit of sports and series |
-| `public/lib/rules.mjs` | House rules (locks, parlay only) and the house cut by risk |
+| `public/lib/rules.mjs` | House rules (locks, parlay only) and the house cut |
+| `public/lib/house.mjs` | The house's own prices for games no bookmaker prices, from ESPN's standings |
 | `public/lib/recommend.mjs` | Recommendations on single picks |
 | `public/lib/sim.mjs` | The simulated crowd: traits, calendar, the shared world, leaderboards |
 | `public/lib/profile.mjs` | One person's betting from their tickets, for you and for anyone in the crowd |

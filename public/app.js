@@ -1014,7 +1014,7 @@ function liveStateText(live) {
 function kambiLiveBets(game, g, base) {
   const t = state.t;
   const bets = [];
-  const k = houseCut({ base: 'live', sport: g.sport });
+  const k = houseCut({ base: 'live' });
   const common = { ...base, fairMargin: null, errKey: 'liveOther', cut: k };
   if (g.ml) {
     for (const side of ['away', 'home']) {
@@ -1093,7 +1093,7 @@ function buildLiveBets(data) {
     const matchup = matchupText(game);
     const base = { gameId: game.id, game, sport: g.sport, matchup, start: g.startUtc, live: true, fairMargin: null, errKey: g.sport === 'mlb' ? 'live' : family === 'soccer' ? 'liveSoccer' : 'liveOther' };
     // The live cut (soccer's winner at its three-way one), more for the leagues the house knows less.
-    const cut = { ml: houseCut({ base: family === 'soccer' ? LIVE_THREE_WAY : 'live', sport: g.sport }), other: houseCut({ base: 'live', sport: g.sport }) };
+    const cut = { ml: houseCut({ base: family === 'soccer' ? LIVE_THREE_WAY : 'live' }), other: houseCut({ base: 'live' }) };
     for (const m of markets ?? (dist ? liveMarkets(dist, { sport: g.sport, awayScore: g.awayScore, homeScore: g.homeScore, pm: g.pm }) : [])) {
       const k = m.kind === 'ml' ? cut.ml : cut.other;
       const common = { ...base, kind: m.kind, side: m.side, market: m.market, posted: m.posted, fairChance: m.fair, cut: k, estOdds: liveOdds(m.fair, k) };

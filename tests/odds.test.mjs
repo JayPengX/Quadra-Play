@@ -23,8 +23,7 @@ import {
   devigProportional,
   quantile,
   seededRandom,
-  K_BOTH,
-  K_POLYMARKET
+  K_WIN
 } from '../public/lib/odds.mjs';
 
 const close = (a, b, eps = 1e-3) => assert.ok(Math.abs(a - b) < eps, `${a} !~ ${b}`);
@@ -50,9 +49,9 @@ test('power devig sums to 1 and shrinks longshots more', () => {
 
 // Real lottery prices from 2026-09-25 against DraftKings+Polymarket fair chances.
 test('lottery estimate reproduces real MLB prices within a few cents', () => {
-  close(estimateLotteryOdds(0.4455, K_BOTH), 1.95, 0.02);
-  close(estimateLotteryOdds(1 - 0.4455, K_BOTH), 1.57, 0.02);
-  close(estimateLotteryOdds(0.502, K_BOTH), 1.73, 0.01);
+  close(estimateLotteryOdds(0.4455, K_WIN), 1.95, 0.02);
+  close(estimateLotteryOdds(1 - 0.4455, K_WIN), 1.57, 0.02);
+  close(estimateLotteryOdds(0.502, K_WIN), 1.73, 0.02);
 });
 
 test('F1 estimate matches the lottery board on race eve', () => {
@@ -86,12 +85,14 @@ test('parlay multiplies odds and chances', () => {
   close(p.fairChance, 0.2585);
 });
 
-test('blendOutcomes averages sources and picks the right multiplier', () => {
+test('blendOutcomes averages sources, one multiplier for every source', () => {
   assert.equal(blendOutcomes(null, null), null);
   const both = blendOutcomes({ away: 0.5, home: 0.5 }, { away: 0.52, home: 0.48 });
   close(both.probs.away, 0.51);
-  assert.equal(both.k, K_BOTH);
-  assert.equal(blendOutcomes(null, { away: 0.4, draw: 0.3, home: 0.3 }).k, K_POLYMARKET);
+  assert.equal(both.k, K_WIN);
+  assert.equal(blendOutcomes(null, { away: 0.4, draw: 0.3, home: 0.3 }).k, K_WIN);
+  assert.equal(blendOutcomes(null, null, { away: 0.4, home: 0.6 }).source, 'house');
+  assert.equal(blendOutcomes(null, null, { away: 0.4, home: 0.6 }).k, K_WIN);
 });
 
 test('proportional devig handles three outcomes', () => {

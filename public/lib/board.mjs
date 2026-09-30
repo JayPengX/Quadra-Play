@@ -26,8 +26,6 @@ import {
   lineInRange,
   MLB_TOTAL_DISPERSION,
   GOALS_DISPERSION,
-  MLB_MARKET_OVERROUND,
-  K_DRAFTKINGS,
   TOP_INNING_ODDS
 } from './odds.mjs';
 import { pointsModel, pointsMarkets, goalMarkets, fitHockey, baseballMarkets, setsMarkets, marketOdds, unitModel, guessBestOf, unitLineMarkets } from './markets.mjs';
@@ -113,7 +111,7 @@ function lineOptions(game, base, probs) {
   const modeled = Boolean(total?.modeled);
   const mlb = game.sport === 'mlb';
   const baseball = familyOf(game.sport) === 'baseball';
-  const cut = (k, steps) => houseCut({ base: k, sport: game.sport, steps });
+  const cut = k => houseCut({ base: k });
 
   // 大小分. MLB: the lottery's three lines, from one line; elsewhere the
   // bookmaker's own half line; then the wider range from the model.
@@ -130,9 +128,8 @@ function lineOptions(game, base, probs) {
       if (lineInRange(over) && lineInRange(1 - over)) totals.set(line, { line, over, main: false, posted: false });
     }
   }
-  const mainTotal = [...totals.values()].find(l => l.main)?.line;
   for (const { line, over, main, posted } of [...totals.values()].sort((a, b) => a.line - b.line)) {
-    const k = cut(K_DRAFTKINGS, posted || mainTotal == null ? 0 : line - mainTotal);
+    const k = cut('twoWay');
     for (const side of ['over', 'under']) {
       const p = side === 'over' ? over : 1 - over;
       out.push({
@@ -175,7 +172,7 @@ function lineOptions(game, base, probs) {
     const order = [...lines.values()].sort((a, b) => Math.abs(a.awayLine) - Math.abs(b.awayLine) || a.awayLine - b.awayLine);
     for (const { awayLine, fair, lottery, posted, first } of order) {
       const giver = awayLine < 0 ? 'away' : 'home';
-      const k = cut(MLB_MARKET_OVERROUND, posted ? 0 : Math.max(1, Math.abs(awayLine) - 2.5));
+      const k = cut('twoWay');
       for (const side of ['away', 'home']) {
         const p = side === 'away' ? fair : 1 - fair;
         const priced = side === 'away' ? lottery : 1 - lottery;
@@ -208,7 +205,7 @@ function lineOptions(game, base, probs) {
         if (line <= 0) continue;
         const over = teamOverChance(model.means[team], line);
         if (!(lineInRange(over) && lineInRange(1 - over))) continue;
-        const k = cut(MLB_MARKET_OVERROUND, d);
+        const k = cut('twoWay');
         for (const side of ['over', 'under']) {
           const p = side === 'over' ? over : 1 - over;
           out.push({
@@ -262,7 +259,7 @@ function sideOptions(game, base, probs) {
   }
   const out = [];
   for (const m of markets) {
-    const k = houseCut({ base: m.cut, sport: game.sport, steps: m.steps ?? 0 });
+    const k = houseCut({ base: m.cut });
     for (const pick of m.picks) {
       const o = {
         ...base,
@@ -296,7 +293,7 @@ function sideOptions(game, base, probs) {
 // The bookmaker's own handicap and total in games or points, for matches in
 // sets (tennis games; points in badminton, table tennis and volleyball).
 function unitLineOptions(game, base) {
-  const k = houseCut({ base: 'twoWay', sport: game.sport });
+  const k = houseCut({ base: 'twoWay' });
   const out = [];
   if (game.spread) {
     const { awayLine, awayFair } = game.spread;
@@ -318,7 +315,7 @@ function unitLineOptions(game, base) {
 
 // Every option of one game, priced, with the house's rules on each.
 export function gameOptions(game) {
-  const blend = blendOutcomes(game.draftKings, game.polymarket);
+  const blend = blendOutcomes(game.draftKings, game.polymarket, game.house);
   if (!blend) return [];
   // No total posted (a game only Polymarket or Kambi prices the winner of):
   // our own, so it gets every market all the same.
@@ -331,7 +328,7 @@ export function gameOptions(game) {
   const gap = both ? Math.max(...sides.map(side => Math.abs(game.draftKings[side] - game.polymarket[side]) / 2)) : null;
   // Soccer's 不讓分 has three outcomes: the lottery's three-way cut (its 1X2
   // odds add up to about 120%), not the two-way one.
-  const mlCut = houseCut({ base: isSoccer(game.sport) ? 'threeWay' : blend.k, sport: game.sport, fairMargin: gap });
+  const mlCut = houseCut({ base: isSoccer(game.sport) ? 'threeWay' : blend.k });
   const out = sides.map(side => ({
     ...base,
     id: `${game.id}|ml|${side}`,

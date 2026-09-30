@@ -37,18 +37,14 @@ test('the house locks very short and very long prices, and sells short ones only
   assert.ok(slipErrors({ mode: 'parlay', legs: [...legs, { gameId: 3, odds: 12, lock: 'high' }], sizes: [3], stake: 100 }).includes('locked'));
 });
 
-test('the house cut grows with its risk, from the measured one', () => {
-  // A big league, sources agreeing as usual: exactly the measured cut.
-  close(houseCut({ base: 'twoWay', sport: 'mlb' }), BASE_CUT.twoWay);
-  close(houseCut({ base: 1.151, sport: 'mlb', fairMargin: 0.01 }), 1.151);
-  // Less-known leagues, disagreeing sources and far lines cost more.
+test('one house cut: the lottery\'s own for each kind of market, whatever the league or price', () => {
+  close(houseCut(), BASE_CUT.twoWay);
+  close(houseCut({ base: 'threeWay' }), BASE_CUT.threeWay);
+  close(houseCut({ base: 1.3 }), 1.3);
+  // Close to the lottery: 1.72-1.73 each side of a coin flip.
+  assert.ok(1 / (0.5 * houseCut()) > 1.72 && 1 / (0.5 * houseCut()) < 1.73);
+  // The league's tier is only for what home leads with.
   assert.equal(leagueTier('cpbl'), 'thin');
-  assert.ok(houseCut({ sport: 'cpbl' }) > houseCut({ sport: 'mls' }));
-  assert.ok(houseCut({ sport: 'mls' }) > houseCut({ sport: 'mlb' }));
-  assert.ok(houseCut({ sport: 'mlb', fairMargin: 0.04 }) > houseCut({ sport: 'mlb', fairMargin: 0.01 }));
-  assert.ok(houseCut({ sport: 'mlb', steps: 3 }) > houseCut({ sport: 'mlb', steps: 1 }));
-  // Never more than 8% over the base.
-  assert.ok(houseCut({ sport: 'tennis', fairMargin: 0.5, steps: 10 }) <= BASE_CUT.twoWay * 1.08 + 1e-9);
 });
 
 test('recommendations: tagged on single picks, never on locked or near-certain ones', () => {

@@ -165,9 +165,9 @@ test('soccer games merge across name styles and get Chinese names', () => {
   assert.ok(game.draftKings.draw > 0 && game.polymarket.draw > 0);
 });
 
-test('eplMatchdays keeps calendar dates in the coming three weeks', () => {
-  const days = eplMatchdays({ leagues: [{ calendar: ['2026-09-20T07:00Z', '2026-10-10T07:00Z', '2026-10-11T07:00Z', '2026-10-31T07:00Z'] }] }, NOW);
-  assert.deepEqual(days.map(d => d.toISOString().slice(0, 10)), ['2026-10-10', '2026-10-11']);
+test('eplMatchdays keeps calendar dates within the board\'s reach (two weeks)', () => {
+  const days = eplMatchdays({ leagues: [{ calendar: ['2026-09-20T07:00Z', '2026-10-03T07:00Z', '2026-10-04T07:00Z', '2026-10-10T07:00Z'] }] }, NOW);
+  assert.deepEqual(days.map(d => d.toISOString().slice(0, 10)), ['2026-10-03', '2026-10-04']);
 });
 
 test('lottery window ends at the end of tomorrow, Taiwan time', async () => {
@@ -211,7 +211,7 @@ test('futures parser reads teams from questions and drops placeholders', async (
   assert.equal(epl.season, '2026/27');
 });
 
-test('every game not yet started is listed, however far ahead', async () => {
+test('every game not yet started is listed, up to two weeks ahead', async () => {
   const { lotteryGames, nextMatchweek } = await import('../public/lib/sources.mjs');
   const epl = (startUtc, away, home) => ({ sport: 'epl', startUtc, away: { en: away }, home: { en: home } });
   const round = [
@@ -230,9 +230,11 @@ test('every game not yet started is listed, however far ahead', async () => {
   const shown = lotteryGames([mlb('2026-09-26T02:00:00Z', 'tomorrow'), mlb('2026-09-26T23:00:00Z', 'day after'), mlb('2026-09-25T01:00:00Z', 'started'), ...round, ...next], now);
   assert.deepEqual(shown.filter(g => g.sport === 'mlb').map(g => g.id), ['tomorrow', 'day after']);
   assert.equal(shown.filter(g => g.sport === 'epl').length, 6);
-  // A round two weeks out is listed too.
+  // A round a week and a half out is listed too; one past two weeks isn't.
+  const soon = round.map(g => ({ ...g, startUtc: g.startUtc.replace('2026-09-2', '2026-10-0') }));
+  assert.equal(lotteryGames(soon, now).length, 4);
   const later = round.map(g => ({ ...g, startUtc: g.startUtc.replace('2026-09-2', '2026-10-1') }));
-  assert.equal(lotteryGames(later, now).length, 4);
+  assert.equal(lotteryGames(later, now).length, 0);
 });
 
 test('the NBA shows only from opening night to the end of June', async () => {
