@@ -179,8 +179,8 @@ function matchupText(game) {
 // event (Kambi's group: "Chengdu", "Italy Serie A" …).
 function gameSeries(game) {
   const league = state.t(`sport_${game.sport}`);
-  // Leagues whose Kambi group is only the league again ("Chinese Professional Baseball", "UFC").
-  const plain = ['baseball', 'basketball', 'rugby', 'mma'].includes(familyOf(game.sport));
+  // Leagues whose Kambi group is only the league again ("Chinese Professional Baseball", "UFC"), or says nothing ("Upcoming Fights", cricket's "Matches").
+  const plain = ['baseball', 'basketball', 'rugby', 'mma', 'boxing', 'cricket'].includes(familyOf(game.sport));
   const event = game.group && !plain && normalizeTeamName(game.group) !== normalizeTeamName(league) ? game.group : null;
   return event ? `${league} · ${event}` : league;
 }
@@ -421,6 +421,8 @@ const SPORT_GROUPS = {
   football: { icon: '🏈', leagues: ['nfl', 'ncaaf'] },
   hockey: { icon: '🏒', leagues: ['nhl'] },
   mma: { icon: '🥊', leagues: ['ufc'] },
+  boxing: { icon: '🥊', leagues: ['boxing'] },
+  cricket: { icon: '🏏', leagues: ['cricket'] },
   rugby: { icon: '🏉', leagues: ['rugbyunion'] },
   tennis: { icon: '🎾', leagues: ['tennis', 'wta'] },
   badminton: { icon: '🏸', leagues: ['badminton'] },
@@ -1667,7 +1669,7 @@ function commitAccount(next) {
 
 // While Play is closed: when an open slip's last game should be over, a
 // notice to come and see how it went (it settles when Play is opened).
-const GAME_HOURS = { baseball: 3.3, football: 3.5, basketball: 2.6, hockey: 2.7, soccer: 2.1, sets: 2.5, racing: 2.2, mma: 5, rugby: 2 };
+const GAME_HOURS = { baseball: 3.3, football: 3.5, basketball: 2.6, hockey: 2.7, soccer: 2.1, sets: 2.5, racing: 2.2, mma: 5, rugby: 2, cricket: 8, boxing: 4 };
 function syncPush(profile) {
   const now = Date.now();
   const items = [];

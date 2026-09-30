@@ -9,7 +9,7 @@ import { runOrder, shareLeft } from './live.mjs';
 import { KAMBI, kambiUrl, parseKambiInPlay, useKambiToken, fetchKambiLeague, decidedFromLive, decidedTeamGame, parseKambiLiveData, kambiLiveDataUrl, setsWon, watchKambiMatches, fetchKeptKambi } from './kambi.mjs';
 import { KAMBI_LEAGUES } from './teams.mjs';
 import { withHousePrices, sameSide, pointsStrengths } from './house.mjs';
-import { SOLD_DAYS, ASIA_URL, asiaMonth, asiaMonthOf } from './catalog.mjs';
+import { SOLD_DAYS, ASIA_URL, asiaMonth, asiaMonthOf, tsdbBoxingDays, notableFight, boxingResult } from './catalog.mjs';
 import { parseAsiaSchedule, parseEspnCard, parseEspnDraw, parseRankings } from './schedules.mjs';
 
 export const PROXY_URL = 'https://sports-proxy.pengzjay.workers.dev';
@@ -896,6 +896,27 @@ export async function fetchOutcomes(legs, now = new Date()) {
         if (g) out.set(leg.id, asiaResult(g));
         return;
       }
+      // Cricket: ESPN's score panel, the start's day and the ones either side.
+      if (leg.sport === 'cricket') {
+        const t = Date.parse(leg.start);
+        for (const d of [...new Set([t - 5 * 3_600_000, t, t + DAY_MS].map(x => yyyymmdd(new Date(x))))]) {
+          const game = findEspnGame(parseCricketPanel(await page(`${ESPN}/cricket/scorepanel?dates=${d}`)), leg);
+          if (game) return out.set(leg.id, game);
+        }
+        // Not in ESPN's panel a week on: the stake back.
+        if (now.getTime() - t > 7 * DAY_MS) out.set(leg.id, { status: 'void', reason: 'noResult' });
+        return;
+      }
+      // Boxing: the card's write-up on TheSportsDB (the fight's day or the next).
+      if (leg.sport === 'boxing') {
+        const t = Date.parse(leg.start);
+        const days = [...new Set([t - 12 * 3_600_000, t, t + DAY_MS].map(x => taipeiDayKey(new Date(x).toISOString())))];
+        const cards = await tsdbBoxingDays(days);
+        const result = boxingResult(days.flatMap(d => cards[d] || []), leg.home, leg.away);
+        if (result) return out.set(leg.id, result);
+        if (now.getTime() - t > 5 * DAY_MS) out.set(leg.id, { status: 'void', reason: 'noResult' });
+        return;
+      }
       // Kambi's sports: the result from the match's own live data, once the
       // score shows it decided (see decidedTeamGame / decidedFromLive). Once
       // Kambi has dropped it, from the Worker's kept copy (below).
@@ -1161,7 +1182,8 @@ export async function loadExtraLeagues(now = new Date(), onPart) {
   const kambi = KAMBI_LEAGUES.map(key =>
     part(
       Promise.allSettled([fetchKambiLeague(key, now, getJson), fetchSchedule(key, now)]).then(async ([p, s]) => {
-        const priced = p.status === 'fulfilled' ? p.value : [];
+        let priced = p.status === 'fulfilled' ? p.value : [];
+        if (LEAGUES[key].notable) priced = await notableOnly(priced, now);
         const scheduled = mergeGames((s.status === 'fulfilled' ? s.value : []).filter(g => !pricedByKambi(g, priced)), []);
         if (key === 'ufc') await rememberFighterFlags([...priced, ...scheduled]).catch(() => {});
         return [...priced, ...scheduled];
@@ -1170,6 +1192,37 @@ export async function loadExtraLeagues(now = new Date(), onPart) {
   );
   const results = await Promise.allSettled([...espn, ...kambi]);
   return results.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
+}
+
+// Boxing: only the bouts on a card TheSportsDB lists (its main events), by
+// the fight's day and the day before (a night card runs past midnight).
+async function notableOnly(games, now = new Date()) {
+  const day = ms => taipeiDayKey(new Date(ms).toISOString());
+  const dayOf = g => [day(Date.parse(g.startUtc)), day(Date.parse(g.startUtc) - DAY_MS)];
+  const soon = lotteryGames(games, now);
+  const cards = await tsdbBoxingDays([...new Set(soon.flatMap(dayOf))].slice(0, 16));
+  return soon.filter(g => dayOf(g).some(d => notableFight(g.home.en, g.away.en, cards[d])));
+}
+
+// Cricket's results from ESPN's score panel for a day: games shaped like
+// parseEspnResults' (1-0 for the winner; a tie, no result or abandoned
+// match void).
+export function parseCricketPanel(data) {
+  const games = [];
+  for (const block of data?.scores || []) {
+    for (const event of block.events || []) {
+      const comp = event.competitions?.[0];
+      const sides = comp?.competitors || [];
+      if (sides.length !== 2) continue;
+      const home = sides.find(c => c.homeAway === 'home') ?? sides[0];
+      const away = sides.find(c => c !== home);
+      const state = comp.status?.type?.state;
+      const won = c => c.winner === true || c.winner === 'true';
+      const status = state !== 'post' ? 'pending' : won(home) || won(away) ? 'final' : 'void';
+      games.push({ sport: 'cricket', startUtc: new Date(event.date).toISOString(), home: home.team?.displayName, away: away.team?.displayName, status, homeScore: won(home) ? 1 : 0, awayScore: won(away) ? 1 : 0, homeInnings: [], awayInnings: [] });
+    }
+  }
+  return games;
 }
 
 // Fighters' flags from ESPN's cards (Kambi names no country): each card's
@@ -1238,7 +1291,7 @@ async function storeTeams(url, teams) {
 // lottery does with a match that has no official result. That's once the
 // kept copy is marked gone, or, with nothing kept at all, once the match is
 // surely over (its sport's longest usual length, plus two hours).
-const KAMBI_LONGEST_H = { tabletennis: 2, badminton: 3, volleyball: 4, tennis: 6, wta: 5, snooker: 10, npb: 6, kbo: 6, cpbl: 6, euroleague: 4, bleague: 4, ufc: 10, rugbyunion: 30, acb: 4, nbl: 4, cba: 4, kbl: 4, kleague: 4 };
+const KAMBI_LONGEST_H = { tabletennis: 2, badminton: 3, volleyball: 4, tennis: 6, wta: 5, snooker: 10, npb: 6, kbo: 6, cpbl: 6, euroleague: 4, bleague: 4, ufc: 10, rugbyunion: 30, acb: 4, nbl: 4, cba: 4, kbl: 4, kleague: 4, cricket: 10, boxing: 8 };
 export function kambiUnresolvable(leg, entry, now = new Date(), watchReachable = true) {
   if (entry?.gone) return true;
   const past = now.getTime() - Date.parse(leg.start);

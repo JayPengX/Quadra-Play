@@ -819,6 +819,9 @@ export const SIM_SPORTS = {
   facup: { family: 'soccer', kind: 'soccer', pop: 0.2, games: w => ({ 44: 40, 48: 20, 1: 32, 5: 16, 9: 8, 11: 4, 16: 2, 20: 1 })[w] ?? 0 },
   // UFC: a card most weeks (about 12 bouts), a few weeks off a year.
   ufc: { family: 'mma', kind: 'mma', pop: 0.4, games: w => (w % 6 === 5 || w === 51 ? 0 : 12) },
+  // International cricket all year, the Asian Games and World Cups on top; the big boxing cards.
+  cricket: { family: 'cricket', kind: 'cricket', pop: 0.1, games: () => 4 },
+  boxing: { family: 'boxing', kind: 'boxing', pop: 0.1, games: w => (w % 2 === 0 ? 3 : 1) },
   // Rugby union: the Six Nations (Feb-Mar), the Rugby Championship (Aug-Sep), November's tests, the Champions Cup (Dec-Jan).
   rugbyunion: { family: 'rugby', kind: 'rugby', pop: 0.1, games: w => (between(w, 6, 11) || between(w, 32, 39) ? 3 : between(w, 45, 47) ? 8 : between(w, 50, 3) ? 10 : 0) },
   // NRL: March to the grand final in early October; AFL: March to late September.
@@ -881,7 +884,7 @@ export function weekOfYear(date) {
 // (board.mjs), so they get the same markets, the same house cut for the
 // league and the same locks. A sport off the board is then no cheaper, or
 // dearer, to bet on than one on it. Seeded, so it's the same every time.
-const TEMPLATE_WIN = { baseball: [0.35, 0.65], basketball: [0.15, 0.85], football: [0.2, 0.8], hockey: [0.35, 0.65], sets: [0.12, 0.88], mma: [0.2, 0.8], rugby: [0.2, 0.8] };
+const TEMPLATE_WIN = { baseball: [0.35, 0.65], basketball: [0.15, 0.85], football: [0.2, 0.8], hockey: [0.35, 0.65], sets: [0.12, 0.88], mma: [0.2, 0.8], rugby: [0.2, 0.8], cricket: [0.25, 0.75], boxing: [0.15, 0.85] };
 // Each sport's usual total line (none: its own model sets one).
 const TEMPLATE_TOTAL = { mlb: 8.5, npb: 7.5, kbo: 9.5, cpbl: 9.5, nfl: 44.5, ncaaf: 52.5, nba: 224.5, wnba: 162.5, euroleague: 160.5, bleague: 158.5, nhl: 5.5 };
 // An F1 field as the market usually prices it: the average shape of two real

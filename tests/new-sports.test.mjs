@@ -105,3 +105,32 @@ test('every league Play sells sits in one of the sport filter groups', async () 
   const fixed = [...src.matchAll(/leagues: \[([^\]]*)\]/g)].flatMap(m => [...m[1].matchAll(/'([a-z0-9]+)'/g)].map(x => x[1]));
   for (const [key, l] of Object.entries(LEAGUES)) assert.ok(['soccer', 'basketball'].includes(l.family) || fixed.includes(key), key);
 });
+
+test('cricket: international only, settled from ESPN\'s score panel', async () => {
+  const { parseCricketPanel } = await import('../public/lib/sources.mjs');
+  const { kambiKept } = await import('../public/lib/catalog.mjs');
+  assert.ok(kambiKept('cricket', { group: 'Matches', path: ['cricket', 'international_one_day', 'matches'] }));
+  assert.ok(!kambiKept('cricket', { group: 'Pro20 Cup', path: ['cricket', 'south_africa', 'pro20_cup'] }));
+  const games = parseCricketPanel(fixture('espn-cricket-panel-2026-09-27.json'));
+  // Kambi lists the home side first: "South Africa - Australia".
+  const sa = findEspnGame(games, { start: '2026-09-27T08:00:00Z', home: 'South Africa', away: 'Australia' });
+  assert.equal(sa.status, 'final');
+  assert.equal(legResult({ kind: 'ml', side: 'home' }, sa), 'won');
+  const wi = findEspnGame(games, { start: '2026-09-27T08:30:00Z', home: 'West Indies', away: 'India' });
+  assert.equal(legResult({ kind: 'ml', side: 'away' }, wi), 'won');
+  const tied = parseCricketPanel({ scores: [{ events: [{ date: '2026-09-27T08:00Z', competitions: [{ status: { type: { state: 'post' } }, competitors: [{ homeAway: 'home', winner: 'false', team: { displayName: 'A' } }, { homeAway: 'away', winner: 'false', team: { displayName: 'B' } }] }] }] }] });
+  assert.equal(tied[0].status, 'void');
+});
+
+test('boxing: only the cards TheSportsDB lists, settled from its write-ups', async () => {
+  const { notableFight, boxingResult } = await import('../public/lib/catalog.mjs');
+  assert.ok(notableFight('Anthony Joshua', 'Tyson Fury', [{ strEvent: 'Tyson Fury vs Anthony Joshua' }]));
+  assert.ok(!notableFight('Jordan Orozco', 'Yusniel Abrahante', [{ strEvent: 'Tyson Fury vs Anthony Joshua' }]));
+  const card = [{ strEvent: 'Zuffa Boxing 11 Fisher vs Pirotton', strResult: 'Johnny Fisher defeated Michael Pirotton by majority decision.\r\n\r\nJohnny Fisher def. Michael Pirotton - Majority Decision (95-95, 98-92, 96-95), 10 rounds\r\nKayla Allen def. Edina Kiss - TKO (corner stoppage), R3 2:00\r\nA Draw vs B Level - Majority Draw' },
+    { strEvent: 'Prime Video Boxing 16 Inoue vs Nasukawa II', strResult: 'Takuma Inoue retained the WBC bantamweight world championship with a unanimous-decision victory over Tenshin Nasukawa in their Tokyo rematch.' }];
+  assert.equal(legResult({ kind: 'ml', side: 'away' }, boxingResult(card, 'Michael Pirotton', 'Johnny Fisher')), 'won');
+  assert.equal(legResult({ kind: 'ml', side: 'home' }, boxingResult(card, 'Takuma Inoue', 'Tenshin Nasukawa')), 'won');
+  assert.deepEqual(boxingResult(card, 'Andy Draw', 'Bob Level'), { status: 'void' });
+  assert.equal(boxingResult(card, 'Nobody Here', 'Someone Else'), null);
+  assert.ok(LEAGUES.boxing.notable && isPlayers('boxing'));
+});

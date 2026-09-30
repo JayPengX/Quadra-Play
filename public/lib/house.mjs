@@ -22,7 +22,7 @@ const ESPN_STANDINGS = 'https://site.api.espn.com/apis/v2/sports';
 
 // Games in a regular season: how much a game of it tells about a team.
 const SEASON_GAMES = { nba: 82, wnba: 44, nhl: 82, mlb: 162, nfl: 17, ncaaf: 12 };
-const FAMILY_GAMES = { soccer: 34, baseball: 140, basketball: 40, hockey: 60, football: 14, rugby: 24, mma: 10 };
+const FAMILY_GAMES = { soccer: 34, baseball: 140, basketball: 40, hockey: 60, football: 14, rugby: 24, mma: 10, cricket: 12, boxing: 6 };
 // Last season counts as this many of this season's games (a share of a season).
 const PRIOR_SHARE = 0.3;
 // Last season pulled this far towards even.
