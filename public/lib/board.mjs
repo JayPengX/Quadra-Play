@@ -322,10 +322,8 @@ export function gameOptions(game) {
   game = withModelLines(game, blend.probs);
   const base = { gameId: game.id, game, sport: game.sport, start: game.startUtc };
   const sides = isSoccer(game.sport) ? ['home', 'draw', 'away'] : ['away', 'home'];
-  // The winner at the measured cut for its source, more for a league the
-  // house knows less or sources that disagree.
+  // The winner at the lottery's cut (rules.mjs houseCut), the same for every source.
   const both = game.draftKings && game.polymarket;
-  const gap = both ? Math.max(...sides.map(side => Math.abs(game.draftKings[side] - game.polymarket[side]) / 2)) : null;
   // Soccer's 不讓分 has three outcomes: the lottery's three-way cut (its 1X2
   // odds add up to about 120%), not the two-way one.
   const mlCut = houseCut({ base: isSoccer(game.sport) ? 'threeWay' : blend.k });
@@ -353,8 +351,10 @@ export function gameOptions(game) {
     TOP_INNING_ODDS.forEach((odds, i) => out.push({ ...base, id: `${game.id}|inning|${i}`, kind: 'inning', market: 'inning', inning: i, fairMargin: null, errKey: 'topInning', fairChance: 1 / odds / book, estOdds: odds }));
   }
   for (const o of out) Object.assign(o, houseRule(o.kind, o.estOdds));
-  return out;
+  // A game settled from its final score alone (schedules.mjs): nothing on a part of it.
+  return game.scoreOnly ? out.filter(o => !PART_KINDS.has(o.kind)) : out;
 }
+const PART_KINDS = new Set(['htft', 'htotal', 'f5', 'f5total', 'q1', 'half', 'regulation', 'firstinning', 'inning', 'nextrun', 'firstset', 'gamehcap', 'gametotal']);
 
 // ---- The simulated crowd's pool ----------------------------------------------
 

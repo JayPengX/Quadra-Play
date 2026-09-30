@@ -77,9 +77,14 @@ test('Kambi odds become games with the margin removed, and live scores settle de
   assert.equal(first.home.en, 'Juan Manuel Cerundolo');
   assert.equal(first.total.line, 22.5);
   assert.ok(first.spread.awayLine === -1.5 && first.spread.awayFair > 0.5);
-  // Nothing already started, and a busy league keeps only the next few.
+  // Nothing already started; every match listed, none cut off.
   assert.equal(parseKambiEvents(fixture('kambi-atp-2026-09-26.json'), 'tennis', new Date('2027-01-01T00:00:00Z')).length, 0);
-  assert.equal(parseKambiEvents(fixture('kambi-atp-2026-09-26.json'), 'tennis', new Date('2026-09-26T00:00:00Z'), 2).length, 2);
+  // A match listed without a winner price: sold at the house's price when asked.
+  const bare = { events: [{ event: { id: 9, homeName: 'A Player', awayName: 'B Player', start: '2026-09-27T10:00:00Z', state: 'NOT_STARTED' }, betOffers: [] }] };
+  assert.equal(parseKambiEvents(bare, 'badminton', new Date('2026-09-26T00:00:00Z')).length, 0);
+  const [house] = parseKambiEvents(bare, 'badminton', new Date('2026-09-26T00:00:00Z'), { unpriced: true });
+  assert.equal(house.draftKings, null);
+  close(house.house.home, 0.5);
 
   const live = parseKambiLive(fixture('kambi-live-2026-09-26.json'));
   assert.ok(live.size > 0);

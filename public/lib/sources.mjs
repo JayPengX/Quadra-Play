@@ -8,8 +8,9 @@ import { normalizeTeamName, teamZh, LEAGUES, familyOf, isSoccer, rememberLogo, r
 import { runOrder, shareLeft } from './live.mjs';
 import { KAMBI, kambiUrl, parseKambiInPlay, useKambiToken, fetchKambiLeague, decidedFromLive, decidedTeamGame, parseKambiLiveData, kambiLiveDataUrl, setsWon, watchKambiMatches, fetchKeptKambi } from './kambi.mjs';
 import { KAMBI_LEAGUES } from './teams.mjs';
-import { withHousePrices } from './house.mjs';
-import { SOLD_DAYS } from './catalog.mjs';
+import { withHousePrices, sameSide, pointsStrengths } from './house.mjs';
+import { SOLD_DAYS, ASIA_URL, asiaMonth, asiaMonthOf } from './catalog.mjs';
+import { parseAsiaSchedule, parseEspnCard, parseEspnDraw, parseRankings } from './schedules.mjs';
 
 export const PROXY_URL = 'https://sports-proxy.pengzjay.workers.dev';
 const ESPN = 'https://site.api.espn.com/apis/site/v2/sports';
@@ -131,7 +132,8 @@ function ttlFor(url) {
   if (url.includes('/in-play.json')) return 20_000;
   if (url.includes('/listView/')) return 2 * 60_000;
   if (url.includes('/summary?event=')) return 60 * 60_000;
-  if (url.includes('/standings')) return 6 * 60 * 60_000;
+  if (url.includes('/standings') || url.includes('/rankings')) return 6 * 60 * 60_000;
+  if (url.startsWith(ASIA_URL)) return 10 * 60_000;
   if (/scoreboard\?dates=\d{6}$/.test(url)) return 10 * 60_000;
   if (/scoreboard\?dates=/.test(url)) return 60_000;
   return 20_000;
@@ -600,7 +602,9 @@ export function mergeGames(dkGames, pmGames) {
       total: dk?.total ?? null,
       spread: dk?.spread ?? null,
       // The house's own chances, where no bookmaker prices the game (house.mjs).
-      house: dk && !dk.outcomes && !pm ? (dk.house ?? null) : null
+      house: dk && !dk.outcomes && !pm ? (dk.house ?? null) : null,
+      // Settled from a final score alone (schedules.mjs): no markets on parts of it.
+      scoreOnly: dk?.scoreOnly || undefined
     }))
     .filter(g => g.draftKings || g.polymarket || g.house)
     .sort((a, b) => a.startUtc.localeCompare(b.startUtc));
@@ -910,6 +914,15 @@ export async function fetchOutcomes(legs, now = new Date()) {
           }
         }
       }
+      // Asian baseball from the league's own list (a game Kambi didn't price):
+      // the final score in its month's list.
+      if (league?.schedule?.asia && !leg.kambiId) {
+        const t = Date.parse(leg.start);
+        const games = await asiaMonth(page, league.schedule.asia, asiaMonthOf(t)).catch(() => []);
+        const g = games.find(x => Math.abs(Date.parse(x.start) - t) < 12 * 3_600_000 && sameSide(x.home?.en, leg.home) && sameSide(x.away?.en, leg.away));
+        if (g) out.set(leg.id, asiaResult(g));
+        return;
+      }
       // Kambi's sports: the result from the match's own live data, once the
       // score shows it decided (see decidedTeamGame / decidedFromLive). Once
       // Kambi has dropped it, from the Worker's kept copy (below).
@@ -951,6 +964,14 @@ export async function fetchOutcomes(legs, now = new Date()) {
     }
   }
   return out;
+}
+
+// A game in an Asian league's month list as a result: final (its score),
+// void (called off), or still to come.
+export function asiaResult(g) {
+  if (g.state === 'void') return { status: 'void' };
+  if (g.state === 'post' && g.homeScore != null && g.awayScore != null) return { status: 'final', homeScore: Number(g.homeScore), awayScore: Number(g.awayScore), awayInnings: [], homeInnings: [] };
+  return { status: 'pending', state: g.state === 'in' ? 'in' : 'pre' };
 }
 
 // ---- Live (場中) ------------------------------------------------------------------
@@ -1106,16 +1127,56 @@ async function fetchPolymarketLiveEvents(tagId, now) {
   return getJson(`${GAMMA}/events?tag_id=${tagId}&closed=false&limit=100&order=startTime&ascending=true&start_time_min=${since}`, 'polymarket-events');
 }
 
-// Every other league (ESPN / DraftKings only), fetched after the page opens
-// so they don't hold it up. A league that fails is left out.
+// A Kambi league's own schedule (schedules.mjs), every game on it the house
+// prices; Kambi's priced ones are taken over them (loadExtraLeagues).
+async function fetchSchedule(key, now) {
+  const schedule = LEAGUES[key].schedule;
+  if (!schedule) return [];
+  if (schedule.asia) {
+    // This season's results for the clubs' strengths: the last two months too.
+    const months = new Set();
+    for (let d = -60; d <= DAYS_AHEAD; d++) months.add(asiaMonthOf(now.getTime() + d * DAY_MS));
+    const lists = await Promise.all([...months].map(m => asiaMonth(getJson, schedule.asia, m).catch(() => [])));
+    return parseAsiaSchedule(lists.flat(), key, now);
+  }
+  if (schedule.kind === 'card') {
+    const pages = await Promise.all(monthsAhead(now, 0).map(m => getJson(`${ESPN}/${schedule.espn}/scoreboard?dates=${m}`).catch(() => null)));
+    return pages.filter(Boolean).flatMap(p => parseEspnCard(p, key, now));
+  }
+  if (schedule.kind === 'draw') {
+    const [board, ranks] = await Promise.all([getJson(`${ESPN}/${schedule.espn}/scoreboard`), getJson(`${ESPN}/${schedule.espn}/rankings`).catch(() => null)]);
+    return parseEspnDraw(board, key, pointsStrengths(parseRankings(ranks)), now);
+  }
+  // Matches (NRL, AFL): like any ESPN league, the house pricing from ESPN's standings.
+  const listed = await fetchEspnDays(key, schedule.espn, dailyDays(now)).catch(() => []);
+  return withLaterGames(key, schedule.espn, listed, now);
+}
+
+// A schedule's game Kambi prices already (the two sides, either order, near its start).
+export function pricedByKambi(game, kambiGames) {
+  const t = Date.parse(game.startUtc);
+  return kambiGames.some(
+    k =>
+      k.sport === game.sport &&
+      Math.abs(Date.parse(k.startUtc) - t) < 12 * 3_600_000 &&
+      ((sameSide(k.home.en, game.home) && sameSide(k.away.en, game.away)) || (sameSide(k.home.en, game.away) && sameSide(k.away.en, game.home)))
+  );
+}
+
+// Every other league (ESPN / DraftKings, Kambi, Kambi leagues' own
+// schedules), fetched after the page opens so they don't hold it up. A league
+// that fails is left out.
 export async function loadExtraLeagues(now = new Date()) {
-  const [espn, kambi] = await Promise.all([
+  const [espn, kambi, schedules] = await Promise.all([
     Promise.allSettled(EXTRA_LEAGUES.map(key => fetchLeague(key, now))),
-    Promise.allSettled(KAMBI_LEAGUES.map(key => fetchKambiLeague(key, now, getJson)))
+    Promise.allSettled(KAMBI_LEAGUES.map(key => fetchKambiLeague(key, now, getJson))),
+    Promise.allSettled(KAMBI_LEAGUES.map(key => fetchSchedule(key, now)))
   ]);
   const ok = results => results.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
-  await rememberFighterFlags(ok(kambi).filter(g => g.sport === 'ufc')).catch(() => {});
-  return lotteryGames([...mergeGames(ok(espn), []), ...ok(kambi)], now);
+  const priced = ok(kambi);
+  const scheduled = mergeGames(ok(schedules).filter(g => !pricedByKambi(g, priced)), []);
+  await rememberFighterFlags([...priced, ...scheduled].filter(g => g.sport === 'ufc')).catch(() => {});
+  return lotteryGames([...mergeGames(ok(espn), []), ...priced, ...scheduled], now);
 }
 
 // Fighters' flags from ESPN's cards (Kambi names no country): each card's

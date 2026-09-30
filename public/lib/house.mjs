@@ -22,7 +22,7 @@ const ESPN_STANDINGS = 'https://site.api.espn.com/apis/v2/sports';
 
 // Games in a regular season: how much a game of it tells about a team.
 const SEASON_GAMES = { nba: 82, wnba: 44, nhl: 82, mlb: 162, nfl: 17, ncaaf: 12, ncaam: 31, ncaaw: 30 };
-const FAMILY_GAMES = { soccer: 34, baseball: 140, basketball: 40, hockey: 60, football: 14 };
+const FAMILY_GAMES = { soccer: 34, baseball: 140, basketball: 40, hockey: 60, football: 14, rugby: 24, aussie: 23, mma: 10 };
 // Last season counts as this many of this season's games (a share of a season).
 const PRIOR_SHARE = 0.3;
 // Last season pulled this far towards even.
@@ -53,8 +53,10 @@ export function parseStandings(data) {
       const stat = name => Number(entry.stats?.find(s => s.name === name || s.type === name)?.value) || 0;
       const draws = stat('ties');
       const games = stat('gamesPlayed') || stat('wins') + stat('losses') + draws + stat('otLosses');
+      // Some tables give only the share (NRL).
+      const wins = stat('wins') || stat('losses') ? stat('wins') + draws / 2 : stat('winPercent') * games;
       const name = entry.team?.displayName;
-      if (name) out.set(normalizeTeamName(name), { wins: stat('wins') + draws / 2, games });
+      if (name) out.set(normalizeTeamName(name), { wins, games });
     }
     for (const [key, value] of Object.entries(node)) if (key !== 'standings' && typeof value === 'object') walk(value);
   };
@@ -81,7 +83,7 @@ export function strengths(sport, current, previous) {
 // The house's fair chances for one game: { away, home } or, for soccer,
 // { away, draw, home }.
 export function housePrices(sport, away, home, table, { neutral = false, preseason = false } = {}) {
-  const s = name => clamp(table?.get(normalizeTeamName(name)) ?? 0.5);
+  const s = name => clamp(table?.get(normalizeTeamName(name)) ?? table?.unranked ?? 0.5);
   const edge = neutral ? 0 : HOME_EDGE[sport] ?? FAMILY_EDGE[familyOf(sport)] ?? 0.2;
   const p = clamp(sigmoid((logit(s(home)) - logit(s(away)) + edge) * (preseason ? PRESEASON_PULL : 1)));
   if (!isSoccer(sport)) return { away: 1 - p, home: p };
@@ -111,4 +113,39 @@ export async function withHousePrices(games, sport, path, getJson) {
   if (!path || !games.some(g => !g.outcomes)) return games;
   const table = await loadStrengths(sport, path, getJson).catch(() => new Map());
   return games.map(g => (g.outcomes ? g : { ...g, house: housePrices(sport, g.away, g.home, table, { neutral: g.neutral, preseason: g.preseason }) }));
+}
+
+// The same side under two spellings (Kambi's, a league's own, ESPN's): equal,
+// one inside the other, or a shared long word ("Rakuten Monkeys" / "Rakuten").
+export function sameSide(a, b) {
+  const [x, y] = [normalizeTeamName(a), normalizeTeamName(b)];
+  if (!x || !y) return false;
+  if (x === y || x.includes(y) || y.includes(x)) return true;
+  const words = new Set(x.split(' ').filter(w => w.length >= 4));
+  return y.split(' ').some(w => w.length >= 4 && words.has(w));
+}
+
+// A fighter's record ("23-14-0", wins-losses-draws) as { wins, games }.
+export function parseRecord(summary) {
+  const [w, l, d] = String(summary || '').split('-').map(Number);
+  if (![w, l].every(Number.isFinite)) return null;
+  return { wins: w + (d || 0) / 2, games: w + l + (d || 0) };
+}
+
+// Players by their ranking points (tennis): each one's strength so that two
+// players' chances go by their points (a player with twice the points wins
+// about 65%). Unranked players count as half the last ranked one's points.
+const POINTS_POWER = 0.9;
+const POINTS_BASE = 1000;
+export function pointsStrengths(ranks) {
+  const table = new Map();
+  let least = Infinity;
+  for (const r of ranks) {
+    const points = Number(r.points);
+    if (!r.name || !(points > 0)) continue;
+    least = Math.min(least, points);
+    table.set(normalizeTeamName(r.name), sigmoid(POINTS_POWER * Math.log(points / POINTS_BASE)));
+  }
+  table.unranked = Number.isFinite(least) ? sigmoid(POINTS_POWER * Math.log(least / 2 / POINTS_BASE)) : 0.5;
+  return table;
 }

@@ -175,7 +175,7 @@ The page stays simple: odds, colours and the amounts that matter. What the numbe
 - **What's listed:** every game of every league starting within the next 14 days (one reach for all, see the house cut below):
   - MLB and the Premier League (DraftKings and Polymarket).
   - **More sports from ESPN** (DraftKings' lines, else the house's own prices): football, basketball, hockey and the soccer leagues.
-  - **More sports from Kambi** (a European bookmaker's public odds, `public/lib/kambi.mjs`): NPB, KBO and CPBL baseball, EuroLeague and B.League basketball, tennis (ATP, WTA), badminton, table tennis, volleyball and snooker, whenever they have matches (busy table tennis and volleyball show the next 16).
+  - **More sports from Kambi** (a European bookmaker's public odds, `public/lib/kambi.mjs`): NPB, KBO and CPBL baseball, EuroLeague and B.League basketball, tennis (ATP, WTA), UFC, NRL, AFL, badminton, table tennis, volleyball and snooker. Every game on each league's own schedule is sold, not only the ones Kambi prices (`public/lib/schedules.mjs`): Asian baseball's month lists (clubs' strength from this season's results; settled from the lists' final scores, so only winner, totals, run lines, team totals, odd/even and margin), ESPN's UFC cards (fighters' records), tennis draws (ranking points), NRL and AFL schedules (ESPN standings), and for the rest every match in Kambi's list, priced or not. Kambi's price takes over a game once it has one.
   - The next F1 race winner, every driver named as the lottery writes them (G.羅素, AK.安東內利 …).
   - Championships (see Boards below).
   Everything but MLB, the Premier League and F1 loads in the background after the page opens.
@@ -355,7 +355,8 @@ The account lives on the Quadra Pass: Shared-Proxy's `orbit-workers-proxy`, rout
 | `public/home.js`, `public/lottery-ui.js` | The home and lottery tabs |
 | `public/lib/audit.mjs` | The fairness audit of sports and series |
 | `public/lib/rules.mjs` | House rules (locks, parlay only) and the house cut |
-| `public/lib/house.mjs` | The house's own prices for games no bookmaker prices, from ESPN's standings |
+| `public/lib/house.mjs` | The house's own prices for games no bookmaker prices: standings, records, ranking points |
+| `public/lib/schedules.mjs` | Kambi leagues' own schedules (Asian baseball, UFC cards, tennis draws), every game on them |
 | `public/lib/recommend.mjs` | Recommendations on single picks |
 | `public/lib/sim.mjs` | The simulated crowd: traits, calendar, the shared world, leaderboards |
 | `public/lib/profile.mjs` | One person's betting from their tickets, for you and for anyone in the crowd |

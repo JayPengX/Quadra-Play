@@ -6,6 +6,7 @@
 // thousandths too (1500 = 1.5); a match lists its home player first.
 import { devigProportional } from './odds.mjs';
 import { LEAGUES, normalizeTeamName, teamZh } from './teams.mjs';
+import { housePrices } from './house.mjs';
 
 export const KAMBI = 'https://eu-offering-api.kambicdn.com/offering/v2018/ub';
 
@@ -28,9 +29,11 @@ function fairPair(a, b) {
 
 // Upcoming matches of one league: games shaped like the rest of the page's
 // ({ id, sport, startUtc, away, home, draftKings: fair win chances, total,
-// spread }), with `book: 'kambi'`. `limit` keeps busy leagues (table tennis
-// runs matches around the clock) to the next few.
-export function parseKambiEvents(data, sport, now = new Date(), limit = Infinity) {
+// spread }), with `book: 'kambi'`. `unpriced`: a match Kambi lists without a
+// winner price is sold too, at the house's price (even players, a home side's
+// usual edge: Kambi's list is all that's known of them), for leagues whose
+// only schedule is Kambi's (the others have their own, schedules.mjs).
+export function parseKambiEvents(data, sport, now = new Date(), { unpriced = false } = {}) {
   const games = [];
   for (const item of data?.events || []) {
     const e = item.event;
@@ -38,17 +41,17 @@ export function parseKambiEvents(data, sport, now = new Date(), limit = Infinity
     if (!e.homeName || !e.awayName) continue;
     const offers = item.betOffers || [];
     const match = offers.find(o => o.betOfferType?.englishName === 'Match' || /match odds|moneyline/i.test(o.criterion?.englishLabel || ''));
-    if (!match) continue;
     // Two-way winner; a three-way one (a draw after regulation) is split between the two.
-    const win = fairPair(outcome(match, 'OT_ONE'), outcome(match, 'OT_TWO'));
-    if (!win) continue;
+    const win = match && fairPair(outcome(match, 'OT_ONE'), outcome(match, 'OT_TWO'));
+    if (!win && !unpriced) continue;
     const game = {
       id: `${sport}_${e.start.slice(0, 13)}_${normalizeTeamName(e.awayName)}_${normalizeTeamName(e.homeName)}`.replaceAll(' ', ''),
       sport,
       startUtc: new Date(e.start).toISOString(),
       away: { en: e.awayName, zh: teamZh(sport, e.awayName) },
       home: { en: e.homeName, zh: teamZh(sport, e.homeName) },
-      draftKings: { home: win[0], away: win[1] },
+      draftKings: win ? { home: win[0], away: win[1] } : null,
+      house: win ? null : housePrices(sport, e.awayName, e.homeName, null, { neutral: Boolean(LEAGUES[sport]?.neutral) }),
       polymarket: null,
       polymarketLiquidity: null,
       total: null,
@@ -74,7 +77,7 @@ export function parseKambiEvents(data, sport, now = new Date(), limit = Infinity
     }
     games.push(game);
   }
-  return games.sort((a, b) => a.startUtc.localeCompare(b.startUtc)).slice(0, limit);
+  return games.sort((a, b) => a.startUtc.localeCompare(b.startUtc));
 }
 
 // The event's group and path words, for playerNation (the proxy's trim keeps path as words).
@@ -82,7 +85,7 @@ export const kambiWhere = e => [e.group, ...(e.path || []).map(p => (typeof p ==
 
 export async function fetchKambiLeague(key, now = new Date(), getJson) {
   const league = LEAGUES[key];
-  return parseKambiEvents(await getJson(kambiUrl(league.kambi), 'kambi-events'), key, now, league.cap ?? Infinity);
+  return parseKambiEvents(await getJson(kambiUrl(league.kambi), 'kambi-events'), key, now, { unpriced: !league.schedule });
 }
 
 // ---- In play -------------------------------------------------------------------

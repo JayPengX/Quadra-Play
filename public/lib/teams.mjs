@@ -16,7 +16,13 @@ export const LEAGUES = Object.fromEntries(
     .map(l => {
       const league = { family: familyOfSport(l.sport) };
       if (l.odds === 'espn') league.path = l.espn;
-      else league.kambi = l.kambi;
+      else {
+        league.kambi = l.kambi;
+        // Its own schedule besides Kambi's list (schedules.mjs): the league's
+        // month lists (Asian baseball) or ESPN's (cards, draws, matches).
+        if (l.data === 'asia') league.schedule = { asia: l.asia };
+        else if (l.data === 'espn') league.schedule = { espn: l.espn, kind: l.kind };
+      }
       for (const k of ['logo', 'icon', 'badge', 'neutral', 'sets', 'results', 'scores', 'cap', 'players', 'top']) if (l[k] !== undefined) league[k] = l[k];
       return [l.bet, league];
     })
