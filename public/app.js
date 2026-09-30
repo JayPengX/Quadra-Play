@@ -530,7 +530,11 @@ function dayLabel(day) {
 // Days as a calendar strip: weekday, date, and what's on.
 function renderDayFilter() {
   const t = state.t;
-  const days = [...new Set(state.bets.filter(b => inSport(b.sport)).map(b => dayKey(b.start)))].sort();
+  const today = dayKey(new Date().toISOString());
+  const liveNow = state.liveGames.filter(g => inSport(g.sport)).length;
+  // Today stays on the strip while games are on (場中 lives there), even with
+  // every one of today's games already under way.
+  const days = [...new Set([...state.bets.filter(b => inSport(b.sport)).map(b => dayKey(b.start)), ...(liveNow ? [today] : [])])].sort();
   // The earliest day with games (today, unless today's are all under way),
   // until a day is picked: games arriving later (the other leagues, a
   // refresh after midnight) move it to the new earliest day too.
@@ -559,10 +563,12 @@ function renderDayFilter() {
         }
       }, [
         el('span', { class: 'day-text' }, [el('span', { class: 'day-week', text: label }), el('span', { class: 'day-num', text: `${m}/${d}` })]),
-        el('span', { class: 'day-count', text: [games ? t('gamesN', { n: games }) : null, hasF1 ? 'F1' : null].filter(Boolean).join(' + ') })
+        el('span', { class: 'day-count', text: [day === today && liveNow ? `${t('liveTitle')} ${liveNow}` : null, games ? t('gamesN', { n: games }) : null, hasF1 ? 'F1' : null].filter(Boolean).join(' + ') })
       ]);
     })
   );
+  // 場中 shows on today only.
+  renderLive();
 }
 
 // Where Kambi filed each player's match (its group and path words): their
@@ -1132,8 +1138,10 @@ function renderLive() {
   // The big leagues first, then by start.
   const TIER = { major: 0, minor: 1, thin: 2 };
   const games = state.liveGames.filter(g => inSport(g.sport)).sort((a, b) => TIER[shownTier(a.sport)] - TIER[shownTier(b.sport)] || a.startUtc.localeCompare(b.startUtc));
-  $('live').hidden = !games.length;
-  if (!games.length) return;
+  // Only on today's board: another day's games haven't started.
+  const onToday = state.day === dayKey(new Date().toISOString());
+  $('live').hidden = !games.length || !onToday;
+  if (!games.length || !onToday) return;
   const byGame = groupBy(state.liveBets, b => b.gameId);
   $('live-updated').textContent = state.liveAt ? t('liveUpdated', { time: formatter('hms', locale => new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Taipei' })).format(new Date(state.liveAt)) }) : '';
   $('live-list').replaceChildren(...games.map(g => gameCard(g, byGame.get(g.id) ?? [])));
@@ -1159,7 +1167,9 @@ async function refreshLive() {
     // A live pick whose line is gone (the game moved on, or ended) leaves the slip.
     const ids = new Set(slipCandidates().map(b => b.id));
     state.parlay = state.parlay.filter(id => ids.has(id));
-    renderLive();
+    // The day strip (today stays on it while games are on), and 場中 with it.
+    if (state.data && !state.query) renderDayFilter();
+    else renderLive();
     renderParlay();
     renderTabs();
     if (state.tab === 'home') renderHome(homeCtx());
@@ -3257,6 +3267,8 @@ function openWantedGame() {
     state.wantedGame = null;
     state.tab = 'games';
     state.sport = 'all';
+    state.day = dayKey(new Date().toISOString());
+    state.dayPicked = true;
     state.open.add(live.id);
     renderAll();
     showTab('games');
@@ -3377,6 +3389,8 @@ function homeCtx() {
     state.tab = 'games';
     state.sport = 'all';
     state.query = '';
+    state.day = dayKey(new Date().toISOString());
+    state.dayPicked = true;
     if (id) state.open.add(id);
     renderAll();
     showTab('games');
