@@ -108,12 +108,11 @@ banner on screen or a system notice when allowed.
   weeks, football the current week), not only tomorrow's or the next
   matchweek.
 - **More leagues** (ESPN's DraftKings lines, the other markets from our
-  model): 2. Bundesliga, LaLiga 2, Serie B, Ligue 2, League One, Belgium,
-  Austria, Switzerland, Denmark, Norway, Sweden, Greece, Saudi Pro League,
-  A-League, Chinese Super League, Colombia, Chile, USL, NWSL, the
-  Conference League, Libertadores, Sudamericana, the Nations League, World
-  Cup qualifying, the EFL Cup and the Copa del Rey, and NCAA men's and
-  women's basketball, on top of everything before.
+  model): Belgium, Scotland, Turkey, the Saudi Pro League, the Conference
+  League, Libertadores, Sudamericana, the Nations League, World Cup
+  qualifying, the EFL Cup and the Copa del Rey, and for Asia and the
+  national teams the AFC Champions League Elite, the Asian Cup and
+  international friendlies, on top of everything before.
 - **F1:** the race winner and podium, and now the **top six**, **points
   finish (top ten)**, **teammates head to head** and the **winning team**,
   from the win chances (Harville finishing orders, 40,000 draws with a
@@ -175,7 +174,7 @@ The page stays simple: odds, colours and the amounts that matter. What the numbe
 - **What's listed:** every game of every league starting within the next 14 days (one reach for all, see the house cut below):
   - MLB and the Premier League (DraftKings and Polymarket).
   - **More sports from ESPN** (DraftKings' lines, else the house's own prices): football, basketball, hockey and the soccer leagues.
-  - **More sports from Kambi** (a European bookmaker's public odds, `public/lib/kambi.mjs`): NPB, KBO and CPBL baseball, EuroLeague and B.League basketball, tennis (ATP, WTA), UFC, NRL, AFL, badminton, table tennis, volleyball and snooker (table tennis: the pro tours only, WTT, ITTF and the title events, not Kambi's round-the-clock betting leagues such as Czech Liga Pro or TT Elite Series). Every game on each league's own schedule is sold, not only the ones Kambi prices (`public/lib/schedules.mjs`): Asian baseball's month lists (clubs' strength from this season's results; settled from the lists' final scores, so only winner, totals, run lines, team totals, odd/even and margin), ESPN's UFC cards (fighters' records), tennis draws (ranking points), NRL and AFL schedules (ESPN standings), and for the rest every match in Kambi's list, priced or not. Kambi's price takes over a game once it has one.
+  - **More sports from Kambi** (a European bookmaker's public odds, `public/lib/kambi.mjs`): NPB, KBO and CPBL baseball, EuroLeague, Liga ACB, NBL and B.League basketball, tennis (ATP, WTA), UFC, international rugby union (results from ESPN's competitions), badminton, table tennis, volleyball and snooker (table tennis: the pro tours only, WTT, ITTF and the title events, not Kambi's round-the-clock betting leagues such as Czech Liga Pro or TT Elite Series). Every game on each league's own schedule is sold, not only the ones Kambi prices (`public/lib/schedules.mjs`): Asian baseball's month lists (clubs' strength from this season's results; settled from the lists' final scores, so only winner, totals, run lines, team totals, odd/even and margin), ESPN's UFC cards (fighters' records), tennis draws (ranking points), NRL and AFL schedules (ESPN standings), and for the rest every match in Kambi's list, priced or not. Kambi's price takes over a game once it has one.
   - The next F1 race winner, every driver named as the lottery writes them (G.羅素, AK.安東內利 …).
   - Championships (see Boards below).
   Everything but MLB, the Premier League and F1 loads in the background after the page opens.
@@ -193,8 +192,8 @@ The page stays simple: odds, colours and the amounts that matter. What the numbe
   - tennis, badminton, table tennis, volleyball, snooker: **第一局, 局數比分** ("Sinner 2:1"), **總局數, 讓局**, and handicaps and totals in games (tennis), points or frames on every match: Kambi's own line plus lines from a point-by-point model (each game or point won with the chance that gives the set chance; a set to 6 with a tiebreak, 11, 21 capped at 30, or 25 with a 15-point decider), shifted so it agrees with Kambi's price. Snooker's match length isn't in the feed: it's the one whose frame total best matches Kambi's line. Set chances come from the match chance (best of 3 or 5, sets independent);
   - F1: the race winner and **前三名** (podium): top-three chances from the win chances (Harville), priced to return what the winner board does.
 - **Cards:** each shows its series (日職 · NPB, 網球 WTA · Seoul: the league and, for tours and cups, the event). Players' sports (tennis, badminton, table tennis, snooker) have no 主/客: players are listed in the draw's order as "A vs B".
-- **Leagues:** each nation's first tier and the big international competitions. Second divisions (英冠, 英甲, 德乙, 西乙, 義乙, 法乙, USL) and NCAA basketball were retired on 2026-09-30 (`retired` in the kit's catalogue): no longer sold or listed, still read to settle the slips already on them.
-- **NASCAR and IndyCar:** the next race of each series (NASCAR's Cup Series) as a board like F1's, 冠軍 and 前三, from Kambi's winner prices on F1's price curve; settled from ESPN's scoreboard of the series (`RACE_SERIES` in `public/lib/sources.mjs`). Shown while Kambi prices a race (IndyCar's season is over until spring).
+- **Leagues:** each nation's first tier and the big international competitions. Second divisions (英冠, 英甲, 德乙, 西乙, 義乙, 法乙, USL) and NCAA basketball were retired on 2026-09-30 (`retired` in the kit's catalogue): no longer sold or listed, still read to settle the slips already on them. The smaller countries' leagues (Austria, Switzerland, Denmark, Norway, Sweden, Greece, Colombia, Chile, the A-League, the Chinese Super League, NWSL), NRL, AFL, NASCAR and IndyCar were removed outright the same day.
+- **Pro events only** (`pro` in the catalogue, `kambiKept`): table tennis's pro tours, volleyball's national teams, big club events and top leagues, rugby union's internationals and the Champions Cup.
 - **場中 (live):** only on today's board (the day strip keeps today while games are on); games in progress (MLB and the Premier League), refreshed every 30 seconds while on screen, with the same market tabs, 第N分 for MLB, and the live model (`public/lib/live.mjs`) checked on one real snapshot of the lottery's 場中 page. The house rules apply live too, so lopsided games show their lopsided side locked.
 
 - **Boards:** F1 (drivers with team-coloured badges, and whether the odds are before or after qualifying) and every championship: World Series, AL, NL, NBA, Premier League, and from Polymarket's search NFL, NHL, WNBA, college football, Champions League, Europa League, La Liga, Serie A, Bundesliga, Ligue 1, MLS, and the F1 drivers' and constructors' titles.

@@ -104,7 +104,7 @@ const PART = /\b(\d(st|nd|rd|th)|set|frame|game \d|quarter|half|inning|period|by
 export function parseKambiInPlay(data, sport) {
   const league = LEAGUES[sport];
   // Team sports with a main handicap and total worth selling live.
-  const team = ['baseball', 'basketball', 'rugby', 'aussie'].includes(league?.family);
+  const team = ['baseball', 'basketball', 'rugby'].includes(league?.family);
   const games = [];
   for (const item of data?.events || []) {
     const e = item.event;

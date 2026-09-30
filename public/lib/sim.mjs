@@ -770,6 +770,8 @@ export const SIM_SPORTS = {
   // October to May.
   euroleague: { family: 'basketball', kind: 'basketball', pop: 1, games: w => (between(w, 40, 20) ? 14 : 0) },
   bleague: { family: 'basketball', kind: 'basketball', pop: 1.5, games: w => (between(w, 40, 18) ? 26 : 0) },
+  acb: { family: 'basketball', kind: 'basketball', pop: 0.3, games: w => (between(w, 39, 23) ? 9 : 0) },
+  nbl: { family: 'basketball', kind: 'basketball', pop: 0.3, games: w => (between(w, 38, 8) ? 5 : 0) },
   // NHL: 1,312 games, 7 October (week 40) to mid-April (week 15), then the playoffs.
   nhl: { family: 'hockey', kind: 'hockey', pop: 1, headline: true, games: w => (between(w, 40, 15) ? 47 : between(w, 16, 24) ? 10 : 0) },
   // Premier League: 380 games, 22 August 2026 (week 33) to 30 May 2027 (week
@@ -801,23 +803,16 @@ export const SIM_SPORTS = {
   ligue2: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(9) },
   league1: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(12) },
   belgium: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(8) },
-  austria: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(6) },
-  swiss: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(6) },
-  denmark: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(6) },
-  norway: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(8) },
-  sweden: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(8) },
-  greece: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(7) },
   saudi: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(9) },
-  aleague: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(6) },
-  csl: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(8) },
-  colombia: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(10) },
-  chile: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(8) },
   usl: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(12) },
-  nwsl: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(7) },
   uecl: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
   libertadores: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
   sudamericana: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
   nationsleague: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
+  acl: { family: 'soccer', kind: 'soccer', pop: 0.3, games: w => UEFA_WEEKS[w] ? 8 : 0 },
+  // The Asian Cup every four years (January); friendlies in the international windows.
+  asiancup: { family: 'soccer', kind: 'soccer', pop: 0.3, games: w => (between(w, 1, 6) ? 9 : 0) },
+  friendly: { family: 'soccer', kind: 'soccer', pop: 0.2, games: w => ([12, 23, 37, 41, 46].includes(w) ? 20 : 0) },
   wcqeurope: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
   leaguecup: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
   copadelrey: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
@@ -825,9 +820,9 @@ export const SIM_SPORTS = {
   facup: { family: 'soccer', kind: 'soccer', pop: 0.2, games: w => ({ 44: 40, 48: 20, 1: 32, 5: 16, 9: 8, 11: 4, 16: 2, 20: 1 })[w] ?? 0 },
   // UFC: a card most weeks (about 12 bouts), a few weeks off a year.
   ufc: { family: 'mma', kind: 'mma', pop: 0.4, games: w => (w % 6 === 5 || w === 51 ? 0 : 12) },
+  // Rugby union: the Six Nations (Feb-Mar), the Rugby Championship (Aug-Sep), November's tests, the Champions Cup (Dec-Jan).
+  rugbyunion: { family: 'rugby', kind: 'rugby', pop: 0.1, games: w => (between(w, 6, 11) || between(w, 32, 39) ? 3 : between(w, 45, 47) ? 8 : between(w, 50, 3) ? 10 : 0) },
   // NRL: March to the grand final in early October; AFL: March to late September.
-  nrl: { family: 'rugby', kind: 'rugby', pop: 0.1, games: w => (between(w, 9, 38) ? 8 : between(w, 39, 40) ? 2 : 0) },
-  afl: { family: 'aussie', kind: 'aussie', pop: 0.1, games: w => (between(w, 10, 35) ? 9 : between(w, 36, 38) ? 2 : 0) },
   // Tennis: ATP and WTA main-draw singles, about 60 and 50 matches a week.
   tennis: { family: 'sets', kind: 'tennis', pop: 2, headline: true, games: tourWeek(60) },
   wta: { family: 'sets', kind: 'tennis', pop: 1, games: tourWeek(50) },
@@ -887,7 +882,7 @@ export function weekOfYear(date) {
 // (board.mjs), so they get the same markets, the same house cut for the
 // league and the same locks. A sport off the board is then no cheaper, or
 // dearer, to bet on than one on it. Seeded, so it's the same every time.
-const TEMPLATE_WIN = { baseball: [0.35, 0.65], basketball: [0.15, 0.85], football: [0.2, 0.8], hockey: [0.35, 0.65], sets: [0.12, 0.88], mma: [0.2, 0.8], rugby: [0.2, 0.8], aussie: [0.15, 0.85] };
+const TEMPLATE_WIN = { baseball: [0.35, 0.65], basketball: [0.15, 0.85], football: [0.2, 0.8], hockey: [0.35, 0.65], sets: [0.12, 0.88], mma: [0.2, 0.8], rugby: [0.2, 0.8] };
 // Each sport's usual total line (none: its own model sets one).
 const TEMPLATE_TOTAL = { mlb: 8.5, npb: 7.5, kbo: 9.5, cpbl: 9.5, nfl: 44.5, ncaaf: 52.5, nba: 224.5, wnba: 162.5, ncaam: 143.5, ncaaw: 136.5, euroleague: 160.5, bleague: 158.5, nhl: 5.5 };
 // An F1 field as the market usually prices it: the average shape of two real
@@ -897,7 +892,7 @@ const TEMPLATE_TOTAL = { mlb: 8.5, npb: 7.5, kbo: 9.5, cpbl: 9.5, nfl: 44.5, nca
 const F1_FIELD = [0.5165, 0.1703, 0.105, 0.077, 0.0431, 0.0323, 0.0261, 0.0095, 0.0041, 0.0018, 0.0014, 0.0012, 0.0012, 0.0012, 0.0012, 0.0009, 0.0009, 0.0009, 0.0009, 0.0009, 0.0009, 0.0009, 0.0009, 0.0007, 0.0002];
 // Matches in sets: the bookmaker's handicap and total in games (tennis),
 // points or frames, as it lists them.
-const TEMPLATE_UNITS = { tennis: [3.5, 22.5], wta: [3.5, 21.5], badminton: [4.5, 80.5], tabletennis: [3.5, 75.5], volleyball: [4.5, 180.5], snooker: [1.5, 8.5], nrl: [6.5, 44.5], afl: [12.5, 165.5] };
+const TEMPLATE_UNITS = { tennis: [3.5, 22.5], wta: [3.5, 21.5], badminton: [4.5, 80.5], tabletennis: [3.5, 75.5], volleyball: [4.5, 180.5], snooker: [1.5, 8.5], rugbyunion: [6.5, 44.5] };
 const templates = new Map();
 export function sportTemplate(sport, seed = 7) {
   const key = `${sport}|${seed}`;

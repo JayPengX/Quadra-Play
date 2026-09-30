@@ -1,4 +1,4 @@
-// UFC, NRL, AFL and the FA Cup in Play: priced, named, settled; players' flags.
+// UFC, rugby union and the FA Cup in Play: priced, named, settled; players' flags.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -10,12 +10,18 @@ import { legResult } from '../public/lib/account.mjs';
 
 const fixture = name => JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
 
-test('UFC, NRL, AFL and the FA Cup are Play leagues, from the shared catalogue', () => {
+test('UFC, rugby union, the new basketball and Asian soccer and the FA Cup are Play leagues, from the shared catalogue', () => {
   assert.equal(LEAGUES.ufc.kambi, 'ufc_mma/ufc');
   assert.equal(familyOf('ufc'), 'mma');
   assert.ok(isNeutral('ufc') && isPlayers('ufc'));
-  assert.equal(LEAGUES.nrl.scores, 'rugby-league/3');
-  assert.equal(familyOf('afl'), 'aussie');
+  assert.ok(LEAGUES.rugbyunion.scores.includes('rugby/180659'));
+  assert.equal(familyOf('rugbyunion'), 'rugby');
+  assert.equal(LEAGUES.acb.kambi, 'basketball/spain/liga_acb');
+  assert.equal(familyOf('nbl'), 'basketball');
+  assert.equal(LEAGUES.acl.path, 'soccer/afc.champions');
+  assert.equal(LEAGUES.asiancup.path, 'soccer/afc.asian.cup');
+  // Gone for good (2026-09-30): not even kept for settling.
+  for (const key of ['nrl', 'afl', 'nascar', 'indycar', 'aleague', 'csl', 'nwsl', 'austria', 'chile']) assert.equal(LEAGUES[key], undefined, key);
   assert.equal(LEAGUES.facup.path, 'soccer/eng.fa');
   for (const key of ['tennis', 'wta', 'badminton', 'tabletennis', 'snooker']) assert.ok(isPlayers(key), key);
 });
@@ -47,8 +53,8 @@ test('a fight is settled from ESPN\'s card, by the fighters in either order', ()
   assert.ok(parseFighterFlags(card).some(([name, flag]) => name === 'Yazmin Jauregui' && /countries\/500\/mex\.png$/.test(flag)));
 });
 
-test('NRL and AFL games Kambi priced are found on ESPN by club words, sides turned when ESPN has them the other way', () => {
-  const espn = [{ sport: 'nrl', startUtc: '2026-10-04T08:30:00.000Z', home: 'Sydney Roosters', away: 'Newcastle Knights', status: 'final', homeScore: 20, awayScore: 18, homeInnings: [], awayInnings: [] }];
+test('rugby games Kambi priced are found on ESPN by club words, sides turned when ESPN has them the other way', () => {
+  const espn = [{ sport: 'rugbyunion', startUtc: '2026-10-04T08:30:00.000Z', home: 'Sydney Roosters', away: 'Newcastle Knights', status: 'final', homeScore: 20, awayScore: 18, homeInnings: [], awayInnings: [] }];
   const same = findEspnGame(espn, { start: '2026-10-04T08:30:00Z', home: 'Roosters', away: 'Knights' });
   assert.equal(same.homeScore, 20);
   const turned = findEspnGame(espn, { start: '2026-10-04T08:30:00Z', home: 'Newcastle Knights', away: 'Sydney Roosters' });
@@ -56,8 +62,8 @@ test('NRL and AFL games Kambi priced are found on ESPN by club words, sides turn
   assert.equal(findEspnGame(espn, { start: '2026-10-06T08:30:00Z', home: 'Roosters', away: 'Knights' }), null);
 });
 
-test('NRL and AFL get the points markets, whole game only', () => {
-  const game = { id: 'nrl_x', sport: 'nrl', startUtc: '2026-10-04T08:30:00.000Z', away: { en: 'A', zh: 'A' }, home: { en: 'B', zh: 'B' }, draftKings: { home: 0.6, away: 0.4 }, polymarket: null, spread: { awayLine: 4.5, awayFair: 0.5 }, total: { line: 44.5, overFair: 0.5 } };
+test('rugby union gets the points markets, whole game only', () => {
+  const game = { id: 'ru_x', sport: 'rugbyunion', startUtc: '2026-10-04T08:30:00.000Z', away: { en: 'A', zh: 'A' }, home: { en: 'B', zh: 'B' }, draftKings: { home: 0.6, away: 0.4 }, polymarket: null, spread: { awayLine: 4.5, awayFair: 0.5 }, total: { line: 44.5, overFair: 0.5 } };
   const kinds = new Set(gameOptions(game).map(o => o.kind));
   for (const k of ['ml', 'runline', 'total', 'margin']) assert.ok(kinds.has(k), k);
   for (const k of ['half', 'htotal', 'q1']) assert.ok(!kinds.has(k), k);

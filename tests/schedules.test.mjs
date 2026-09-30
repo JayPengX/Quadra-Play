@@ -13,7 +13,7 @@ test('every Kambi league has a schedule of its own, or sells what Kambi lists', 
   assert.deepEqual(LEAGUES.cpbl.schedule, { asia: 'cpbl' });
   assert.equal(LEAGUES.ufc.schedule.kind, 'card');
   assert.equal(LEAGUES.tennis.schedule.kind, 'draw');
-  assert.equal(LEAGUES.nrl.schedule.kind, 'match');
+  assert.equal(LEAGUES.rugbyunion.schedule, undefined);
   assert.equal(LEAGUES.tabletennis.schedule, undefined);
 });
 

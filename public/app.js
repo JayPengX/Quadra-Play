@@ -5,7 +5,7 @@ import {
   FANS, STYLES, SPORTS, SIM_SPORTS, sportTemplate, weekOfYear, crowdPools, crowdSize, hashString, simulateCrowd, MONTH_WEEKS, PERIOD_MONTHS, monthWeeks
 } from './lib/sim.mjs';
 import { ticketProfile, accountTickets } from './lib/profile.mjs';
-import { useSourcesSession, loadOdds, loadExtraLeagues, loadExtraFutures, taipeiDayKey, fetchOutcomes, loadLive, parseInning, loadFutureTeams, futureTeamLeagues, RACE_SERIES } from './lib/sources.mjs';
+import { useSourcesSession, loadOdds, loadExtraLeagues, loadExtraFutures, taipeiDayKey, fetchOutcomes, loadLive, parseInning, loadFutureTeams, futureTeamLeagues } from './lib/sources.mjs';
 import { inningsLeft, liveBaseball, liveSoccer, liveGoals, livePoints, fitGoals, liveMarkets, liveOdds, pregameRuns, nextRunChances, nextRunOdds, LIVE_MIN_LIQUIDITY, LIVE_THREE_WAY, PERIODS } from './lib/live.mjs';
 import { fitHockey } from './lib/markets.mjs';
 import {
@@ -55,8 +55,6 @@ const state = {
   liveBets: [],
   liveRecs: new Map(),
   liveAt: null,
-  // NASCAR's and IndyCar's board: the tab each is on (winner or top three).
-  raceTab: {},
   parlay: [],
   slipMode: 'single',
   // Chosen 過關組合 sizes; 'all' stands for 全過, whatever the leg count.
@@ -182,7 +180,7 @@ function matchupText(game) {
 function gameSeries(game) {
   const league = state.t(`sport_${game.sport}`);
   // Leagues whose Kambi group is only the league again ("Chinese Professional Baseball", "UFC").
-  const plain = ['baseball', 'basketball', 'rugby', 'aussie', 'mma'].includes(familyOf(game.sport));
+  const plain = ['baseball', 'basketball', 'rugby', 'mma'].includes(familyOf(game.sport));
   const event = game.group && !plain && normalizeTeamName(game.group) !== normalizeTeamName(league) ? game.group : null;
   return event ? `${league} · ${event}` : league;
 }
@@ -355,34 +353,6 @@ function buildBets(data) {
       }
     }
   }
-  // NASCAR and IndyCar: each series' next race, its winner and top three,
-  // priced on F1's curve from Kambi's winner prices.
-  for (const race of data.races || []) {
-    const series = t(`sport_${race.series}`);
-    const matchup = `${series} ${race.title}`;
-    const driver = { color: RACE_COLOR[race.series] };
-    const winners = race.drivers.map(d => ({
-      id: `race|${race.series}|${d.name}`,
-      gameId: `race|${race.series}`,
-      kind: 'race',
-      sport: race.series,
-      matchup,
-      start: race.startUtc,
-      label: `${series} ${d.name}`,
-      shortLabel: d.name,
-      driverEn: d.name,
-      driver,
-      fairChance: d.fair,
-      fairMargin: null,
-      errKey: 'extra',
-      estOdds: estimateF1LotteryOdds(d.fair, 'post')
-    }));
-    bets.push(...winners);
-    f1Podium(winners.map(b => ({ fair: b.fairChance, odds: b.estOdds }))).forEach((p, i) => {
-      const w = winners[i];
-      bets.push({ ...w, id: `racepod|${race.series}|${w.driverEn}`, gameId: `racepod|${race.series}|${w.driverEn}`, kind: 'racepodium', market: `racepodium|${w.driverEn}`, label: `${series} ${t('f1PodiumShort')} ${w.shortLabel}`, fairChance: p.fair, estOdds: p.odds });
-    });
-  }
   // Single-source games: the typical DraftKings-Polymarket gap of that sport.
   for (const sport of new Set(bets.map(b => b.sport))) {
     const gaps = bets.filter(b => b.sport === sport && b.fairMargin != null).map(b => b.fairMargin);
@@ -451,19 +421,14 @@ const SPORT_GROUPS = {
   football: { icon: '🏈', leagues: ['nfl', 'ncaaf'] },
   hockey: { icon: '🏒', leagues: ['nhl'] },
   mma: { icon: '🥊', leagues: ['ufc'] },
-  rugby: { icon: '🏉', leagues: ['nrl'] },
-  aussie: { icon: '🏉', leagues: ['afl'] },
+  rugby: { icon: '🏉', leagues: ['rugbyunion'] },
   tennis: { icon: '🎾', leagues: ['tennis', 'wta'] },
   badminton: { icon: '🏸', leagues: ['badminton'] },
   tabletennis: { icon: '🏓', leagues: ['tabletennis'] },
   volleyball: { icon: '🏐', leagues: ['volleyball'] },
   snooker: { icon: '🎱', leagues: ['snooker'] },
-  f1: { icon: '🏎️', leagues: ['f1'] },
-  motor: { icon: '🏁', leagues: ['nascar', 'indycar'] }
+  f1: { icon: '🏎️', leagues: ['f1'] }
 };
-// NASCAR and IndyCar (sources.mjs): a board each, its drivers' badges in the series' colour.
-const RACE_COLOR = { nascar: '#e4002b', indycar: '#0b3d91' };
-const isRaceSeries = key => Boolean(RACE_SERIES[key]);
 const groupOfSport = sport => Object.keys(SPORT_GROUPS).find(g => SPORT_GROUPS[g].leagues.includes(sport));
 
 function inSport(sport) {
@@ -489,7 +454,6 @@ function rerenderFiltered() {
   renderLive();
   renderFutures();
   renderF1();
-  renderRaces();
 }
 
 function chip({ pressed, icon, text, count, onclick }) {
@@ -523,7 +487,7 @@ function renderSportFilter() {
     ...groups.map(g => {
       const leagues = SPORT_GROUPS[g].leagues.filter(l => present.has(l));
       const value = leagues.length === 1 ? leagues[0] : `g:${g}`;
-      return tile(value, groupIcon(g), t(`group_${g}`), countText(games(sp => SPORT_GROUPS[g].leagues.includes(sp)), g === 'f1' || g === 'motor'), current === g);
+      return tile(value, groupIcon(g), t(`group_${g}`), countText(games(sp => SPORT_GROUPS[g].leagues.includes(sp)), g === 'f1'), current === g);
     })
   );
   // Keep the picked tile in view in the scrolling row.
@@ -585,7 +549,6 @@ function renderDayFilter() {
     ...days.map(day => {
       const games = state.data.games.filter(g => inSport(g.sport) && dayKey(g.startUtc) === day).length;
       const hasF1 = inSport('f1') && state.data.f1 && dayKey(state.data.f1.startUtc) === day;
-      const races = (state.data.races || []).filter(r => inSport(r.series) && dayKey(r.startUtc) === day).map(r => t(`sport_${r.series}`));
       const [, m, d] = day.split('-').map(Number);
       const label = dayLabel(day);
       return el('button', {
@@ -599,7 +562,7 @@ function renderDayFilter() {
         }
       }, [
         el('span', { class: 'day-text' }, [el('span', { class: 'day-week', text: label }), el('span', { class: 'day-num', text: `${m}/${d}` })]),
-        el('span', { class: 'day-count', text: [day === today && liveNow ? `${t('liveTitle')} ${liveNow}` : null, games ? t('gamesN', { n: games }) : null, hasF1 ? 'F1' : null, ...races].filter(Boolean).join(' + ') })
+        el('span', { class: 'day-count', text: [day === today && liveNow ? `${t('liveTitle')} ${liveNow}` : null, games ? t('gamesN', { n: games }) : null, hasF1 ? 'F1' : null].filter(Boolean).join(' + ') })
       ]);
     })
   );
@@ -682,8 +645,7 @@ function renderStatic() {
     ['account-title', 'accountTitle'],
     ['saved-title', 'savedTitle'],
     ['stats-title', 'statsTitle'],
-    ['f1-title', 'f1Title'],
-    ['races-title', 'racesTitle']
+    ['f1-title', 'f1Title']
   ])
     $(id).textContent = t(key);
   for (const node of document.querySelectorAll('[data-t]')) node.textContent = t(node.dataset.t);
@@ -708,7 +670,7 @@ function renderStatus(kind) {
 
 function betIcon(bet) {
   if (bet.kind === 'f1team') return constructorBadge(bet.team, 'logo-sm');
-  if ((bet.kind?.startsWith('f1') || bet.kind?.startsWith('race')) && bet.driver) return driverBadge(bet, 'logo-sm');
+  if (bet.kind?.startsWith('f1') && bet.driver) return driverBadge(bet, 'logo-sm');
   if (bet.kind === 'future') return logoImg(bet.sport, bet.teamEn, bet.shortLabel, 'logo-sm');
   // Totals' side is over/under: they show the league, team totals the team.
   const side = bet.kind === 'teamtotal' ? bet.team : ['away', 'home'].includes(bet.side) ? bet.side : null;
@@ -1263,7 +1225,7 @@ function entryRow(bet, i, picture, sub) {
 }
 
 // A board of prices (F1, championships): its picks and nothing else.
-function board({ emblem, title, sub, bets, rows, id, shown = Infinity, tabs = null, lead = null, moreKey = 'futureMore' }) {
+function board({ emblem, title, sub, bets, rows, id, shown = Infinity, tabs = null, lead = null }) {
   const t = state.t;
   const entries = bets.map((b, i) => rows(b, i));
   const rest = entries.slice(shown);
@@ -1275,7 +1237,7 @@ function board({ emblem, title, sub, bets, rows, id, shown = Infinity, tabs = nu
     tabs ? el('div', { class: 'board-tabs' }, tabs) : null,
     lead ? el('p', { class: 'board-lead', text: lead }) : null,
     el('div', { class: 'entries' }, entries.slice(0, shown)),
-    rest.length ? el('details', { class: 'board-more' }, [el('summary', { text: t(moreKey, { n: rest.length }) }), el('div', { class: 'entries' }, rest)]) : null
+    rest.length ? el('details', { class: 'board-more' }, [el('summary', { text: t('futureMore', { n: rest.length }) }), el('div', { class: 'entries' }, rest)]) : null
   ]);
 }
 
@@ -1316,7 +1278,6 @@ function toggleLeg(bet) {
   renderGames();
   renderLive();
   renderF1();
-  renderRaces();
   renderFutures();
   renderParlay();
   if (state.tab === 'home') renderHome(homeCtx());
@@ -1707,7 +1668,7 @@ function commitAccount(next) {
 
 // While Play is closed: when an open slip's last game should be over, a
 // notice to come and see how it went (it settles when Play is opened).
-const GAME_HOURS = { baseball: 3.3, football: 3.5, basketball: 2.6, hockey: 2.7, soccer: 2.1, sets: 2.5, racing: 2.2, mma: 5, rugby: 2, aussie: 3 };
+const GAME_HOURS = { baseball: 3.3, football: 3.5, basketball: 2.6, hockey: 2.7, soccer: 2.1, sets: 2.5, racing: 2.2, mma: 5, rugby: 2 };
 function syncPush(profile) {
   const now = Date.now();
   const items = [];
@@ -2879,56 +2840,6 @@ function renderF1() {
   );
 }
 
-// NASCAR and IndyCar: a card per series, its winner and top three as tabs.
-const RACE_TABS = [
-  { kind: 'race', tab: 'f1WinnerTab', sub: null },
-  { kind: 'racepodium', tab: 'f1PodiumShort', sub: 'f1PodiumSub', shown: 10 }
-];
-function renderRaces() {
-  const t = state.t;
-  const races = (state.data.races || []).filter(r => inSport(r.series));
-  $('races').hidden = !races.length;
-  $('races-list').replaceChildren(
-    ...races.map(race => {
-      const tabs = RACE_TABS.filter(x => state.bets.some(b => b.kind === x.kind && b.sport === race.series));
-      const current = tabs.find(x => x.kind === state.raceTab[race.series]) ?? tabs[0];
-      if (!current) return '';
-      const list = state.bets.filter(b => b.kind === current.kind && b.sport === race.series);
-      const picked = kind => state.parlay.some(id => state.bets.find(b => b.id === id && b.sport === race.series)?.kind === kind);
-      const tabRow = el(
-        'div',
-        { class: 'segmented market-tabs', role: 'tablist', 'aria-label': t('moreMarkets') },
-        tabs.map(x =>
-          el('button', {
-            type: 'button',
-            role: 'tab',
-            class: picked(x.kind) ? 'has-pick' : '',
-            'aria-selected': String(x === current),
-            'aria-pressed': String(x === current),
-            text: t(x.tab),
-            onclick: () => {
-              state.raceTab[race.series] = x.kind;
-              renderRaces();
-            }
-          })
-        )
-      );
-      return board({
-        emblem: race.series,
-        title: `${t(`sport_${race.series}`)} · ${race.title}`,
-        sub: fmtTime(race.startUtc),
-        tabs: tabRow,
-        lead: current.sub ? t(current.sub) : null,
-        bets: list,
-        id: `${race.series}|${current.kind}`,
-        shown: current.shown ?? 12,
-        moreKey: 'raceMore',
-        rows: (b, i) => entryRow(b, i, driverBadge(b), '')
-      });
-    })
-  );
-}
-
 // ============================================================================
 // DO NOT REMOVE - iOS Safari "a tap needs two taps" fix (from Quadra Fixtures).
 // ============================================================================
@@ -2961,7 +2872,6 @@ function renderAll() {
   renderFutures();
   renderParlay();
   renderF1();
-  renderRaces();
   if (state.tab === 'home') renderHome(homeCtx());
   renderAccount();
   renderSaved();
@@ -3295,14 +3205,14 @@ function showLeague(key, note = '') {
   state.wantedGame = null;
   state.wantedNote = note;
   state.tab = 'games';
-  state.sport = LEAGUES[key] || key === 'f1' || isRaceSeries(key) ? key : 'all';
+  state.sport = LEAGUES[key] || key === 'f1' ? key : 'all';
   state.dayPicked = false;
   state.query = '';
   renderAll();
   renderWantedNote();
   showTab('games');
   const live = state.liveGames.some(g => g.sport === key);
-  requestAnimationFrame(() => $(live ? 'live' : isRaceSeries(key) ? 'races' : 'games')?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+  requestAnimationFrame(() => $(live ? 'live' : 'games')?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
 }
 
 function openWantedGame() {
@@ -3311,7 +3221,7 @@ function openWantedGame() {
   if (id.startsWith('league:')) {
     // Once its games are on the board (the other leagues come in after the main board).
     const key = id.slice(7);
-    const has = state.data.games.some(g => g.sport === key) || state.liveGames.some(g => g.sport === key) || state.bets.some(b => b.sport === key && b.kind === 'race');
+    const has = state.data.games.some(g => g.sport === key) || state.liveGames.some(g => g.sport === key);
     if (has) return showLeague(key);
     if (state.boardComplete && state.liveAt) return showLeague('all', state.t('wantedGone', { league: state.t(`sport_${key}`) }));
     return;

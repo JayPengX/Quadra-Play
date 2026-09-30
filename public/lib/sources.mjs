@@ -440,39 +440,6 @@ export function parseKambiF1Race(event, offers) {
   };
 }
 
-// NASCAR's Cup Series and IndyCar: the next race of each from Kambi's
-// motorsport list (its winner prices, the margin taken out), settled from
-// ESPN's scoreboard of the series. `words`: the path Kambi files it under.
-export const RACE_SERIES = {
-  nascar: { words: ['nascar', 'cup_series'], espn: 'racing/nascar-premier' },
-  indycar: { words: ['indycar'], espn: 'racing/irl' }
-};
-const KAMBI_MOTOR_LIST = `${KAMBI}/listView/motorsports/all/all/all/competitions.json?lang=en_GB&market=GB&useCombined=true`;
-export function parseKambiSeriesRaces(list, now) {
-  const races = [];
-  for (const [series, { words }] of Object.entries(RACE_SERIES)) {
-    const item = (list?.events || [])
-      .filter(({ event: e }) => {
-        const path = (e?.path || []).map(p => (typeof p === 'string' ? p : p?.termKey) || '');
-        // The race itself: not its qualifying, not the season's title.
-        return e && e.state === 'NOT_STARTED' && Date.parse(e.start) > now.getTime() && !/qualif|championship/i.test(e.name || '') && words.every(w => path.some(p => p.includes(w)));
-      })
-      .sort((a, b) => Date.parse(a.event.start) - Date.parse(b.event.start))[0];
-    const offer = item && (item.betOffers || []).find(o => o.from === 1 && o.to === 1 && /^(finishing position|race winner|winner)$/i.test(o.criterion?.englishLabel || '') && !o.suspended);
-    const drivers = (offer?.outcomes || []).filter(o => o.odds > 1000 && o.participant).map(o => ({ name: o.participant, raw: 1000 / o.odds }));
-    if (drivers.length < 10) continue;
-    const fair = devigPower(drivers.map(d => d.raw));
-    races.push({
-      series,
-      title: item.event.name.trim(),
-      slug: `kambi-${item.event.id}`,
-      startUtc: new Date(item.event.start).toISOString(),
-      drivers: drivers.map((d, i) => ({ name: d.name, fair: fair[i] })).sort((a, b) => b.fair - a.fair)
-    });
-  }
-  return races;
-}
-
 // Pole position (排位賽第一): Polymarket's driver pole market for the race
 // weekend ("f1-…-grand-prix-driver-pole-position-<date>", opened a few days
 // before), else Kambi's when it lists one. { source, drivers: [{ name, fair }] }
@@ -556,7 +523,7 @@ function seasonLabel(event, sport) {
   const year = Number(/\d{4}/.exec(event.title)?.[0]);
   if (!year) return '';
   // Seasons inside one calendar year (baseball, the WNBA, MLS, racing): the year alone.
-  return ['mlb', 'wnba', 'mls', 'f1', 'cpbl', 'npb', 'kbo', 'nascar', 'indycar'].includes(sport) ? String(year) : `${year - 1}/${String(year).slice(2)}`;
+  return ['mlb', 'wnba', 'mls', 'f1', 'cpbl', 'npb', 'kbo'].includes(sport) ? String(year) : `${year - 1}/${String(year).slice(2)}`;
 }
 
 // "Will (the) Los Angeles Dodgers win the 2026 World Series?" -> the team.
@@ -658,12 +625,11 @@ export async function loadOdds(now = new Date(), onProgress) {
       // The whole season (the plain scoreboard stays on the last race until the
       // week's first session): the next race's qualifying time.
       getJson(`${ESPN}/racing/f1/scoreboard?dates=${now.getUTCFullYear()}`),
-      getJson(KAMBI_F1_LIST),
-      getJson(KAMBI_MOTOR_LIST)
+      getJson(KAMBI_F1_LIST)
     ].map(track)
   );
   if (results.every(r => r.status === 'rejected')) throw results[0].reason;
-  const [mlbDk, mlbPm, eplDk, eplPm, f1, nbaPm, f1Espn, f1Kambi, motorKambi] = results.map(r => (r.status === 'fulfilled' ? r.value : []));
+  const [mlbDk, mlbPm, eplDk, eplPm, f1, nbaPm, f1Espn, f1Kambi] = results.map(r => (r.status === 'fulfilled' ? r.value : []));
   let race = parseF1RaceWinner(f1, now);
   // Polymarket not open for the next race yet (or only for a later one): Kambi's.
   const kambiRace = nextKambiF1Race(f1Kambi, now);
@@ -682,7 +648,6 @@ export async function loadOdds(now = new Date(), onProgress) {
     loadedAt: now.toISOString(),
     games: lotteryGames(mergeGames([...mlbDk, ...eplDk], [...parsePolymarketMlb(mlbPm, now), ...parsePolymarketEpl(eplPm, now)]), now),
     f1: race,
-    races: parseKambiSeriesRaces(motorKambi, now),
     futures: [...parseFutures(mlbPm, 'mlb'), ...parseFutures(eplPm, 'epl'), ...(nbaInSeason(now) ? parseFutures(nbaPm, 'nba') : [])]
   };
 }
@@ -731,13 +696,11 @@ export function parseEspnResults(data, sport) {
 // weekend's rather than the race's). ESPN can take hours to mark a race
 // final; its "session complete" already has the finishing order, so it
 // counts as the result too.
-// `anyType`: every competition counts (NASCAR's and IndyCar's scoreboards
-// list the race alone, without a session type).
-export function parseEspnRace(data, startUtc, { anyType = false } = {}) {
+export function parseEspnRace(data, startUtc) {
   let best = null;
   for (const event of data.events || []) {
     for (const comp of event.competitions || []) {
-      if (!anyType && comp.type?.abbreviation !== 'Race') continue;
+      if (comp.type?.abbreviation !== 'Race') continue;
       const gap = Math.abs(Date.parse(comp.date) - Date.parse(startUtc));
       if (gap <= 4 * DAY_MS && (!best || gap < best.gap)) best = { gap, comp };
     }
@@ -915,17 +878,6 @@ export async function fetchOutcomes(legs, now = new Date()) {
         }
         return;
       }
-      if (leg.kind === 'race' || leg.kind === 'racepodium') {
-        // NASCAR, IndyCar: the race's day and the two after (a rain delay).
-        const path = RACE_SERIES[leg.sport]?.espn;
-        if (!path) return;
-        for (const days of [0, 1, 2]) {
-          const data = await page(`${ESPN}/${path}/scoreboard?dates=${yyyymmdd(new Date(Date.parse(leg.start) + days * DAY_MS))}`);
-          const result = data && parseEspnRace(data, leg.start, { anyType: true });
-          if (result) return out.set(leg.id, result);
-        }
-        return;
-      }
       if (leg.kind?.startsWith('f1')) {
         // The race's day and the two after (the start kept with a pick can be
         // a little before the race itself).
@@ -950,15 +902,17 @@ export async function fetchOutcomes(legs, now = new Date()) {
           }
         }
       }
-      // NRL, AFL: priced by Kambi, scored by ESPN.
+      // Rugby union: priced by Kambi, scored by ESPN (each of its competitions).
       if (league?.scores) {
         const t = Date.parse(leg.start);
-        for (const date of [...new Set([...espnDates(leg.start), yyyymmdd(new Date(t)), yyyymmdd(new Date(t + DAY_MS))])]) {
-          const data = await page(`${ESPN}/${league.scores}/scoreboard?dates=${date}`);
-          const game = data && findEspnGame(parseEspnResults(data, leg.sport), leg);
-          if (game) {
-            out.set(leg.id, game);
-            return;
+        for (const path of [].concat(league.scores)) {
+          for (const date of [...new Set([...espnDates(leg.start), yyyymmdd(new Date(t)), yyyymmdd(new Date(t + DAY_MS))])]) {
+            const data = await page(`${ESPN}/${path}/scoreboard?dates=${date}`);
+            const game = data && findEspnGame(parseEspnResults(data, leg.sport), leg);
+            if (game) {
+              out.set(leg.id, game);
+              return;
+            }
           }
         }
       }
@@ -1293,7 +1247,7 @@ async function storeTeams(url, teams) {
 // lottery does with a match that has no official result. That's once the
 // kept copy is marked gone, or, with nothing kept at all, once the match is
 // surely over (its sport's longest usual length, plus two hours).
-const KAMBI_LONGEST_H = { tabletennis: 2, badminton: 3, volleyball: 4, tennis: 6, wta: 5, snooker: 10, npb: 6, kbo: 6, cpbl: 6, euroleague: 4, bleague: 4, ufc: 10, nrl: 30, afl: 30 };
+const KAMBI_LONGEST_H = { tabletennis: 2, badminton: 3, volleyball: 4, tennis: 6, wta: 5, snooker: 10, npb: 6, kbo: 6, cpbl: 6, euroleague: 4, bleague: 4, ufc: 10, rugbyunion: 30, acb: 4, nbl: 4 };
 export function kambiUnresolvable(leg, entry, now = new Date(), watchReachable = true) {
   if (entry?.gone) return true;
   const past = now.getTime() - Date.parse(leg.start);

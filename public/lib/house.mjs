@@ -22,7 +22,7 @@ const ESPN_STANDINGS = 'https://site.api.espn.com/apis/v2/sports';
 
 // Games in a regular season: how much a game of it tells about a team.
 const SEASON_GAMES = { nba: 82, wnba: 44, nhl: 82, mlb: 162, nfl: 17, ncaaf: 12, ncaam: 31, ncaaw: 30 };
-const FAMILY_GAMES = { soccer: 34, baseball: 140, basketball: 40, hockey: 60, football: 14, rugby: 24, aussie: 23, mma: 10 };
+const FAMILY_GAMES = { soccer: 34, baseball: 140, basketball: 40, hockey: 60, football: 14, rugby: 24, mma: 10 };
 // Last season counts as this many of this season's games (a share of a season).
 const PRIOR_SHARE = 0.3;
 // Last season pulled this far towards even.
@@ -30,7 +30,7 @@ const PRIOR_REGRESS = 1 / 3;
 // The home side's edge, in log-odds: about 56% at home between even NBA
 // teams, 54% in MLB, a soccer home side 44% to 30% with a draw.
 const HOME_EDGE = { nba: 0.25, wnba: 0.2, nhl: 0.15, mlb: 0.15, nfl: 0.2, ncaaf: 0.4, ncaam: 0.45, ncaaw: 0.4 };
-const FAMILY_EDGE = { soccer: 0.35, baseball: 0.15, basketball: 0.3, hockey: 0.15, football: 0.25, rugby: 0.3, aussie: 0.3 };
+const FAMILY_EDGE = { soccer: 0.35, baseball: 0.15, basketball: 0.3, hockey: 0.15, football: 0.25, rugby: 0.3 };
 // Soccer's draw: this chance in an even game, less the more one-sided.
 const DRAW_EVEN = 0.27;
 const DRAW_FALL = 0.5;
