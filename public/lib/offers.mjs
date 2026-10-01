@@ -301,7 +301,10 @@ function playerPicks(game, family, label, type, outs) {
       if (both) {
         out.push({ stat: prop.stat, line, side: 'over', player, fair: both[0] });
         out.push({ stat: prop.stat, line, side: 'under', player, fair: both[1] });
-      } else if (price(over)) out.push({ stat: prop.stat, line, side: 'over', player, fair: 1 / price(over) / ONE_SIDED_MARGIN, sided: true });
+      } else if (price(over)) {
+        // An over with no under is "at least n" (over 0.5: 1+), shown and settled as such.
+        out.push({ stat: prop.stat, line: Math.ceil(line), side: 'yes', player, fair: 1 / price(over) / ONE_SIDED_MARGIN, sided: true });
+      }
     }
   }
   return out;

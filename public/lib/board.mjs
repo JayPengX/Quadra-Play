@@ -253,6 +253,15 @@ function tennisLines(game, base) {
   return out;
 }
 
+// A game's own Kambi markets and players alone (a live game's: the page
+// prices its winner and main lines itself), with the house's rules on each.
+export function offerOptions(game, offers, extra = {}) {
+  const base = { gameId: game.id, game, sport: game.sport, start: game.startUtc, ...extra };
+  const out = [...marketOptions(game, base, offers.markets || [], { real: true }), ...(LEAGUES[game.sport]?.path ? propOptions(game, base, offers.props || []) : [])];
+  for (const o of out) Object.assign(o, houseRule(o.kind, o.estOdds));
+  return out;
+}
+
 // One option per player pick, at the two-way cut; a ticket with one is
 // capped (SLIP_RULES.capped).
 function propOptions(game, base, props) {

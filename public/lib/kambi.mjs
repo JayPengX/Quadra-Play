@@ -17,6 +17,9 @@ export function kambiUrl(path, kind = 'matches') {
 }
 
 const outcome = (offer, type) => offer.outcomes.find(o => o.type === type);
+// The whole game's winner (with overtime: NHL's regular-time 1X2 isn't it).
+const isMatch = o => o.betOfferType?.englishName === 'Match' || /match odds|moneyline|bout odds/i.test(o.criterion?.englishLabel || '');
+const matchOffer = offers => offers.find(o => isMatch(o) && !/regular time|\b(1st|2nd|3rd)\b|quarter|half|period|inning|set \d|^set\b/i.test(o.criterion?.englishLabel || '')) ?? offers.find(isMatch);
 const odds = o => (o && o.odds > 1000 ? o.odds / 1000 : null);
 
 // Fair chances from one offer's two (or three) prices, the margin removed.
@@ -48,7 +51,7 @@ export function parseKambiEvents(data, sport, now = new Date(), { unpriced = fal
     if (!e || e.state !== 'NOT_STARTED' || Date.parse(e.start) <= now.getTime()) continue;
     if (!e.homeName || !e.awayName) continue;
     const offers = item.betOffers || [];
-    const match = offers.find(o => o.betOfferType?.englishName === 'Match' || /match odds|moneyline/i.test(o.criterion?.englishLabel || ''));
+    const match = matchOffer(offers);
     // Two-way winner; a three-way one (a draw after regulation) is split
     // between the two, but soccer keeps its draw.
     const soccer = LEAGUES[sport]?.family === 'soccer';
@@ -102,7 +105,7 @@ export async function fetchKambiLeague(key, now = new Date(), getJson) {
 // Only prices open to bet (a suspended outcome has no odds, or its old ones).
 const open = o => o && (o.status == null || o.status === 'OPEN') && odds(o);
 // Whole-game lines only: not a set's, a quarter's, an inning's, a team's or the next point's.
-const PART = /\b(\d(st|nd|rd|th)|set|frame|game \d|quarter|half|inning|period|by|next|race|odd|even)\b/i;
+const PART = /\b(\d(st|nd|rd|th)|set|frame|game \d|quarter|half|inning|period|by|next|race|odd|even|regular time)\b/i;
 
 // A league's matches in play (listView …/in-play.json): each with Kambi's
 // live prices, the margin taken out (winner; for baseball and basketball the
@@ -110,18 +113,23 @@ const PART = /\b(\d(st|nd|rd|th)|set|frame|game \d|quarter|half|inning|period|by
 // (between points, a review): `ml` null, shown without bets.
 export function parseKambiInPlay(data, sport) {
   const league = LEAGUES[sport];
-  // Team sports with a main handicap and total worth selling live.
-  const team = ['baseball', 'basketball'].includes(league?.family);
+  // Every team sport has a main total live; a handicap where its lines are
+  // whole games' (not soccer's Asian ones); tennis and UFC the winner only.
+  const family = league?.family;
+  const team = !['tennis', 'mma'].includes(family);
+  const handicaps = ['baseball', 'basketball', 'football', 'hockey'].includes(family);
   const games = [];
   for (const item of data?.events || []) {
     const e = item.event;
     if (!e || e.state !== 'STARTED' || !e.homeName || !e.awayName) continue;
     const offers = item.betOffers || [];
-    const match = offers.find(o => o.betOfferType?.englishName === 'Match' || /match odds|moneyline/i.test(o.criterion?.englishLabel || ''));
+    const match = matchOffer(offers);
     const one = outcome(match || { outcomes: [] }, 'OT_ONE');
     const two = outcome(match || { outcomes: [] }, 'OT_TWO');
-    // Soccer's live winner has a draw: not sold live from Kambi (the score only).
-    const win = league?.family !== 'soccer' && open(one) && open(two) ? fairPair(one, two) : null;
+    // Soccer's live winner has a draw: all three open, or none sold.
+    const cross = outcome(match || { outcomes: [] }, 'OT_CROSS');
+    const three = family === 'soccer' && open(one) && open(cross) && open(two) ? fairThree(one, cross, two) : null;
+    const win = family !== 'soccer' && open(one) && open(two) ? fairPair(one, two) : null;
     const game = {
       kambiId: e.id,
       sport,
@@ -129,19 +137,23 @@ export function parseKambiInPlay(data, sport) {
       away: e.awayName,
       home: e.homeName,
       group: e.group || '',
-      ml: win ? { home: win[0], away: win[1] } : null,
+      ml: three ?? (win ? { home: win[0], away: win[1] } : null),
       spread: null,
       total: null
     };
-    if (team) {
+    // Whole numbers push only where a push is usual (points).
+    const lineOk = line => line != null && (Math.abs((line / 1000) % 1) === 0.5 || ['basketball', 'football'].includes(family));
+    if (handicaps) {
       const handicap = offers.find(o => o.betOfferType?.englishName === 'Handicap' && !PART.test(o.criterion?.englishLabel || ''));
       const home = handicap && outcome(handicap, 'OT_ONE');
       const away = handicap && outcome(handicap, 'OT_TWO');
-      if (open(home) && open(away) && away.line != null) game.spread = { awayLine: away.line / 1000, awayFair: fairPair(away, home)[0] };
+      if (open(home) && open(away) && lineOk(away.line)) game.spread = { awayLine: away.line / 1000, awayFair: fairPair(away, home)[0] };
+    }
+    if (team) {
       const total = offers.find(o => o.betOfferType?.englishName === 'Over/Under' && !PART.test(o.criterion?.englishLabel || ''));
       const over = total && outcome(total, 'OT_OVER');
       const under = total && outcome(total, 'OT_UNDER');
-      if (open(over) && open(under) && over.line != null) game.total = { line: over.line / 1000, overFair: fairPair(over, under)[0] };
+      if (open(over) && open(under) && lineOk(over.line)) game.total = { line: over.line / 1000, overFair: fairPair(over, under)[0] };
     }
     const live = item.liveData || {};
     const score = { home: Number(live.score?.home) || 0, away: Number(live.score?.away) || 0 };

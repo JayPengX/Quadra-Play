@@ -78,3 +78,32 @@ test('UFC from ESPN: the winner 1-0, a draw or no contest void', () => {
   assert.equal(legResult({ kind: 'ml', side: 'away' }, r), 'won');
   assert.equal(parseEspnDuel(card({ athlete: { displayName: 'Ismail Naurdiev' }, winner: false }, { athlete: { displayName: 'Marvin Vettori' }, winner: false }), leg).status, 'void');
 });
+
+test('live: Kambi\'s in-play prices on ESPN\'s live games, turned to ESPN\'s sides; soccer with its draw', async () => {
+  const { attachKambiLive } = await import('../public/lib/sources.mjs');
+  const { parseKambiInPlay } = await import('../public/lib/kambi.mjs');
+  const offer = (type, label, outcomes) => ({ betOfferType: { englishName: type }, criterion: { englishLabel: label }, outcomes });
+  const data = { events: [{ event: { id: 5, state: 'STARTED', homeName: 'Arsenal', awayName: 'Leeds United', start: '2026-10-10T11:30:00Z' },
+    betOffers: [
+      offer('Match', 'Full Time', [{ type: 'OT_ONE', odds: 1500 }, { type: 'OT_CROSS', odds: 4000 }, { type: 'OT_TWO', odds: 7000 }]),
+      offer('Over/Under', 'Total Goals', [{ type: 'OT_OVER', odds: 1900, line: 2500 }, { type: 'OT_UNDER', odds: 1900, line: 2500 }])
+    ], liveData: { score: { home: 1, away: 0 } } }] };
+  const [k] = parseKambiInPlay(data, 'epl');
+  assert.ok(k.ml.draw > 0.1 && Math.abs(k.ml.home + k.ml.draw + k.ml.away - 1) < 1e-9);
+  assert.equal(k.total.line, 2.5);
+  const [same] = attachKambiLive([{ sport: 'epl', home: 'Arsenal', away: 'Leeds United' }], [k]);
+  assert.equal(same.kambi.kambiId, 5);
+  assert.equal(same.kambi.ml.home, k.ml.home);
+  const [flip] = attachKambiLive([{ sport: 'epl', home: 'Leeds United', away: 'Arsenal' }], [k]);
+  assert.equal(flip.kambi.ml.away, k.ml.home);
+  const [none] = attachKambiLive([{ sport: 'mls', home: 'Arsenal', away: 'Leeds United' }], [k]);
+  assert.equal(none.kambi, undefined);
+  // NHL: the winner with overtime, not the regular-time 1X2.
+  const nhl = { events: [{ event: { id: 6, state: 'STARTED', homeName: 'A', awayName: 'B', start: '2026-10-10T00:00:00Z' },
+    betOffers: [
+      offer('Match', 'Match Odds - Regular Time', [{ type: 'OT_ONE', odds: 2000 }, { type: 'OT_CROSS', odds: 4000 }, { type: 'OT_TWO', odds: 3000 }]),
+      offer('Match', 'Moneyline - Including Overtime and penalty shootout', [{ type: 'OT_ONE', odds: 1800 }, { type: 'OT_TWO', odds: 2000 }])
+    ], liveData: { score: { home: 0, away: 0 } } }] };
+  const [h] = parseKambiInPlay(nhl, 'nhl');
+  assert.ok(Math.abs(h.ml.home - (1 / 1.8) / (1 / 1.8 + 1 / 2)) < 1e-9);
+});

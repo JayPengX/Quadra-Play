@@ -21,7 +21,8 @@ export const backOf = bet => bet.fairChance * bet.estOdds * 100;
 // the pick returns more than.
 export function recommend(bets, back = backOf) {
   const [lo, hi] = RECOMMEND.range;
-  const pool = bets.filter(b => !b.lock && b.fairChance >= lo && b.fairChance <= hi && b.estOdds > 1);
+  // Capped picks (a player's, a house-priced game's) are never recommended.
+  const pool = bets.filter(b => !b.lock && !b.cap && b.fairChance >= lo && b.fairChance <= hi && b.estOdds > 1);
   const out = new Map();
   if (pool.length < RECOMMEND.minPool) return out;
   const values = pool.map(back).sort((a, b) => a - b);

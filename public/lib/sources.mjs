@@ -1115,11 +1115,14 @@ function liveEspnPages(key, now) {
 const dedupe = games => [...new Map(games.map(g => [g.espnId, g])).values()];
 
 export async function loadLive(now = new Date(), minLiquidity = 5000) {
-  const [espn, kambi] = await Promise.all([
-    Promise.all(liveLeagues(now).map(key => liveEspnPages(key, now).then(pages => dedupe(pages.flatMap(d => parseEspnLive(d, key)))).catch(() => []))),
-    Promise.all(KAMBI_LEAGUES.map(key => getJson(kambiUrl(LEAGUES[key].kambi, 'in-play'), 'kambi-events').then(d => parseKambiInPlay(d, key)).catch(() => [])))
+  const leagues = liveLeagues(now);
+  const [espn, kambi, books] = await Promise.all([
+    Promise.all(leagues.map(key => liveEspnPages(key, now).then(pages => dedupe(pages.flatMap(d => parseEspnLive(d, key)))).catch(() => []))),
+    Promise.all(KAMBI_LEAGUES.map(key => getJson(kambiUrl(LEAGUES[key].kambi, 'in-play'), 'kambi-events').then(d => parseKambiInPlay(d, key)).catch(() => []))),
+    // Kambi's live prices of the ESPN leagues on now.
+    Promise.all(leagues.filter(key => LEAGUES[key]?.book).map(key => getJson(kambiUrl(LEAGUES[key].book, 'in-play'), 'kambi-events').then(d => parseKambiInPlay(d, key)).catch(() => [])))
   ]);
-  const games = espn.flat();
+  const games = attachKambiLive(espn.flat(), books.flat());
   const pmMlb = games.some(g => g.sport === 'mlb') ? await fetchPolymarketLiveEvents(POLYMARKET_TAG.mlb, now).catch(() => []) : [];
   await Promise.all(
     games.map(async game => {
@@ -1141,7 +1144,26 @@ export async function loadLive(now = new Date(), minLiquidity = 5000) {
       game.pm = event ? parsePolymarketLive(event, game, minLiquidity) : null;
     })
   );
-  return { loadedAt: now.toISOString(), games: games.filter(g => g.pregame), kambi: kambi.flat() };
+  return { loadedAt: now.toISOString(), games: games.filter(g => g.pregame || g.kambi), kambi: kambi.flat() };
+}
+
+// An ESPN game in play gets Kambi's live prices as `kambi` ({ kambiId, ml,
+// spread, total }), turned to ESPN's sides: the board sells those where Kambi
+// has them, the model the rest.
+export function attachKambiLive(games, kambiGames) {
+  return games.map(g => {
+    let flip = false;
+    const k = kambiGames.find(x => {
+      if (x.sport !== g.sport) return false;
+      if (sameSide(x.home, g.home) && sameSide(x.away, g.away)) return !(flip = false);
+      if (sameSide(x.home, g.away) && sameSide(x.away, g.home)) return (flip = true);
+      return false;
+    });
+    if (!k) return g;
+    const ml = k.ml && flip ? { ...k.ml, home: k.ml.away, away: k.ml.home } : k.ml;
+    const spread = k.spread && flip ? { awayLine: -k.spread.awayLine, awayFair: 1 - k.spread.awayFair } : k.spread;
+    return { ...g, kambi: { kambiId: k.kambiId, ml, spread, total: k.total } };
+  });
 }
 
 // Polymarket events that started in the last six hours (games in progress).

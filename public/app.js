@@ -26,7 +26,7 @@ import { f1Driver, f1Constructor, findTeamLogo, countryFlag, countryCode, league
 import { flagUrl } from './lib/logos.mjs';
 import { logoPicture, raceName } from './lib/logos.mjs';
 import { houseRule, houseCut, minLegsProblem, leagueTier } from './lib/rules.mjs';
-import { gameOptions, crowdPool, f1Podium, f1Markets, f1PoleFromWinner } from './lib/board.mjs';
+import { gameOptions, offerOptions, crowdPool, f1Podium, f1Markets, f1PoleFromWinner } from './lib/board.mjs';
 import { auditPools } from './lib/audit.mjs';
 import { recommend } from './lib/recommend.mjs';
 
@@ -761,8 +761,9 @@ function gameCard(game, bets) {
         : el('span', { class: 'game-time', text: state.query ? `${dayKey(game.startUtc).slice(5).replace('-', '/')} ${hhmm(game.startUtc)}` : hhmm(game.startUtc) })
     ]),
     el('div', { class: 'team-rows' }, rows),
-    open && (others.length || !game.live) ? gameMore(game, others) : null,
-    others.length === 0 ? null : el('button', { class: 'more-toggle', type: 'button', 'aria-expanded': String(open), onclick: toggle }, [
+    open && (others.length || (game.live && game.kambiId)) ? gameMore(game, others) : null,
+    // A live game Kambi lists has more once it's opened (its own markets).
+    others.length === 0 && !(game.live && game.kambiId) ? null : el('button', { class: 'more-toggle', type: 'button', 'aria-expanded': String(open), onclick: toggle }, [
       document.createTextNode(open ? t('lessMarkets') : t('moreMarkets'))
     ])
   ]);
@@ -809,8 +810,8 @@ function gameMore(game, bets) {
   else if (current?.kind === 'prop') panel = propsPanel(game, bets.filter(b => b.kind === 'prop'));
   else if (current) panel = marketPanel(game, current, bets.filter(b => b.kind === current.kind));
   // Kambi's full list on its way: say so under the model's markets.
-  const waiting = game.kambiId && !game.live && !gameOffers.has(game.id) && offersLoading.has(game.id);
-  return el('div', { class: 'game-more' }, [tabs, panel, waiting ? el('p', { class: 'muted offers-wait', text: t('offersLoading') }) : null]);
+  const waiting = game.kambiId && !gameOffers.has(game.id) && offersLoading.has(game.id);
+  return el('div', { class: 'game-more' }, [tabs, panel, waiting ? el('p', { class: 'muted offers-wait', text: t('offersLoading') }) : !panel ? el('p', { class: 'muted offers-wait', text: t('offersNone') }) : null]);
 }
 
 // Players' markets: one chip per market (進球, 射正 1.5 …), then each
@@ -873,12 +874,13 @@ function propsPanel(game, bets) {
 const gameOffers = new Map();
 const offersLoading = new Set();
 const OFFERS_FRESH_MS = 2 * 60_000;
+const LIVE_OFFERS_FRESH_MS = 20_000;
 function wantOffers(game) {
-  if (!game?.kambiId || game.live || offersLoading.has(game.id)) return;
+  if (!game?.kambiId || offersLoading.has(game.id)) return;
   const had = gameOffers.get(game.id);
-  if (had && Date.now() - had.at < OFFERS_FRESH_MS) return;
+  if (had && Date.now() - had.at < (game.live ? LIVE_OFFERS_FRESH_MS : OFFERS_FRESH_MS)) return;
   offersLoading.add(game.id);
-  loadGameOffers(game)
+  loadGameOffers(game, { live: Boolean(game.live) })
     .then(offers => {
       if (offers) gameOffers.set(game.id, { at: Date.now(), offers });
     })
@@ -895,6 +897,12 @@ function rebuildBoard() {
   requestAnimationFrame(() => {
     rebuildQueued = false;
     state.bets = buildBets(state.data);
+    if (state.liveData) {
+      const live = buildLiveBets(state.liveData);
+      state.liveGames = live.games;
+      state.liveBets = live.bets;
+      renderLive();
+    }
     renderGames();
     renderParlay();
     renderSlipBar();
@@ -1097,9 +1105,12 @@ function kambiLiveBets(game, g, base) {
   const k = houseCut({ base: 'live' });
   const common = { ...base, fairMargin: null, errKey: 'liveOther', cut: k };
   if (g.ml) {
-    for (const side of ['away', 'home']) {
-      const name = teamName(game[side]);
-      bets.push({ ...common, id: `${game.id}|ml|${side}`, kind: 'ml', side, market: 'ml', posted: true, fairChance: g.ml[side], estOdds: liveOdds(g.ml[side], k), chip: name, label: `${name} ${t('win')}`, shortLabel: name });
+    // Soccer's three results at the live three-way cut.
+    const k3 = houseCut({ base: LIVE_THREE_WAY });
+    for (const side of g.ml.draw != null ? ['home', 'draw', 'away'] : ['away', 'home']) {
+      const name = side === 'draw' ? t('draw') : teamName(game[side]);
+      const cut = side === 'draw' || g.ml.draw != null ? k3 : k;
+      bets.push({ ...common, cut, id: `${game.id}|ml|${side}`, kind: 'ml', side, market: 'ml', posted: true, fairChance: g.ml[side], estOdds: liveOdds(g.ml[side], cut), chip: name, label: side === 'draw' ? `${base.matchup} ${name}` : `${name} ${t('win')}`, shortLabel: name });
     }
   }
   if (g.spread) {
@@ -1121,6 +1132,18 @@ function kambiLiveBets(game, g, base) {
   return bets;
 }
 
+// An open live game's own Kambi markets (lines, halves, players …), read
+// while it's open (wantOffers): each kind Kambi prices takes the model's place.
+function liveOfferBets(game, bets) {
+  const offers = gameOffers.get(game.id)?.offers;
+  if (!offers) return [];
+  const matchup = matchupText(game);
+  const real = offerOptions(game, offers, { live: true, matchup }).filter(o => o.kind !== 'ml').map(o => named(game, o, matchup));
+  const kinds = new Set(real.map(b => b.kind));
+  for (let i = bets.length - 1; i >= 0; i--) if (bets[i].gameId === game.id && kinds.has(bets[i].kind)) bets.splice(i, 1);
+  return real;
+}
+
 // Every live game as a game card's data, and its bets at live odds.
 function buildLiveBets(data) {
   const t = state.t;
@@ -1139,20 +1162,26 @@ function buildLiveBets(data) {
     };
     games.push(game);
     bets.push(...kambiLiveBets(game, g, { gameId: game.id, game, sport: g.sport, matchup: matchupText(game), start: g.startUtc, live: true }));
+    bets.push(...liveOfferBets(game, bets));
   }
   for (const g of data?.games ?? []) {
     const pre = g.pregame;
     const family = familyOf(g.sport);
     let dist = null;
     let markets = null;
-    if (family === 'baseball') {
-      if (!pre.totalLine) continue;
-      const means = pregameRuns({ homeWin: pre.homeWin, totalLine: pre.totalLine, overFair: pre.overFair });
-      const left = inningsLeft(g);
-      dist = liveBaseball({ means, awayScore: g.awayScore, homeScore: g.homeScore, awayLeft: left.away, homeLeft: left.home });
+    // No pregame line (the model has nothing to go on): Kambi's live prices alone.
+    if (!pre) {
+      if (!g.kambi) continue;
+    } else if (family === 'baseball') {
+      if (!pre.totalLine && !g.kambi) continue;
+      if (pre.totalLine) {
+        const means = pregameRuns({ homeWin: pre.homeWin, totalLine: pre.totalLine, overFair: pre.overFair });
+        const left = inningsLeft(g);
+        dist = liveBaseball({ means, awayScore: g.awayScore, homeScore: g.homeScore, awayLeft: left.away, homeLeft: left.home });
+      }
     } else if (family === 'soccer') {
-      if (!(pre.draw > 0)) continue;
-      dist = liveSoccer({ means: fitGoals(pre.homeWin, pre.awayWin), awayScore: g.awayScore, homeScore: g.homeScore, minutesLeft: 90 - g.minute });
+      if (!(pre.draw > 0) && !g.kambi) continue;
+      if (pre.draw > 0) dist = liveSoccer({ means: fitGoals(pre.homeWin, pre.awayWin), awayScore: g.awayScore, homeScore: g.homeScore, minutesLeft: 90 - g.minute });
     } else if (family === 'hockey') {
       const total = pre.totalLine ? { line: pre.totalLine, overFair: pre.overFair } : null;
       dist = g.left > 0.01 ? liveGoals({ means: fitHockey(pre.homeWin, total), awayScore: g.awayScore, homeScore: g.homeScore, share: g.left }) : null;
@@ -1164,6 +1193,7 @@ function buildLiveBets(data) {
       startUtc: g.startUtc,
       away: { en: g.away, zh: teamZh(g.sport, g.away) },
       home: { en: g.home, zh: teamZh(g.sport, g.home) },
+      ...(g.kambi?.kambiId ? { kambiId: g.kambi.kambiId } : {}),
       live: { ...g, pmWin: g.pm?.awayWin ?? null }
     };
     games.push(game);
@@ -1189,8 +1219,15 @@ function buildLiveBets(data) {
         bets.push({ ...common, id: `${game.id}|tt|${m.team}|${m.line}|${m.side}`, team: m.team, teamLine: m.line, chip: t(m.side), label: text, shortLabel: text });
       }
     }
+    // Kambi's live prices take the place of the model's where it has them.
+    if (g.kambi) {
+      const real = kambiLiveBets(game, g.kambi, { gameId: game.id, game, sport: g.sport, matchup, start: g.startUtc, live: true });
+      const kinds = new Set(real.map(b => b.kind));
+      for (let i = bets.length - 1; i >= 0; i--) if (bets[i].gameId === game.id && kinds.has(bets[i].kind)) bets.splice(i, 1);
+      bets.push(...real);
+    }
     // 第N分: the next two runs of the game.
-    if (g.sport === 'mlb') {
+    if (g.sport === 'mlb' && pre?.totalLine) {
       const means = pregameRuns({ homeWin: pre.homeWin, totalLine: pre.totalLine, overFair: pre.overFair });
       for (const ahead of [1, 2]) {
         const n = g.awayScore + g.homeScore + ahead;
@@ -1202,6 +1239,7 @@ function buildLiveBets(data) {
         }
       }
     }
+    bets.push(...liveOfferBets(game, bets));
   }
   return { games, bets: withHouseRules(bets) };
 }
@@ -1230,6 +1268,7 @@ async function refreshLive() {
   liveBusy = true;
   try {
     const data = await loadLive(new Date(), LIVE_MIN_LIQUIDITY);
+    state.liveData = data;
     const { games, bets } = buildLiveBets(data);
     state.liveRecs = recommend(bets);
     state.liveGames = games;

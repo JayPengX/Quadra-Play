@@ -151,7 +151,7 @@ export function renderHome(ctx) {
   // one of favourites, one of longer prices; one pick a game, games in the
   // next two days, none that must be bought with more picks.
   const soonest = (a, b) => a.start.localeCompare(b.start);
-  const winPicks = (state.bets || []).filter(b => b.kind === 'ml' && b.side !== 'draw' && !b.lock && !(b.minLegs > 3) && ctx.leagueTier(b.sport) !== 'thin' && Date.parse(b.start) > now && Date.parse(b.start) - now < 48 * 3_600_000);
+  const winPicks = (state.bets || []).filter(b => b.kind === 'ml' && b.side !== 'draw' && !b.lock && !b.cap && !(b.minLegs > 3) && ctx.leagueTier(b.sport) !== 'thin' && Date.parse(b.start) > now && Date.parse(b.start) - now < 48 * 3_600_000);
   const onePerGame = list => {
     const seen = new Set();
     return list.filter(b => !seen.has(b.gameId) && seen.add(b.gameId));
