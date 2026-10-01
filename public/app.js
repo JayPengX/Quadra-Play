@@ -1276,15 +1276,14 @@ function renderParlay() {
   const mode = state.slipMode;
   const chosen = [...state.slipSizes].map(k => (k === 'all' ? n : k));
   const sizes = slipSizes(mode, n, chosen);
-  // A free bet (Plus's weekly one, the welcome offer): one slip, the free
-  // bet part of its stake; the person can
-  // put more on it with their own money (state.freeTopUp), so it works as a
-  // cut off a bigger bet.
+  // A free bet (Plus's weekly one, the welcome offer): a cut off the stake.
+  // The stake is the person's usual one (never below the free bet); the free
+  // bet pays its part and the rest comes from the balance. One slip.
   const tokens = freeBetList();
   const free = tokens.find(x => x.id === state.useFree) || null;
   const freeShape = Boolean(free) && (mode === 'parlay' || (mode === 'single' && n === 1));
   const freeOn = freeShape && freeOddsOk(legs.map(b => ({ odds: effectiveOdds(b) })));
-  const stake = freeOn ? free.value + (state.freeTopUp || 0) : state.slipStake;
+  const stake = freeOn ? Math.max(free.value, state.slipStake) : state.slipStake;
   const slip = legs.map(b => ({ gameId: b.gameId, market: b.market ?? b.kind, odds: effectiveOdds(b), fairChance: b.fairChance, minLegs: b.minLegs ?? 1, lock: b.lock ?? null }));
   const errors = slipErrors({ mode, legs: slip, sizes, stake });
   const rerender = () => renderParlay();
@@ -1379,11 +1378,6 @@ function renderParlay() {
     onchange: event => {
       const units = Math.max(0, Math.round(Number(event.target.value) || 0));
       const value = units * SLIP_RULES.unit;
-      if (freeOn) {
-        // The total: never below the free bet; the rest is the top-up.
-        state.freeTopUp = Math.max(0, value - free.value);
-        return void setTimeout(rerender);
-      }
       if (value === state.slipStake) return;
       setStake(value);
       // Redraw after the event: redrawing removes this input, and removing a
@@ -1395,7 +1389,7 @@ function renderParlay() {
   if (tokens.length) ticket.push(freeBetRow(tokens, free, freeOn, rerender, freeShape));
   ticket.push(
     el('label', { class: 'slip-field' }, [
-      el('span', { text: freeOn ? t('freeTotal', { v: fmtMoney(free.value, { sign: false }) }) : t('slipStake') }),
+      el('span', { text: t('slipStake') }),
       el('span', { class: 'stake-box' }, [
         stakeInput,
         el('strong', { text: t('slipStakeEquals', { v: fmtMoney(stake, { sign: false }) }) }),
@@ -1403,16 +1397,14 @@ function renderParlay() {
       ])
     ])
   );
-  // Quick stakes: one tap to the usual amounts.
+  // Quick stakes: one tap to the usual amounts (with a free bet, it comes off them).
   ticket.push(
-    freeOn
-      ? el('div', { class: 'stake-quick', role: 'group', 'aria-label': t('freeTopUp') }, [0, 100, 300, 500, 1_000].map(v =>
-          el('button', { type: 'button', 'aria-pressed': String((state.freeTopUp || 0) === v), text: v ? `+${fmtMoney(v, { sign: false }).replace('NT$', '')}` : t('freeOnly'), onclick: () => ((state.freeTopUp = v), rerender()) })
-        ))
-      : el('div', { class: 'stake-quick', role: 'group', 'aria-label': t('slipStake') }, QUICK_STAKES.map(v =>
-          el('button', { type: 'button', 'aria-pressed': String(stake === v), text: fmtMoney(v, { sign: false }).replace('NT$', ''), onclick: () => (setStake(v), rerender()) })
-        ))
+    el('div', { class: 'stake-quick', role: 'group', 'aria-label': t('slipStake') }, QUICK_STAKES.map(v =>
+      el('button', { type: 'button', 'aria-pressed': String(stake === v), text: fmtMoney(v, { sign: false }).replace('NT$', ''), onclick: () => (setStake(v), rerender()) })
+    ))
   );
+  // With a free bet: what it takes off, and what's left to pay.
+  if (freeOn) ticket.push(el('p', { class: 'note free-cut', text: t('freeCut', { stake: fmtMoney(stake, { sign: false }), f: fmtMoney(free.value, { sign: false }), v: fmtMoney(stake - free.value, { sign: false }) }) }));
   if (errors.length) {
     ticket.push(el('ul', { class: 'slip-errors' }, errors.map(e => el('li', { text: t(`slipError_${e}`, { max: SLIP_RULES.maxLegs, min: fmtMoney(SLIP_RULES.minTicket, { sign: false }), maxTicket: fmtMoney(SLIP_RULES.maxTicket, { sign: false }), unit: SLIP_RULES.unit, need: minLegsProblem(slip, sizes) }) }))));
   }
@@ -1835,7 +1827,7 @@ function freeBetRow(tokens, free, freeOn, rerender, freeShape = true) {
   return el('div', { class: 'free-bets' }, [
     el('div', { class: 'free-bets-head' }, [el('strong', { text: t('freeBetsTitle') }), el('small', { class: 'muted', text: t('freeBetsSub') })]),
     el('div', { class: 'free-bets-row', role: 'group' }, tokens.map(x =>
-      el('button', { type: 'button', class: 'free-bet', 'aria-pressed': String(free?.id === x.id), onclick: () => ((state.useFree = free?.id === x.id ? null : x.id), (state.freeTopUp = 0), rerender()) }, [
+      el('button', { type: 'button', class: 'free-bet', 'aria-pressed': String(free?.id === x.id), onclick: () => ((state.useFree = free?.id === x.id ? null : x.id), rerender()) }, [
         el('strong', { class: 'num', text: `🎁 ${fmtMoney(x.value, { sign: false })}` }),
         el('small', { text: x.id === 'eco:fb:welcome' ? `${t('freeBetWelcome')} · ${t('freeBetDays', { n: days(x) })}` : x.id.startsWith('eco:fb:') ? `✦ ${t('freeBetPlus')} · ${t('freeBetDays', { n: days(x) })}` : t('freeBetDays', { n: days(x) }) })
       ])
@@ -1906,7 +1898,6 @@ function placeButton(legs, sizes, cost, errors, free = null) {
           if (placed.error) return;
           account = placed.account;
           state.useFree = null;
-          state.freeTopUp = 0;
         } else for (const one of slips) {
           // The whole cost was checked above: each part goes through.
           const placed = placeSlip(account, one, now, { extra: Infinity });
@@ -2812,11 +2803,9 @@ function renderAll() {
   state.bets = buildBets(state.data);
   state.futures = buildFutures(state.data);
   state.recs = recommend(state.bets);
-  // A game's pick no longer on the board leaves the slip. Live picks are the
-  // live list's to judge (it may not be read yet), and championships stay
-  // (the slip skips one it can't find): a slip kept on the device comes back whole.
-  const onBoard = new Set(state.bets.map(b => b.id));
-  state.parlay = state.parlay.filter(id => id.startsWith('live|') || id.startsWith('fut|') || onBoard.has(id));
+  // (A pick not on the board stays in the slip: its league may still be on
+  // its way. The slip shows only the picks it finds; saveSlip lets go of the
+  // rest once everything has been read.)
   renderStatus('ok');
   renderTabs();
   renderSportFilter();
@@ -3326,6 +3315,12 @@ function restoreSlip() {
 function saveSlip() {
   const key = slipKey();
   if (!slipRestored || !key) return;
+  // Once the boards are all in, a pick on none of them is gone for good
+  // (championships aside: their boards can come later still).
+  if (!state.booting) {
+    const found = new Set(slipCandidates().map(b => b.id));
+    state.parlay = state.parlay.filter(id => id.startsWith('fut|') || found.has(id));
+  }
   try {
     if (!state.parlay.length) return void localStorage.removeItem(key);
     const pickedOdds = Object.fromEntries(state.parlay.filter(id => id in state.pickedOdds).map(id => [id, state.pickedOdds[id]]));
