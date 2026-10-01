@@ -108,6 +108,9 @@ export function teamBadge(sport, name) {
 export function teamLogo(sport, name, dark = false) {
   const base = 'https://a.espncdn.com/i/teamlogos';
   const size = dark ? '500-dark' : '500';
+  if (sport === 'nba' && ['Boston Celtics', 'Boston Celtic'].includes(name)) {
+    return 'https://cdn.nba.com/logos/nba/1610612738/primary/L/logo.svg';
+  }
   if (sport === 'mlb' && MLB_ABBR[name]) return `${base}/mlb/${size}/${MLB_ABBR[name]}.png`;
   if (sport === 'nba' && NBA_ABBR[name]) return `${base}/nba/${size}/${NBA_ABBR[name]}.png`;
   if (sport === 'nfl' && NFL_ABBR[name]) return `${base}/nfl/${size}/${NFL_ABBR[name]}.png`;
@@ -226,7 +229,7 @@ export function f1Constructor(name) {
 // National teams: a flag.
 const COUNTRY_CODES = {
   afghanistan: 'AF', argentina: 'AR', australia: 'AU', bangladesh: 'BD', kenya: 'KE', namibia: 'NA', nepal: 'NP', oman: 'OM', pakistan: 'PK', 'sri lanka': 'LK', zimbabwe: 'ZW', scotland: 'GB-SCT', wales: 'GB-WLS', 'northern ireland': 'GB-NIR', austria: 'AT', belgium: 'BE', brazil: 'BR', bulgaria: 'BG', canada: 'CA', chile: 'CL', china: 'CN', 'chinese taipei': 'TW', taiwan: 'TW', colombia: 'CO', croatia: 'HR', cuba: 'CU', 'czech republic': 'CZ', czechia: 'CZ', denmark: 'DK', egypt: 'EG', england: 'GB-ENG', estonia: 'EE', finland: 'FI', france: 'FR', germany: 'DE', greece: 'GR', hungary: 'HU', india: 'IN', indonesia: 'ID', iran: 'IR', ireland: 'IE', israel: 'IL', italy: 'IT', japan: 'JP', kazakhstan: 'KZ', 'south korea': 'KR', korea: 'KR', latvia: 'LV', lithuania: 'LT', mexico: 'MX', montenegro: 'ME', netherlands: 'NL', 'new zealand': 'NZ', norway: 'NO', poland: 'PL', portugal: 'PT', 'puerto rico': 'PR', qatar: 'QA', romania: 'RO', russia: 'RU', serbia: 'RS', slovakia: 'SK', slovenia: 'SI', spain: 'ES', sweden: 'SE', switzerland: 'CH', thailand: 'TH', tunisia: 'TN', turkey: 'TR', turkiye: 'TR', ukraine: 'UA', usa: 'US', 'united states': 'US', uruguay: 'UY', vietnam: 'VN', 'dominican republic': 'DO', philippines: 'PH', hongkong: 'HK', 'hong kong': 'HK', singapore: 'SG', malaysia: 'MY',
-  britain: 'GB', 'great britain': 'GB', 'united kingdom': 'GB', uk: 'GB', monaco: 'MC', 'south africa': 'ZA', morocco: 'MA', nigeria: 'NG', ghana: 'GH', senegal: 'SN', 'ivory coast': 'CI', 'cote d ivoire': 'CI', cameroon: 'CM', algeria: 'DZ', peru: 'PE', ecuador: 'EC', paraguay: 'PY', venezuela: 'VE', bolivia: 'BO', jamaica: 'JM', 'saudi arabia': 'SA', 'united arab emirates': 'AE', uae: 'AE', georgia: 'GE', armenia: 'AM', azerbaijan: 'AZ', belarus: 'BY', moldova: 'MD', 'bosnia herzegovina': 'BA', bosnia: 'BA', albania: 'AL', 'north macedonia': 'MK', iceland: 'IS', luxembourg: 'LU', cyprus: 'CY', malta: 'MT', 'korea republic': 'KR', 'republic of korea': 'KR', fiji: 'FJ', samoa: 'WS', tonga: 'TO', 'papua new guinea': 'PG', uzbekistan: 'UZ', mongolia: 'MN', 'costa rica': 'CR', panama: 'PA', honduras: 'HN', 'el salvador': 'SV', guatemala: 'GT', haiti: 'HT', bahamas: 'BS', 'trinidad tobago': 'TT', curacao: 'CW'
+  britain: 'GB', 'great britain': 'GB', 'united kingdom': 'GB', uk: 'GB', monaco: 'MC', 'south africa': 'ZA', morocco: 'MA', nigeria: 'NG', ghana: 'GH', senegal: 'SN', 'ivory coast': 'CI', 'cote d ivoire': 'CI', cameroon: 'CM', algeria: 'DZ', peru: 'PE', ecuador: 'EC', paraguay: 'PY', venezuela: 'VE', bolivia: 'BO', jamaica: 'JM', 'saudi arabia': 'SA', 'united arab emirates': 'AE', uae: 'AE', georgia: 'GE', armenia: 'AM', azerbaijan: 'AZ', belarus: 'BY', moldova: 'MD', 'bosnia herzegovina': 'BA', bosnia: 'BA', albania: 'AL', 'north macedonia': 'MK', iceland: 'IS', luxembourg: 'LU', cyprus: 'CY', malta: 'MT', 'korea republic': 'KR', 'republic of korea': 'KR', fiji: 'FJ', samoa: 'WS', tonga: 'TO', 'papua new guinea': 'PG', uzbekistan: 'UZ', mongolia: 'MN', 'costa rica': 'CR', panama: 'PA', honduras: 'HN', 'el salvador': 'SV', guatemala: 'GT', haiti: 'HT', bahamas: 'BS', 'trinidad tobago': 'TT', curacao: 'CW', 'cape verde': 'CV', 'cabo verde': 'CV', 'congo dr': 'CD', 'dr congo': 'CD', iraq: 'IQ', jordan: 'JO', andorra: 'AD', 'faroe islands': 'FO', gibraltar: 'GI', kosovo: 'XK', liechtenstein: 'LI', 'republic of ireland': 'IE', 'san marino': 'SM', 'new caledonia': 'NC', haiti: 'HT', 'saudi arabia': 'SA', qatar: 'QA', egypt: 'EG'
 };
 // The home nations aren't countries to Intl: their names by hand.
 const HOME_NATIONS = { england: ['英格蘭', 'England'], scotland: ['蘇格蘭', 'Scotland'], wales: ['威爾斯', 'Wales'], 'northern ireland': ['北愛爾蘭', 'Northern Ireland'] };
@@ -298,11 +301,10 @@ export function logoPicture(light, dark, cls, fallback) {
   if (!light || knownBad(light)) return fallback();
   const img = document.createElement('img');
   const known = logoSeen.ok.has(light);
-  // A new one hidden until it has drawn (never the browser's broken-picture
-  // icon); one that's drawn before this session shows at once, so a redraw
-  // (a pick tapped, the app back on screen) doesn't blink it out.
+  // Keep the image slot stable until the current request has decoded. Even a
+  // previously successful URL can fail on a later visit or a weak connection.
   Object.assign(img, { className: cls, alt: '', loading: known ? 'eager' : 'lazy', decoding: known ? 'sync' : 'async' });
-  if (!known) img.style.visibility = 'hidden';
+  img.style.visibility = 'hidden';
   img.addEventListener('load', () => {
     img.style.visibility = '';
     noteLogo(light, true);
@@ -319,20 +321,21 @@ export function logoPicture(light, dark, cls, fallback) {
   picture.append(img);
   // A logo that fails is tried once more (a slow or dropped connection),
   // then gives way to the fallback.
-  let retried = false;
+  let retries = 0;
   img.addEventListener('error', () => {
-    if (retried || !navigator.onLine) {
+    if (!navigator.onLine || retries >= 2) {
       if (navigator.onLine) noteLogo(light, false);
       return picture.replaceWith(fallback());
     }
-    retried = true;
-    // The same address again (TheSportsDB refuses any extra ?query).
+    retries++;
+    // Retry promptly without query parameters (TheSportsDB refuses them).
     setTimeout(() => {
+      if (!picture.isConnected) return;
       const source = picture.querySelector('source');
       if (source) source.srcset = dark;
       img.removeAttribute('src');
       img.setAttribute('src', light);
-    }, 1500);
+    }, retries === 1 ? 250 : 750);
   });
   return picture;
 }
