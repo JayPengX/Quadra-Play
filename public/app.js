@@ -1968,7 +1968,7 @@ function freeBetRow(tokens, free, freeOn, rerender, freeShape = true) {
     el('div', { class: 'free-bets-row', role: 'group' }, tokens.map(x =>
       el('button', { type: 'button', class: 'free-bet', 'aria-pressed': String(free?.id === x.id), onclick: () => ((state.useFree = free?.id === x.id ? null : x.id), (state.freeTopUp = 0), rerender()) }, [
         el('strong', { class: 'num', text: `🎁 ${fmtMoney(x.value, { sign: false })}` }),
-        el('small', { text: x.id === 'eco:fb:welcome' ? `${t('freeBetWelcome')} · ${t('freeBetDays', { n: days(x) })}` : x.id.startsWith('eco:fb:') ? `✦ ${t('freeBetPlus')} · ${t('freeBetDays', { n: days(x) })}` : t('freeBetDays', { n: days(x) }) })
+        el('small', { text: x.id === 'eco:fb:welcome' ? `${t('freeBetWelcome')} · ${t('freeBetDays', { n: days(x) })}` : x.id.startsWith('eco:fb:') ? `✦ ${t('freeBetPlus')} · ${t('freeBetDays', { n: days(x) })}` : x.id.startsWith('vocab:xs:') ? `⭐ ${t('freeBetPoints')} · ${t('freeBetDays', { n: days(x) })}` : t('freeBetDays', { n: days(x) }) })
       ])
     )),
     free && !freeOn ? el('p', { class: 'note back-low', text: freeShape ? t('freeBetMinOdds', { v: FREE_MIN_ODDS.toFixed(2) }) : t('freeBetOneSlip') }) : free ? el('p', { class: 'note', text: t('freeBetNote') }) : null
