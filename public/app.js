@@ -1386,13 +1386,13 @@ function renderParlay() {
     }
   });
   numberField(stakeInput, { digits: 5 });
-  if (tokens.length) ticket.push(freeBetRow(tokens, free, freeOn, rerender, freeShape, freeOn ? { stake, pay: stake - free.value } : null));
+  if (tokens.length) ticket.push(freeBetRow(tokens, free, freeOn, rerender, freeShape));
   ticket.push(
     el('label', { class: 'slip-field' }, [
       el('span', { text: t('slipStake') }),
       el('span', { class: 'stake-box' }, [
         stakeInput,
-        el('strong', { text: freeOn ? `${t('slipStakeEquals', { v: fmtMoney(stake, { sign: false }) })} · ${t('freePay', { v: fmtMoney(stake - free.value, { sign: false }) })}` : t('slipStakeEquals', { v: fmtMoney(stake, { sign: false }) }) }),
+        el('strong', { text: t('slipStakeEquals', { v: fmtMoney(stake, { sign: false }) }) }),
         el('small', { text: t('slipStakeHint', { unit: SLIP_RULES.unit }) })
       ])
     ])
@@ -1403,6 +1403,8 @@ function renderParlay() {
       el('button', { type: 'button', 'aria-pressed': String(stake === v), text: fmtMoney(v, { sign: false }).replace('NT$', ''), onclick: () => (setStake(v), rerender()) })
     ))
   );
+  // With a free bet: what it takes off, and what's left to pay.
+  if (freeOn) ticket.push(el('p', { class: 'note free-cut', text: t('freeCut', { stake: fmtMoney(stake, { sign: false }), f: fmtMoney(free.value, { sign: false }), v: fmtMoney(stake - free.value, { sign: false }) }) }));
   if (errors.length) {
     ticket.push(el('ul', { class: 'slip-errors' }, errors.map(e => el('li', { text: t(`slipError_${e}`, { max: SLIP_RULES.maxLegs, min: fmtMoney(SLIP_RULES.minTicket, { sign: false }), maxTicket: fmtMoney(SLIP_RULES.maxTicket, { sign: false }), unit: SLIP_RULES.unit, need: minLegsProblem(slip, sizes) }) }))));
   }
@@ -1822,8 +1824,7 @@ function freeBetList() {
   return freeBets(state.wallet, Date.now(), state.account.ledger.filter(e => e.kind === 'freebet').map(e => e.id.slice(3)));
 }
 // Above the stake: the free bets to use, one tap each.
-// `cut` (a free bet applied): { stake, pay }, shown right under the chips.
-function freeBetRow(tokens, free, freeOn, rerender, freeShape = true, cut = null) {
+function freeBetRow(tokens, free, freeOn, rerender, freeShape = true) {
   const t = state.t;
   const days = x => Math.max(1, Math.ceil((x.until - Date.now()) / 86_400_000));
   return el('div', { class: 'free-bets' }, [
@@ -1834,13 +1835,6 @@ function freeBetRow(tokens, free, freeOn, rerender, freeShape = true, cut = null
         el('small', { text: x.id === 'eco:fb:welcome' ? `${t('freeBetWelcome')} · ${t('freeBetDays', { n: days(x) })}` : x.id.startsWith('eco:fb:') ? `✦ ${t('freeBetPlus')} · ${t('freeBetDays', { n: days(x) })}` : t('freeBetDays', { n: days(x) }) })
       ])
     )),
-    // Applied: what it takes off and what's left to pay, big, by the chip.
-    cut
-      ? el('div', { class: 'free-cut', role: 'status' }, [
-          el('strong', { class: 'num', text: `−${fmtMoney(free.value, { sign: false })}` }),
-          el('span', { text: t('freeCut', { stake: fmtMoney(cut.stake, { sign: false }), f: fmtMoney(free.value, { sign: false }), v: fmtMoney(cut.pay, { sign: false }) }) })
-        ])
-      : null,
     free && !freeOn ? el('p', { class: 'note back-low', text: freeShape ? t('freeBetMinOdds', { v: FREE_MIN_ODDS.toFixed(2) }) : t('freeBetOneSlip') }) : free ? el('p', { class: 'note', text: t('freeBetNote') }) : null
   ]);
 }
