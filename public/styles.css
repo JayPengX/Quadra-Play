@@ -1221,3 +1221,6 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 .leg-pick strong, .leg-main strong { overflow-wrap: break-word; min-width: 0; }
 .slip-leg-game { overflow-wrap: break-word; }
 .slip-sheet .stake-quick { margin-bottom: 14px; }
+/* A pay cell never runs into the next one; a free bet's split sits under its figure. */
+.pay-cell strong { overflow: hidden; text-overflow: ellipsis; }
+.pay-cell .pay-sub { font-size: 0.7rem; font-weight: 600; color: var(--text-secondary); line-height: 1.3; }

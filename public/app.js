@@ -1555,9 +1555,11 @@ function boostLadder(size) {
   ]);
 }
 
-function payCell(label, value, cls = '') {
-  return el('div', { class: 'pay-cell' }, [el('small', { text: label }), el('strong', { class: cls, text: value })]);
+function payCell(label, value, cls = '', sub = '') {
+  return el('div', { class: 'pay-cell' }, [el('small', { text: label }), el('strong', { class: cls, text: value }), sub ? el('small', { class: 'pay-sub', text: sub }) : null]);
 }
+// A free bet's slip: the whole stake, and how it was paid under it.
+const freeCell = slip => payCell(state.t('slipCost'), fmtMoney(slip.stake, { sign: false }), '', slip.cost > 0 ? state.t('placeFreePlus', { f: fmtMoney(slip.freeValue ?? slip.stake - slip.cost, { sign: false }), v: fmtMoney(slip.cost, { sign: false }) }) : state.t('placeFree', { v: fmtMoney(slip.freeValue ?? slip.stake, { sign: false }) }));
 
 function payLine(label, value, cls = '') {
   return el('div', { class: `pay-line ${cls}` }, [el('span', { text: label }), el('strong', { text: value })]);
@@ -2027,7 +2029,6 @@ function slipRange(slip) {
 const LEG_ICON = { won: '✓', lost: '✗', void: '↺', live: '●', waiting: '⏳', cashed: '–' };
 
 // A free bet's slip: the free part, and what was put on top.
-const freeCellText = slip => (slip.cost > 0 ? `${fmtMoney(slip.freeValue ?? slip.stake - slip.cost, { sign: false })} + ${fmtMoney(slip.cost, { sign: false })}` : fmtMoney(slip.stake, { sign: false }));
 
 // ---- Cash out ------------------------------------------------------------------------
 
@@ -2235,12 +2236,12 @@ function savedSlipCard(slip) {
     ),
     el('div', { class: 'saved-pay' }, settled
       ? [
-          slip.free ? payCell(t('freeBetTag'), freeCellText(slip)) : payCell(t('slipCost'), fmtMoney(slip.cost, { sign: false })),
+          slip.free ? freeCell(slip) : payCell(t('slipCost'), fmtMoney(slip.cost, { sign: false })),
           payCell(t('slipPaidLabel'), fmtMoney(slip.payout, { sign: false })),
           profit > 0 ? payCell(t('slipResult'), fmtMoney(profit), 'back-high') : null
         ]
       : [
-          slip.free ? payCell(t('freeBetTag'), freeCellText(slip)) : payCell(t('slipCost'), fmtMoney(slip.cost, { sign: false })),
+          slip.free ? freeCell(slip) : payCell(t('slipCost'), fmtMoney(slip.cost, { sign: false })),
           slip.mode === 'parlay' ? payCell(t('payOdds'), `×${fmtOdds(slip.legs.reduce((p, l) => p * l.odds, 1))}`) : null,
           decided && range.locked > 0 ? payCell(t('slipLocked'), fmtMoney(range.locked, { sign: false }), 'back-high') : null,
           payCell(decided ? t('slipMost') : t('payAll'), fmtMoney(range.most, { sign: false }), dead ? 'back-low' : '')
