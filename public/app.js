@@ -1091,8 +1091,8 @@ async function refreshLive() {
     state.liveBets = bets;
     state.liveAt = data.loadedAt;
     // A live pick whose line is gone (the game moved on, or ended) leaves the slip.
-    const ids = new Set(slipCandidates().map(b => b.id));
-    state.parlay = state.parlay.filter(id => ids.has(id));
+    const ids = new Set(bets.map(b => b.id));
+    state.parlay = state.parlay.filter(id => !id.startsWith('live|') || ids.has(id));
     // The day strip (today stays on it while games are on), and 場中 with it.
     if (state.data && !state.query) renderDayFilter();
     else renderLive();
@@ -1221,6 +1221,7 @@ function toggleLeg(bet) {
 // every board, and every pick button anywhere on the page (an open game's
 // sheet too) shows it at once, and so does the slip bar.
 function slipChanged() {
+  saveSlip();
   renderGames();
   renderLive();
   renderF1();
@@ -1323,6 +1324,7 @@ function renderParlay() {
           onclick: () => {
             state.slipMode = m;
             state.modeChosen = true;
+            saveSlip();
             rerender();
           }
         })
@@ -1358,6 +1360,7 @@ function renderParlay() {
               onclick: () => {
                 if (on) state.slipSizes.delete(k);
                 else state.slipSizes.add(k);
+                saveSlip();
                 rerender();
               }
             });
@@ -1913,6 +1916,7 @@ function placeButton(legs, sizes, cost, errors, free = null) {
         const slip = { legs: records };
         state.parlay = [];
         state.modeChosen = false;
+        saveSlip();
         state.justPlaced = { at: Date.now(), n: slips.length, cost, free: free ? free.value : 0 };
         for (const one of slips) state.freshSlips.add(one.id);
         commitAccount(account);
@@ -2808,7 +2812,11 @@ function renderAll() {
   state.bets = buildBets(state.data);
   state.futures = buildFutures(state.data);
   state.recs = recommend(state.bets);
-  state.parlay = state.parlay.filter(id => slipCandidates().some(b => b.id === id));
+  // A game's pick no longer on the board leaves the slip. Live picks are the
+  // live list's to judge (it may not be read yet), and championships stay
+  // (the slip skips one it can't find): a slip kept on the device comes back whole.
+  const onBoard = new Set(state.bets.map(b => b.id));
+  state.parlay = state.parlay.filter(id => id.startsWith('live|') || id.startsWith('fut|') || onBoard.has(id));
   renderStatus('ok');
   renderTabs();
   renderSportFilter();
@@ -3255,6 +3263,7 @@ function homeCtx() {
     state.parlay = [...ids];
     state.slipMode = 'parlay';
     state.modeChosen = false;
+    saveSlip();
     renderGames();
     renderParlay();
     openSlip();
@@ -3295,9 +3304,39 @@ function drawSnapshot() {
     state.fromSnapshot = false;
   }
 }
+// The slip being made (picks not bought yet) stays on this device, under
+// the pass: closed and opened again, it's as it was. Saved only when the
+// person changes it (a board still loading never saves a pick away); a pick
+// whose game is no longer offered just isn't shown. Buying the slip or
+// clearing it empties it. Signing out wipes it with the rest.
+const slipKey = () => (q.pass ? `play.slip:${q.pass}` : '');
+let slipRestored = false;
+function restoreSlip() {
+  slipRestored = true;
+  try {
+    const saved = JSON.parse(localStorage.getItem(slipKey()) || 'null');
+    if (!saved || !Array.isArray(saved.parlay)) return;
+    state.parlay = saved.parlay.filter(id => typeof id === 'string').slice(0, SLIP_RULES.maxLegs);
+    state.pickedOdds = saved.pickedOdds && typeof saved.pickedOdds === 'object' ? saved.pickedOdds : {};
+    if (['single', 'parlay', 'system'].includes(saved.mode)) state.slipMode = saved.mode;
+    state.modeChosen = saved.modeChosen === true;
+    if (Array.isArray(saved.sizes) && saved.sizes.length) state.slipSizes = new Set(saved.sizes.filter(k => k === 'all' || Number.isInteger(k)));
+  } catch {}
+}
+function saveSlip() {
+  const key = slipKey();
+  if (!slipRestored || !key) return;
+  try {
+    if (!state.parlay.length) return void localStorage.removeItem(key);
+    const pickedOdds = Object.fromEntries(state.parlay.filter(id => id in state.pickedOdds).map(id => [id, state.pickedOdds[id]]));
+    localStorage.setItem(key, JSON.stringify({ parlay: state.parlay, pickedOdds, mode: state.slipMode, modeChosen: Boolean(state.modeChosen), sizes: [...state.slipSizes] }));
+  } catch {}
+}
+
 async function boot() {
   let accountDone;
   state.accountIn = new Promise(resolve => (accountDone = resolve));
+  restoreSlip();
   drawSnapshot();
   const first = await q.start();
   state.wallet = first.wallet || q.wallet;
@@ -3311,6 +3350,8 @@ async function boot() {
   }
   applyGrant();
   renderAccount();
+  // The slip bar waits for the account (a slip kept on the device shows now).
+  renderSlipBar();
   renderSaved();
   lotteryUi.render();
   if (state.tab === 'home' && state.data) renderHome(homeCtx());
