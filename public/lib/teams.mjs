@@ -1,6 +1,6 @@
 // Logos, flags and the F1 grid: the shared kit's (lib/logos.mjs).
 import { CATALOG, familyOfSport } from './catalog.mjs';
-import { normalizeTeamName, MLB_ABBR, NBA_ABBR, EPL_ESPN_ID, TEAM_BADGES, rememberLogo, teamLogo } from './logos.mjs';
+import { normalizeTeamName, MLB_ABBR, NBA_ID, EPL_ESPN_ID, TEAM_BADGES, rememberLogo, teamLogo } from './logos.mjs';
 export { normalizeTeamName, rememberLogo, teamLogo, leagueLogo, teamBadge, f1Driver, f1Constructor, countryFlag, countryCode, flagUrl } from './logos.mjs';
 
 // Teams in Chinese: the shared kit's (lib/names.mjs), the lottery's names
@@ -56,7 +56,7 @@ export function leagueTeams(sport) {
   let names = [];
   if (fetchedTeams.get(sport)?.length) names = fetchedTeams.get(sport);
   else if (sport === 'mlb') names = Object.keys(MLB_ABBR);
-  else if (sport === 'nba') names = Object.keys(NBA_ABBR);
+  else if (sport === 'nba') names = Object.keys(NBA_ID);
   else if (sport === 'epl') names = Object.keys(EPL_ESPN_ID).map(titleCase);
   else if (TEAM_BADGES[sport]) names = Object.keys(TEAM_BADGES[sport]);
   const seen = new Set();
