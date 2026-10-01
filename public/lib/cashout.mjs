@@ -43,7 +43,7 @@ export function cashOutValue(slip, chances, { keep = CASHOUT_KEEP } = {}) {
       chance *= hit ? p[k] : 1 - p[k];
       legs[i].result = hit ? 'won' : 'lost';
     });
-    if (chance > 0) worth += chance * settleSlip({ legs, sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0, lift: slip.lift ?? 0 }).net;
+    if (chance > 0) worth += chance * settleSlip({ legs, sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0 }).net;
   }
   const value = Math.floor(worth * (1 - keep) + 1e-6);
   return value >= 1 ? value : null;

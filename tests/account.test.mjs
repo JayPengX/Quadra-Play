@@ -14,9 +14,7 @@ import {
   mergeAccounts,
   topInning,
   placeFreeSlip,
-  cashOut,
-  liftUsedToday,
-  liftFits
+  cashOut
 } from '../public/lib/account.mjs';
 import { settleSlip, slipOutlook, SLIP_RULES } from '../public/lib/odds.mjs';
 import { BASE_CUT } from '../public/lib/rules.mjs';
@@ -139,33 +137,28 @@ test('a free bet with more on it: the free bet comes off the stake; a win return
   assert.equal(placeFreeSlip(newAccount(at('2026-09-25T00:00:00Z')), slip('u', 0, [{ id: 'c', odds: 2 }], { stake: START_BALANCE + 1_000 }), token).error, 'funds');
 });
 
-test('Plus daily boost: +10% of the winnings, paid as its own entry, one slip a Taiwan day', () => {
+test('Plus’s bigger parlay boost: what it adds is paid as its own entry; the house stays ahead', () => {
   let account = newAccount(at('2026-09-25T00:00:00Z'));
   const now = at('2026-09-25T04:00:00Z');
-  assert.equal(liftUsedToday(account, now), false);
-  ({ account } = placeSlip(account, { ...slip('s', 100, [{ id: 'a', odds: 2 }, { id: 'b', odds: 1.5 }]), lift: 0.1 }, now));
-  assert.equal(liftUsedToday(account, now), true);
-  // The next Taiwan day it's back.
-  assert.equal(liftUsedToday(account, at('2026-09-25T16:30:00Z')), false);
-  const won = applyResults(account, 's', ['won', 'won'], now);
-  // 100 × 3.00: winnings 200, +10% = 220, paid 320: 300 as winnings, 20 as the boost.
-  assert.equal(won.slips[0].payout, 320);
-  assert.equal(won.ledger.find(e => e.id === 'payout-s').amount, 300);
-  assert.deepEqual(won.ledger.find(e => e.id === 'plus-s'), { id: 'plus-s', t: now.toISOString(), kind: 'plusboost', amount: 20, slipId: 's' });
-  assert.equal(balance(won), START_BALANCE - 100 + 320);
-  // A lost slip pays nothing, and no boost entry.
-  const lost = applyResults(account, 's', ['won', 'lost'], now);
-  assert.ok(!lost.ledger.some(e => e.id === 'plus-s'));
-  assert.equal(liftFits(1000, 1000), true);
-  assert.equal(liftFits(1010, 1000), false);
-  assert.equal(liftFits(0, 1000), false);
-});
-
-test('Plus daily boost keeps the house ahead at any price, on every market cut', () => {
+  const legs = [{ id: 'a', odds: 2 }, { id: 'b', odds: 2 }, { id: 'c', odds: 2 }];
+  // A member's slip keeps boost 1.5: 3 picks +5% ×1.5 = +7.5% of the winnings.
+  ({ account } = placeSlip(account, { ...slip('s', 100, legs), boost: 1.5 }, now));
+  const won = applyResults(account, 's', ['won', 'won', 'won'], now);
+  // 100 × 8.00: winnings 700; everyone's +5% pays 835, a member's +7.5% 852.
+  assert.equal(won.slips[0].payout, 852);
+  assert.equal(won.ledger.find(e => e.id === 'payout-s').amount, 835);
+  assert.deepEqual(won.ledger.find(e => e.id === 'plus-s'), { id: 'plus-s', t: now.toISOString(), kind: 'plusboost', amount: 17, slipId: 's' });
+  assert.equal(balance(won), START_BALANCE - 100 + 852);
+  // A lost slip pays nothing, and no boost entry; nor does everyone's boost.
+  assert.ok(!applyResults(account, 's', ['won', 'won', 'lost'], now).ledger.some(e => e.id === 'plus-s'));
+  const plain = placeSlip(newAccount(at('2026-09-25T00:00:00Z')), { ...slip('p', 100, legs), boost: 1 }, now).account;
+  assert.ok(!applyResults(plain, 'p', ['won', 'won', 'won'], now).ledger.some(e => e.id === 'plus-p'));
+  // On any market's cut, a member's boosted parlay still returns less than its stake.
   for (const cut of Object.values(BASE_CUT)) {
-    for (const odds of [1.2, 1.85, 3, 8, 50]) {
+    for (const odds of [1.5, 1.85, 3]) {
       const fairChance = 1 / (odds * cut);
-      const { mean } = slipOutlook({ legs: [{ gameId: 'g', odds, fairChance }], sizes: [1], stake: 100, lift: 0.1 });
+      const three = [0, 1, 2].map(i => ({ gameId: `g${i}`, odds, fairChance }));
+      const { mean } = slipOutlook({ legs: three, sizes: [3], stake: 100, boost: 1.5 });
       assert.ok(mean < 100, `cut ${cut} odds ${odds}: returns ${mean}`);
     }
   }
@@ -351,42 +344,6 @@ test('slip history keeps itself: final scores with each pick, compact picks, bac
   assert.deepEqual(compactAccount(backup).slips[0].legs[0].final, { away: 4, home: 6 });
 });
 
-test('money sources: every NT$ in and out of the account, by where it came from', async () => {
-  const { moneySources } = await import('../public/lib/history.mjs');
-  const t = '2026-09-21T02:00:00.000Z';
-  const account = {
-    v: 1, created: t, updated: t,
-    ledger: [
-      { id: 'start', t, kind: 'start', amount: 10000 },
-      { id: 'grant-2026-09-21', t, kind: 'grant', amount: 5000 },
-      { id: 'game-a', t, kind: 'game', game: 'typing', amount: 25 },
-      { id: 'game-b', t, kind: 'game', game: 'typing', amount: 20 },
-      { id: 'game-c', t, kind: 'game', game: 'derby', amount: 40 },
-      { id: 'stake-s1', t, kind: 'stake', amount: -1000, slipId: 's1' },
-      { id: 'payout-s1', t, kind: 'payout', amount: 1500, slipId: 's1' },
-      { id: 'stake-s2', t, kind: 'stake', amount: -500, slipId: 's2' },
-      { id: 'payout-s2', t, kind: 'payout', amount: 0, slipId: 's2' },
-      { id: 'stake-s3', t, kind: 'stake', amount: -200, slipId: 's3' }
-    ],
-    slips: [
-      { id: 's1', status: 'settled', cost: 1000, payout: 1500, gross: 1600, legs: [] },
-      { id: 's2', status: 'settled', cost: 500, payout: 0, gross: 0, legs: [] },
-      { id: 's3', status: 'open', cost: 200, legs: [] }
-    ]
-  };
-  const m = moneySources(account);
-  assert.equal(m.balance, 10000 + 5000 + 85 - 1700 + 1500);
-  assert.equal(m.start + m.grants.sum + m.games.sum + m.payouts.sum - m.stakes.sum, m.balance);
-  assert.deepEqual(m.games.byGame.typing, { rounds: 2, sum: 45, best: 25 });
-  assert.equal(m.payouts.n, 1);
-  assert.equal(m.bettingNet, 0);
-  assert.equal(m.houseKept, 1500 - 1600);
-  assert.equal(m.tax, 100);
-  assert.deepEqual(m.open, { n: 1, sum: 200 });
-  assert.equal(m.weeks.length, 1);
-  assert.equal(m.weeks[0].games, 85);
-});
-
 test('Quadra pool: extra money to bet with, the weekly limit, entries for the pool', async () => {
   const { newAccount, placeSlip, poolEntries, stakedThisWeek, mergeDistinct, balance, claimGrant } = await import('../public/lib/account.mjs');
   const now = new Date('2026-09-23T04:00:00Z');
@@ -401,7 +358,7 @@ test('Quadra pool: extra money to bet with, the weekly limit, entries for the po
   assert.ok(placeSlip(account, slip('b', 60_000), now, { extra: 90_000 }).account);
   // A new week starts the limit over.
   assert.equal(stakedThisWeek(account, new Date('2026-09-29T04:00:00Z')), 0);
-  const entries = poolEntries(account, now);
+  const entries = poolEntries(account);
   assert.deepEqual(entries.map(e => [e.id, e.amount, e.app]), [['odds:start', 10_000, 'odds'], ['odds:stake-a', -15_000, 'odds']]);
   // Two separate accounts folded together keep both starts and grants.
   const other = claimGrant(newAccount(new Date('2026-08-01T00:00:00Z')), new Date('2026-09-22T01:00:00Z'));

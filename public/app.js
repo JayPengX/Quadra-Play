@@ -9,14 +9,14 @@ import { useSourcesSession, loadOdds, loadExtraLeagues, loadExtraFutures, taipei
 import { inningsLeft, liveBaseball, liveSoccer, liveGoals, livePoints, fitGoals, liveMarkets, liveOdds, pregameRuns, nextRunChances, nextRunOdds, LIVE_MIN_LIQUIDITY, LIVE_THREE_WAY, PERIODS } from './lib/live.mjs';
 import { fitHockey } from './lib/markets.mjs';
 import {
-  WEEKLY_GRANT, newAccount, balance, canClaim, claimGrant, newSlipId, placeSlip, placeFreeSlip, FREE_MIN_ODDS, freeOddsOk, legResult, applyResults, mergeAccounts, recoverFromWallet, refundLost, mergeDistinct, poolEntries, compactAccount, cashOut, isAccount, liftUsedToday, liftFits
+  WEEKLY_GRANT, newAccount, balance, canClaim, claimGrant, newSlipId, placeSlip, placeFreeSlip, FREE_MIN_ODDS, freeOddsOk, legResult, applyResults, mergeAccounts, recoverFromWallet, refundLost, mergeDistinct, poolEntries, compactAccount, cashOut, isAccount
 } from './lib/account.mjs';
 import { cashOutValue, CASHOUT_KEEP } from './lib/cashout.mjs';
 import { renderHome } from './home.js';
 import { mountLottery } from './lottery-ui.js';
 import { mountStats } from './stats-ui.js';
 import {
-  othersBalance, installGate, watchUpdates, quadraSession, tabBar, topActions, recordAffinity, affinityPatch, activityPatch, notify, schedulePush, storedAccount, PLUS, plusMember, openPlus, ask, tell, freeBets
+  othersBalance, installGate, watchUpdates, quadraSession, tabBar, topActions, recordAffinity, affinityPatch, notify, schedulePush, storedAccount, PLUS, plusMember, openPlus, ask, tell, freeBets
 } from './lib/quadra.mjs';
 import { pack, unpack } from './lib/codec.mjs';
 import { historyStats, funFacts, crowdPercentile } from './lib/history.mjs';
@@ -1275,8 +1275,8 @@ function renderParlay() {
   const mode = state.slipMode;
   const chosen = [...state.slipSizes].map(k => (k === 'all' ? n : k));
   const sizes = slipSizes(mode, n, chosen);
-  // A free bet (Plus's weekly one, the welcome offer; Rewards' missions gave
-  // them before v7): one slip, the free bet part of its stake; the person can
+  // A free bet (Plus's weekly one, the welcome offer): one slip, the free
+  // bet part of its stake; the person can
   // put more on it with their own money (state.freeTopUp), so it works as a
   // cut off a bigger bet.
   const tokens = freeBetList();
@@ -1415,15 +1415,7 @@ function renderParlay() {
   }
   // What comes off the balance: a free bet's top-up only.
   const cost = freeOn ? stake - free.value : comboCount(slip, sizes) * stake;
-  // Quadra Plus's daily boost: on this slip (or the first of several singles).
-  const multi = mode === 'single' && n > 1;
-  const each = multi ? stake : cost;
-  const lift = freeOn ? 0 : liftFor(each);
-  if (!freeOn && cost > 0 && sizes.length && !errors.length) {
-    const row = liftRow(slip, sizes, stake, mode, each, lift, multi);
-    if (row) ticket.push(row);
-  }
-  if (sizes.length && !errors.includes('stakeUnit') && (cost > 0 || freeOn)) ticket.push(payoutBox(slip, sizes, stake, mode, multi ? 0 : lift, freeOn ? free.value : 0));
+  if (sizes.length && !errors.includes('stakeUnit') && (cost > 0 || freeOn)) ticket.push(payoutBox(slip, sizes, stake, mode, freeOn ? free.value : 0));
   if (mode !== 'single' && n >= 2 && !errors.includes('stakeUnit')) ticket.push(boostLadder(mode === 'parlay' ? n : Math.max(...sizes, 0)));
   ticket.push(placeButton(legs, sizes, cost, errors, freeOn ? free : null));
   ticket.push(el('details', { class: 'info' }, [el('summary', { text: t('slipRulesTitle') }), el('p', { text: t('slipRulesNote') })]));
@@ -1496,13 +1488,13 @@ function legMain(leg) {
 // pick's return, for a system each size; then cost, what all correct pays
 // (after tax) and the least a winning ticket pays.
 // `free`: the free bet part of the stake (its stake isn't paid back).
-function payoutBox(legs, sizes, stake, mode, plusLift = 0, free = 0) {
+function payoutBox(legs, sizes, stake, mode, free = 0) {
   const t = state.t;
   const n = legs.length;
   const combos = comboCount(legs, sizes);
   const bySize = combosBySize(legs);
   const cost = combos * stake - free;
-  const table = slipPayoutTable({ legs, sizes, stake, boost: mode === 'single' ? 0 : boostX(), lift: plusLift });
+  const table = slipPayoutTable({ legs, sizes, stake, boost: mode === 'single' ? 0 : boostX() });
   const gross = table.gross;
   const net = free ? table.net.map(v => Math.max(0, v - free)) : table.net;
   const all = (1 << n) - 1;
@@ -1517,13 +1509,12 @@ function payoutBox(legs, sizes, stake, mode, plusLift = 0, free = 0) {
     ]));
     rows.push(payLine(t('payStake'), fmtMoney(stake, { sign: false })));
   } else if (mode === 'single') {
-    legs.forEach((l, i) => rows.push(payLine(`${t('payEach', { i: i + 1 })} ${fmtMoney(stake, { sign: false })} × ${fmtOdds(l.odds)}`, fmtMoney(afterTax(stake * (1 + (l.odds - 1) * (1 + plusLift))), { sign: false }))));
+    legs.forEach((l, i) => rows.push(payLine(`${t('payEach', { i: i + 1 })} ${fmtMoney(stake, { sign: false })} × ${fmtOdds(l.odds)}`, fmtMoney(afterTax(stake * l.odds), { sign: false }))));
   } else {
     for (const k of sizes) rows.push(payLine(t('paySize', { size: sizeName(k, n), c: fmtInt(bySize[k] ?? 0) }), fmtMoney((bySize[k] ?? 0) * stake, { sign: false })));
   }
-  const lift = mode === 'single' ? 0 : boostRate(Math.max(...sizes, 0), boostX());
-  if (lift > 0) rows.push(payLine(t('payBoost'), `+${Math.round(lift * 100)}%`, 'pay-boost'));
-  if (plusLift > 0) rows.push(payLine(t('payLift'), `+${Math.round(plusLift * 100)}%`, 'pay-boost'));
+  const boost = mode === 'single' ? 0 : boostRate(Math.max(...sizes, 0), boostX());
+  if (boost > 0) rows.push(payLine(t('payBoost'), `+${Math.round(boost * 100)}%`, 'pay-boost'));
   if (free) rows.push(payLine(t('payFree'), `−${fmtMoney(free, { sign: false })}`, 'pay-boost'));
   rows.push(payLine(t('payCost', { c: fmtInt(combos) }), fmtMoney(cost, { sign: false }), 'pay-cost'));
   // Tax is the payout table's own (the free part taken off isn't tax).
@@ -1542,37 +1533,9 @@ function payoutBox(legs, sizes, stake, mode, plusLift = 0, free = 0) {
 }
 
 // The parlay boost's multiplier for a slip bought now: PLUS.odds.boost for
-// a Quadra Plus member (1 since v7: the same as everyone's).
+// a Quadra Plus member, 1 for everyone else.
 function boostX() {
   return plusMember(q.wallet) ? PLUS.odds.boost : 1;
-}
-// Quadra Plus's daily boost for a paid slip costing `each` bought now: its
-// share of the winnings, or 0 (not a member, today's used, or too big).
-function liftFor(each) {
-  if (!state.accountReady || !plusMember(q.wallet) || liftUsedToday(state.account)) return 0;
-  return liftFits(each, PLUS.odds.liftMax) ? PLUS.odds.lift : 0;
-}
-// Above the payout: the boost on this slip for a member, why not, or (for
-// anyone else) what Plus would add to it if every pick wins.
-function liftRow(legs, sizes, stake, mode, each, lift, multi) {
-  const t = state.t;
-  // No daily lift in Plus since v8 (PLUS.odds.lift 0): nothing to show.
-  if (!(PLUS.odds.lift > 0)) return null;
-  const pct = `${Math.round(PLUS.odds.lift * 100)}%`;
-  if (lift > 0) return el('p', { class: 'boost-plus lift-on', text: t(multi ? 'liftOnFirst' : 'liftOn', { v: pct }) });
-  if (plusMember(q.wallet)) {
-    if (liftUsedToday(state.account)) return el('p', { class: 'note muted', text: t('liftUsed') });
-    return el('p', { class: 'note muted', text: t('liftTooBig', { max: fmtMoney(PLUS.odds.liftMax, { sign: false }) }) });
-  }
-  if (!liftFits(each, PLUS.odds.liftMax)) return null;
-  // Not a member: what this slip (the first single) would win more with it.
-  const one = multi ? [legs[0]] : legs;
-  const oneSizes = multi ? [1] : sizes;
-  const all = (1 << one.length) - 1;
-  const boost = mode === 'single' ? 0 : boostX();
-  const more = slipPayoutTable({ legs: one, sizes: oneSizes, stake, boost, lift: PLUS.odds.lift }).net[all] - slipPayoutTable({ legs: one, sizes: oneSizes, stake, boost }).net[all];
-  if (!(more >= 1)) return null;
-  return el('button', { class: 'q-plus-hint', type: 'button', onclick: () => openPlus(q), text: t('liftPlusOff', { v: fmtMoney(Math.floor(more), { sign: false }) }) });
 }
 // The parlay boost as a ladder: 3 picks and up, the share the winnings grow
 // by at each size, where this slip stands, and what Plus makes of it (when
@@ -1592,8 +1555,8 @@ function boostLadder(size) {
     PLUS.odds.boost <= 1
       ? null
       : x > 1
-        ? el('p', { class: 'boost-plus', text: t('boostPlusOn') })
-        : el('button', { class: 'q-plus-hint', type: 'button', onclick: () => openPlus(q), text: t('boostPlusOff', { v: pct(boostRate(Math.max(size, 3), PLUS.odds.boost)) }) })
+        ? el('p', { class: 'boost-plus', text: t('boostPlusOn', { x: PLUS.odds.boost }) })
+        : el('button', { class: 'q-plus-hint', type: 'button', onclick: () => openPlus(q), text: t('boostPlusOff', { x: PLUS.odds.boost, v: pct(boostRate(Math.max(size, 3), PLUS.odds.boost)) }) })
   ]);
 }
 
@@ -1610,8 +1573,8 @@ function payLine(label, value, cls = '') {
 // Signing in is required (quadra.mjs's sign-in screen). The account is this
 // app's data on the pass (a copy on the device under the pass, so it opens
 // at once); its ledger's entries go to the pass's wallet, the one Quadra
-// money pool, and the rest of the pool (Securities' cash, Rewards' shop,
-// Quadra's pay) is money to bet with here too.
+// money pool, and the rest of the pool (Securities' cash, Quadra's pay) is
+// money to bet with here too.
 
 const q = quadraSession('odds', { lang: state.locale });
 let lotteryUi = null;
@@ -1813,10 +1776,9 @@ async function mergeRemote(remote) {
 }
 
 // What the person bets on and opens, for recommendations here and in every
-// Quadra app, and Rewards' missions.
-function track(action, keys = [], weight = 1) {
+// Quadra app.
+function track(keys = [], weight = 1) {
   if (keys.length) recordAffinity('odds', keys, weight);
-  if (action && q.active) q.write({ wallet: activityPatch(q.wallet, 'odds', action) }).catch(() => {});
 }
 // The keys a pick is about: its league, sport, teams (or driver) and market.
 function betKeys(bet) {
@@ -1898,7 +1860,7 @@ function freeBetRow(tokens, free, freeOn, rerender, freeShape = true) {
     el('div', { class: 'free-bets-row', role: 'group' }, tokens.map(x =>
       el('button', { type: 'button', class: 'free-bet', 'aria-pressed': String(free?.id === x.id), onclick: () => ((state.useFree = free?.id === x.id ? null : x.id), (state.freeTopUp = 0), rerender()) }, [
         el('strong', { class: 'num', text: `🎁 ${fmtMoney(x.value, { sign: false })}` }),
-        el('small', { text: x.id === 'eco:fb:welcome' ? `${t('freeBetWelcome')} · ${t('freeBetDays', { n: days(x) })}` : x.id.startsWith('eco:fb:') ? `✦ ${t('freeBetPlus')} · ${t('freeBetDays', { n: days(x) })}` : x.id.startsWith('vocab:xs:') ? `⭐ ${t('freeBetPoints')} · ${t('freeBetDays', { n: days(x) })}` : t('freeBetDays', { n: days(x) }) })
+        el('small', { text: x.id === 'eco:fb:welcome' ? `${t('freeBetWelcome')} · ${t('freeBetDays', { n: days(x) })}` : x.id.startsWith('eco:fb:') ? `✦ ${t('freeBetPlus')} · ${t('freeBetDays', { n: days(x) })}` : t('freeBetDays', { n: days(x) }) })
       ])
     )),
     free && !freeOn ? el('p', { class: 'note back-low', text: freeShape ? t('freeBetMinOdds', { v: FREE_MIN_ODDS.toFixed(2) }) : t('freeBetOneSlip') }) : free ? el('p', { class: 'note', text: t('freeBetNote') }) : null
@@ -1939,11 +1901,6 @@ function placeButton(legs, sizes, cost, errors, free = null) {
             : state.slipMode === 'single' && records.length > 1
               ? records.map(leg => ({ id: newSlipId(), mode: 'single', sizes: [1], stake: state.slipStake, cost: cost / records.length, legs: [leg] }))
               : [{ id: newSlipId(), mode: state.slipMode, sizes, stake: state.slipStake, cost, legs: records, ...(state.slipMode !== 'single' ? { boost } : {}) }];
-          // Quadra Plus's daily boost goes with the first paid slip it fits.
-          if (!free) {
-            const lift = liftFor(slips[0].cost);
-            if (lift > 0) slips[0] = { ...slips[0], lift };
-          }
           return { records, slips };
         };
         const stop = () => (renderParlay(), tell({ lang: state.locale, icon: '⏳', title: t('pickGone'), body: t('pickGoneBody') }));
@@ -1988,9 +1945,7 @@ function placeButton(legs, sizes, cost, errors, free = null) {
         // Synced at once, not in a moment: the balance in the other apps.
         clearTimeout(pushTimer);
         syncNow();
-        track('bet', [...new Set(slip.legs.flatMap(leg => betKeys(leg)))], 3);
-        // Rewards' mission: a parlay of three picks or more.
-        if (state.slipMode !== 'single' && records.length >= 3) track('parlay');
+        track([...new Set(slip.legs.flatMap(leg => betKeys(leg)))], 3);
         slipChanged();
         showTab('history');
       }
@@ -2093,8 +2048,8 @@ function slipRange(slip) {
   // A free bet pays its winnings only, not the stake.
   const less = x => (slip.free ? Math.max(0, x - (slip.freeValue ?? slip.stake)) : x);
   return {
-    locked: less(settleSlip({ legs: as('lost'), sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0, lift: slip.lift ?? 0 }).net),
-    most: less(settleSlip({ legs: as('won'), sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0, lift: slip.lift ?? 0 }).net)
+    locked: less(settleSlip({ legs: as('lost'), sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0 }).net),
+    most: less(settleSlip({ legs: as('won'), sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0 }).net)
   };
 }
 
@@ -2146,7 +2101,7 @@ async function doCashOut(slip, value) {
   commitAccount(account);
   clearTimeout(pushTimer);
   syncNow();
-  track('cashout', [...new Set(slip.legs.flatMap(leg => betKeys(leg)))], 1);
+  track([...new Set(slip.legs.flatMap(leg => betKeys(leg)))], 1);
   renderSaved();
   if (state.tab === 'home') renderHome(homeCtx());
 }
@@ -2200,7 +2155,7 @@ function slipNowLine(slip, states) {
   const count = x => slip.legs.filter((leg, k) => states[k] === 'live' && now[k] === x).length;
   const parts = [t('slipNowCount', { win: count('won'), lose: count('lost') })];
   if (now.every(Boolean)) {
-    const pay = settleSlip({ legs: slip.legs.map((leg, k) => ({ gameId: leg.gameId, odds: leg.odds, result: now[k] })), sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0, lift: slip.lift ?? 0 }).net;
+    const pay = settleSlip({ legs: slip.legs.map((leg, k) => ({ gameId: leg.gameId, odds: leg.odds, result: now[k] })), sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0 }).net;
     parts.push(pay > 0 ? t('slipNowPays', { v: fmtMoney(pay, { sign: false }) }) : t('slipNowNothing'));
   }
   return el('p', { class: 'slip-now' }, [el('span', { class: 'live-dot', text: t('tagLive') }), document.createTextNode(` ${parts.join(' · ')}`)]);
@@ -2320,7 +2275,6 @@ function savedSlipCard(slip) {
           payCell(decided ? t('slipMost') : t('payAll'), fmtMoney(range.most, { sign: false }), dead ? 'back-low' : '')
         ]),
     slip.boost && boostRate(Math.max(...slip.sizes), slip.boost) > 0 ? el('p', { class: 'saved-boost', text: t('slipBoosted', { v: `+${Math.round(boostRate(Math.max(...slip.sizes), slip.boost) * 100)}%` }) }) : null,
-    slip.lift > 0 ? el('p', { class: 'saved-boost', text: t('slipLifted', { v: `+${Math.round(slip.lift * 100)}%` }) }) : null,
     settled || dead || slip.free ? null : cashOutRow(slip),
   ]);
 }
@@ -2377,8 +2331,7 @@ function groupSummary(key, slips) {
   return el('span', { class: 'group-sum' }, [document.createTextNode(t('groupCountCost', { n: slips.length, cost: fmtMoney(cost, { sign: false }) })), el('strong', { text: t('groupMost', { v: fmtMoney(most, { sign: false }) }) })]);
 }
 
-// The 紀錄 tab shows the slips, the stats or the mini games, one at a time
-// (the games on their own, so a running one takes no room from the rest).
+// The 紀錄 tab shows the slips, the tickets or the stats, one at a time.
 function applyHistoryView() {
   const t = state.t;
   if (!state.accountReady) return;
@@ -2864,7 +2817,7 @@ function renderF1() {
 // Empty, passive, page-wide touch/pointer listeners. They do nothing; their
 // existence is the fix. iOS WebKit handles a tap differently depending on
 // whether the spot touched has touch/pointer listeners; with listeners only
-// on some elements (the mini games' canvases and pads) a
+// on some elements a
 // gesture there can leave its tap handling stuck, and the next tap
 // elsewhere is used up clearing it. With listeners on the whole document
 // every tap goes down the same path. Passive, so they never block

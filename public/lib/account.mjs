@@ -87,7 +87,7 @@ export function stakedThisWeek(account, now = new Date()) {
 }
 
 // `extra`: money in the shared Quadra pool beyond this account's own ledger
-// (Securities' cash, rewards), spendable here too.
+// (Securities' cash, the pay), spendable here too.
 // Returns { account } or { error: 'funds' }.
 export function placeSlip(account, slip, now = new Date(), { extra = 0 } = {}) {
   if (!(slip.cost > 0) || slip.cost > balance(account) + extra) return { error: 'funds' };
@@ -97,12 +97,7 @@ export function placeSlip(account, slip, now = new Date(), { extra = 0 } = {}) {
   return { account: touched({ ...account, ledger: [...account.ledger, entry], slips: [saved, ...account.slips] }, now) };
 }
 
-// Quadra Plus's daily boost: one paid slip a Taiwan day, costing at most
-// `max`, wins `lift` more (kept with the slip). Whether today's is used.
-export const liftUsedToday = (account, now = new Date()) => account.slips.some(s => s.lift > 0 && s.t && taipeiDayKey(new Date(s.t)) === taipeiDayKey(now));
-export const liftFits = (cost, max) => cost > 0 && cost <= max;
-
-// Buys a slip with a free bet (a Rewards token or Plus's weekly bonus bet, kit freeBets): the token's
+// Buys a slip with a free bet (Plus's weekly bonus bet or the welcome offer, kit freeBets): the token's
 // value is (part of) the stake; only a top-up beyond it comes off the
 // balance, and the token is marked spent ('fb-<token id>', so the same token
 // is never staked twice). Winning pays all but the free part's stake
@@ -285,14 +280,17 @@ export function applyResults(account, slipId, results, now = new Date(), finals 
   let updated = { ...slip, legs };
   let ledger = account.ledger;
   if (legs.every(leg => leg.result)) {
-    const { gross, net } = settleSlip({ legs, sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0, lift: slip.lift ?? 0 });
-    // A free bet pays what it won, less the stake it never cost.
-    const payout = slip.free ? Math.max(0, Math.round(net) - (slip.freeValue ?? slip.stake)) : Math.round(net);
-    // Quadra Plus's daily boost is paid as its own entry ('plus-<slip>', kind
+    const settle = boost => {
+      const { gross, net } = settleSlip({ legs, sizes: slip.sizes, stake: slip.stake, boost });
+      // A free bet pays what it won, less the stake it never cost.
+      return { gross, payout: slip.free ? Math.max(0, Math.round(net) - (slip.freeValue ?? slip.stake)) : Math.round(net) };
+    };
+    const { gross, payout } = settle(slip.boost ?? 0);
+    // What Quadra Plus's bigger parlay boost added (a member's slip keeps
+    // boost PLUS.odds.boost) is paid as its own entry ('plus-<slip>', kind
     // 'plusboost'), so the statement and the Plus sheet show what it gave.
-    const plain = slip.lift ? Math.round(settleSlip({ legs, sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0 }).net) : payout;
-    const extra = Math.max(0, payout - plain);
-    updated = { ...updated, status: 'settled', settledAt: now.toISOString(), gross: Math.round(gross), payout, ...(extra ? { lifted: extra } : {}) };
+    const extra = slip.boost > 1 ? Math.max(0, payout - settle(1).payout) : 0;
+    updated = { ...updated, status: 'settled', settledAt: now.toISOString(), gross: Math.round(gross), payout };
     // (A slip refunded while it was lost, then found on another device, has
     // had its cost back already.)
     const refunded = ledger.some(e => e.id === `refund-${slip.id}`) ? slip.cost : 0;
@@ -357,17 +355,13 @@ export function mergeDistinct(a, b) {
   if (!b) return a;
   const tag = `m${Date.parse(b.created).toString(36)}`;
   const have = new Set(a.ledger.map(e => e.id));
-  const ledger = b.ledger.map(e => (have.has(e.id) && !/^(stake|payout|refund|game|plus)-/.test(e.id) ? { ...e, id: `${e.id}-${tag}` } : e));
+  const ledger = b.ledger.map(e => (have.has(e.id) && !/^(stake|payout|refund|plus)-/.test(e.id) ? { ...e, id: `${e.id}-${tag}` } : e));
   return mergeAccounts(a, { ...b, created: a.created, ledger });
 }
 
-// The ledger as the shared pool's entries. A mini-game round's entry keeps
-// changing while it's played, so it's shared once the round is well over.
-export function poolEntries(account, now = new Date()) {
-  const settled = now.getTime() - 10 * 60_000;
-  return account.ledger
-    .filter(e => e.kind !== 'game' || Date.parse(e.t) < settled)
-    .map(e => ({ id: `odds:${e.id}`, t: Date.parse(e.t), app: 'odds', kind: e.kind, amount: e.amount }));
+// The ledger as the shared pool's entries.
+export function poolEntries(account) {
+  return account.ledger.map(e => ({ id: `odds:${e.id}`, t: Date.parse(e.t), app: 'odds', kind: e.kind, amount: e.amount }));
 }
 
 // What the pass's wallet still records of this account that the account

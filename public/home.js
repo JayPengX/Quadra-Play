@@ -75,7 +75,7 @@ export function renderHome(ctx) {
 
   // ---- 焦點賽事: upcoming games with a win price on sale
   // Quadra's own apps (Fixtures, an add-on, isn't one of them).
-  const aff = affinity(state.wallet, now, ['odds', 'stock', 'vocab']);
+  const aff = affinity(state.wallet, now, ['odds', 'stock']);
   const teamKey = (g, side) => `team:${g.sport}:${norm(g[side]?.en ?? g[side])}`;
   const betsOf = new Map();
   for (const b of state.bets || []) {
@@ -175,7 +175,7 @@ export function renderHome(ctx) {
       })),
       el('div', { class: 'combo-foot' }, [
         el('span', { class: 'combo-pay' }, [el('small', { text: f('comboStake', { v: money(PARLAY_STAKE), x: ctx.fmtOdds(odds) }) }), el('strong', { class: 'num', text: money(ctx.parlayPays(legs, PARLAY_STAKE)) })]),
-        el('button', { class: 'combo-go', type: 'button', text: T.comboGo, onclick: () => (ctx.track(null, [...new Set(legs.flatMap(b => ctx.betKeys(b)))], 1), ctx.takeParlay(legs.map(b => b.id))) })
+        el('button', { class: 'combo-go', type: 'button', text: T.comboGo, onclick: () => (ctx.track([...new Set(legs.flatMap(b => ctx.betKeys(b)))], 1), ctx.takeParlay(legs.map(b => b.id))) })
       ])
     ]);
   };

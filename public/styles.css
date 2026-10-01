@@ -984,7 +984,6 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .boost-steps li.hit { background: var(--good-wash); color: var(--good); }
 .boost-steps li.hit b { color: var(--good); }
 .boost-plus { margin: 0; font-size: 0.78rem; font-weight: 600; color: color-mix(in srgb, var(--q-plus-gold, #d9b877) 70%, var(--text-primary)); }
-.boost-plus.lift-on { margin: 12px 0 2px; font-size: 0.84rem; }
 
 /* ---- Saved slips: cash out ---- */
 .cashout { display: grid; gap: 6px; margin: 12px 0 0; }
