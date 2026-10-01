@@ -272,7 +272,7 @@ async function fetchLeague(key, now) {
 
 // Leagues fetched from ESPN alone (DraftKings); MLB and the Premier League
 // also have Polymarket.
-export const EXTRA_LEAGUES = Object.keys(LEAGUES).filter(key => LEAGUES[key].path && !['mlb', 'epl'].includes(key));
+export const EXTRA_LEAGUES = Object.keys(LEAGUES).filter(key => LEAGUES[key].path && !LEAGUES[key].off && !['mlb', 'epl'].includes(key));
 
 // ---- Polymarket ---------------------------------------------------------------
 

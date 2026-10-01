@@ -419,10 +419,10 @@ function dayKey(iso) {
 const shownTier = sport => (LEAGUES[sport]?.top ? 'major' : leagueTier(sport));
 
 // The sport filter: everything, a kind of sport (g:<group>), or one league.
-const SPORT_GROUPS = {
+const SPORT_GROUPS_ALL = {
   baseball: { icon: '⚾', leagues: ['mlb', 'npb', 'kbo', 'cpbl'] },
-  basketball: { icon: '🏀', leagues: Object.keys(LEAGUES).filter(key => LEAGUES[key].family === 'basketball') },
-  soccer: { icon: '⚽', leagues: Object.keys(LEAGUES).filter(key => LEAGUES[key].family === 'soccer') },
+  basketball: { icon: '🏀', leagues: Object.keys(LEAGUES).filter(key => LEAGUES[key].family === 'basketball' && !LEAGUES[key].off) },
+  soccer: { icon: '⚽', leagues: Object.keys(LEAGUES).filter(key => LEAGUES[key].family === 'soccer' && !LEAGUES[key].off) },
   football: { icon: '🏈', leagues: ['nfl', 'ncaaf'] },
   hockey: { icon: '🏒', leagues: ['nhl'] },
   mma: { icon: '🥊', leagues: ['ufc'] },
@@ -436,6 +436,12 @@ const SPORT_GROUPS = {
   snooker: { icon: '🎱', leagues: ['snooker'] },
   f1: { icon: '🏎️', leagues: ['f1'] }
 };
+// Only leagues on sale (Taiwan can watch them); a kind with none left goes.
+const SPORT_GROUPS = Object.fromEntries(
+  Object.entries(SPORT_GROUPS_ALL)
+    .map(([g, x]) => [g, { ...x, leagues: x.leagues.filter(k => k === 'f1' || (LEAGUES[k] && !LEAGUES[k].off)) }])
+    .filter(([, x]) => x.leagues.length)
+);
 const groupOfSport = sport => Object.keys(SPORT_GROUPS).find(g => SPORT_GROUPS[g].leagues.includes(sport));
 
 function inSport(sport) {
