@@ -11,7 +11,7 @@ cards, all with the one Quadra balance.
 | **Quadra Securities** | Where money lives and grows |
 | **Quadra Play** | A place to play: sports bets and the lottery |
 | **Quadra Fixtures** | The sports data centre, and the way into Play |
-| **Quadra Rewards** | The centre of Quadra: points, goals and every app's guide |
+| **Quadra Hub** | Related add-on: words practice, the Quadra Pass and Plus, the truth about the money, every app's guide |
 | Orbit Class | A related add-on: the class schedule |
 
 - **Quadra Pass required**, one app at a time, one money pool: see the
@@ -20,9 +20,7 @@ cards, all with the one Quadra balance.
   Syncs of the account run one after another, so a slower save never lands
   after a newer one.
 - **Tabs:** 首頁 Home, 賽事 Games, 彩券 Lottery, 投注單 Slip, 紀錄 History.
-  The simulator tab, the guide tab and the mini games are gone: the guide
-  is in Quadra Rewards' help centre, the mini games moved to Rewards, and
-  the simulator's crowd now only serves analysis (紀錄's "you against the
+  The guide is in Quadra Hub's help centre; the simulator's crowd now only serves analysis (紀錄's "you against the
   crowd").
 
 ### 首頁 Home
@@ -85,23 +83,15 @@ Calm on purpose: no banners, no one-tap "hot" parlays, no nags.
   ("其他 N 場").
 - **Parlay boost** (`PARLAY_BOOST` in `odds.mjs`): the winnings of any
   winning combination of 3+ picks grow by 5% (3), 8%, 12%, 15%, up to 20%
-  (7+), the same for everyone (Quadra Plus doubled it until v7). The slip
-  shows the ladder and where the ticket stands. A slip keeps its `boost`
-  (1, or 2 for a member's slip before v7) from when it was bought; older
-  slips have none. Even doubled, a parlay keeps most of the house's cut,
-  since every pick carries its own and they multiply.
-- **Plus daily boost** (kit `PLUS.odds.lift`, the slip's `lift`; 0 since v8,
-  so the slip shows nothing): one paid slip a Taiwan day costing up to
-  NT$500 (v7; was 1,000) won 10% more of its winnings
-  (`liftUsedToday`, `liftFits` in `account.mjs`; on the first of several
-  singles). 10% is under every market's cut (1.158 and up), so a boosted
-  slip still keeps the house ahead at any price (tested). The extra is paid
-  as its own entry, `plus-<slip>` (kind `plusboost`), so the statement and
-  the Plus sheet show it. Non-members see what the slip would win more.
+  (7+). Quadra Plus multiplies the boost by `PLUS.odds.boost` (1.5) on a
+  member's slip; the slip keeps its `boost` from when it was bought, and
+  what Plus adds is paid as its own entry, `plus-<slip>` (kind
+  `plusboost`), so the statement and the Plus sheet show it. Even boosted,
+  a parlay keeps most of the house's cut, since every pick carries its own
+  and they multiply.
 - **Free bets** come from Plus's weekly NT$200 (`eco:fb:<Monday>`) and the
   welcome NT$200 after a first paid bet (`eco:fb:welcome`), both written by
-  the Worker. Rewards' missions gave them before v7 (`vocab:fb:…`; the
-  Worker takes no new ones).
+  the Worker.
 - **VIP** (kit `VIP`, `vipStatus`): the balance card on home shows this
   month's tier from its gaming stakes, the cashback so far and the next
   tier; the Worker pays it after the month (`eco:vip:<month>`).
@@ -248,7 +238,6 @@ The page stays simple: odds, colours and the amounts that matter. What the numbe
 
 ### 紀錄 History: practice account, saved slips and stats
 
-- **錢從哪裡來、到哪裡去 (where the money came from and went)** at the top of 統計分析 (`moneySources` in `history.mjs`): a bar of all money in (the start, weekly grants, mini games, payouts) and one of all stakes, each with amounts and shares; then betting's net result on settled slips, what the lottery kept (stakes minus payouts before tax) and the tax withheld, what work earned and how many minutes of a minimum-wage job it equals, how many mini-game rounds betting's losses would take to earn back, and money still out on open slips. Below it, mini games by game (rounds, total, average and best round, about how long played and the hourly rate), and each week's grants, mini games, betting and change. Shown as soon as there's a grant or a round, before any slip; the balance chart marks mini-game money too.
 
 - **Play money only:** the money is the Quadra Pass's one pool (Quadra pays the month and the week); there's no betting limit and no sending money to another pass.
 - **Kept on the pass:** the account is Play's data on the Quadra Pass, merged with this device's copy (never saved over when the pass's copy can't be read). A bet the account lost but the pass's money records still hold comes back as a recovered slip (cost, time and payout; picks lost), listed on its own and left out of the per-play tables.
