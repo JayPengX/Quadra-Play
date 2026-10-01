@@ -1582,22 +1582,13 @@ let statsUi = null;
 useSourcesSession(q);
 const accountKey = () => `${ACCOUNT_KEY}:${q.pass}`;
 
+// This pass's copy on the device.
 async function loadAccount() {
-  let account = null;
-  // This pass's copy on the device, and the one Quadra Sportsbook kept
-  // before accounts moved onto the pass (left in place as a backup).
-  // The old copy only when it is this pass's: its bets are in the pass's wallet.
-  const onPass = new Set((state.wallet?.entries || []).map(e => e.id));
-  // (Also the copy older versions kept under the pass itself.)
-  for (const key of [accountKey(), q.oldPass ? `${ACCOUNT_KEY}:${q.oldPass}` : '', ACCOUNT_KEY].filter(Boolean)) {
-    try {
-      const stored = await unpack(localStorage.getItem(key));
-      if (!isAccount(stored)) continue;
-      if (key === ACCOUNT_KEY && !stored.ledger.some(e => e.kind === 'stake' && onPass.has(`odds:${e.id}`))) continue;
-      account = splitOnce(mergeAccounts(account, compactAccount(stored)));
-    } catch {}
-  }
-  return account;
+  try {
+    const stored = await unpack(localStorage.getItem(accountKey()));
+    if (isAccount(stored)) return compactAccount(stored);
+  } catch {}
+  return null;
 }
 // A pass that got its opening money from Quadra itself opens an empty ledger.
 const freshAccount = () => newAccount(new Date(), { start: !(state.wallet?.entries || []).some(e => e.id === 'eco:start') });
@@ -1722,23 +1713,6 @@ function syncNow() {
 }
 const mergeFirst = remote => (syncChain = syncChain.then(() => mergeRemote(remote)).catch(console.error));
 
-// A one-time repair (2026-09-29): one pass's 單場 purchase of two picks from
-// the same game, saved as one slip before 單場 made a slip per pick, split
-// into two slips of NT$1,000 each. The money's stake entry stays as it was
-// (NT$2,000, under the first slip); only the slips change. Runs on every
-// load and merge, so any copy that still has the old slip is fixed too.
-const SPLIT_ONCE = 'mumi7p13fbc6ea9f';
-function splitOnce(account) {
-  const slip = account?.slips.find(x => x.id === SPLIT_ONCE);
-  if (!slip || slip.legs.length !== 2 || slip.mode !== 'single') return account;
-  const [first, second] = slip.legs;
-  const half = slip.cost / 2;
-  const slips = account.slips.flatMap(x =>
-    x.id !== SPLIT_ONCE ? [x] : [{ ...x, cost: half, legs: [first] }, ...(account.slips.some(y => y.id === `${SPLIT_ONCE}b`) ? [] : [{ ...x, id: `${SPLIT_ONCE}b`, cost: half, legs: [second] }])]
-  );
-  return { ...account, slips };
-}
-
 async function mergeRemote(remote) {
   if (!remote) return;
   const theirs = remote.payload ? await unpack(remote.payload).catch(() => null) : null;
@@ -1751,7 +1725,7 @@ async function mergeRemote(remote) {
     if (isAccount(other)) merged = mergeDistinct(merged, compactAccount(other));
   }
   const wallet = remote.wallet || state.wallet;
-  merged = splitOnce(refundLost(recoverFromWallet(merged, wallet)));
+  merged = refundLost(recoverFromWallet(merged, wallet));
   const have = new Set((wallet?.entries || []).map(e => e.id));
   const entries = poolEntries(merged).filter(e => !have.has(e.id));
   const open = merged.slips.filter(x => x.status === 'open').reduce((sum, x) => sum + x.cost, 0);
@@ -3251,7 +3225,7 @@ if ('ResizeObserver' in window) {
 }
 
 // Tells the page's failsafe (in index.html) that the scripts loaded and started.
-window.__oddsStarted = true;
+window.__fxStarted = true;
 // Phones and tablets: from the home screen only. Always the newest deploy.
 const gated = installGate('odds', state.locale);
 watchUpdates({ current: document.querySelector('meta[name="build-version"]')?.content, key: 'oddsStudy', cachePrefix: 'quadra-odds-' });
