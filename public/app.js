@@ -2058,6 +2058,8 @@ function currentChance(leg, now = Date.now()) {
 }
 const FALLBACK_MARGIN = 0.1;
 function cashOutPrice(slip, { plus = plusMember(q.wallet) } = {}) {
+  // A free bet's slip is never cashed out.
+  if (slip.free) return null;
   const keep = plus ? PLUS.odds.cashOutKeep : CASHOUT_KEEP;
   return cashOutValue(slip, slip.legs.map(leg => currentChance(leg)), { keep });
 }
