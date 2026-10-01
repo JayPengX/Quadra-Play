@@ -135,12 +135,10 @@
     <div id="lottery-body"></div>
   </div>
 
-  <div id="panel-slip" class="tab-panel" role="tabpanel" aria-labelledby="tab-slip">
-    <section id="parlay" aria-labelledby="parlay-title">
-      <h2 id="parlay-title" class="section-heading"></h2>
-      <div id="parlay-body"></div>
-    </section>
-  </div>
+  <dialog id="slip-sheet" class="q-sheet slip-sheet" aria-labelledby="parlay-title">
+    <div class="q-sheet-head"><h2 id="parlay-title"></h2><button id="slip-close" class="q-close" type="button" aria-label="關閉">×</button></div>
+    <section id="parlay"><div id="parlay-body"></div></section>
+  </dialog>
 
   <div id="panel-history" class="tab-panel" role="tabpanel" aria-labelledby="tab-history">
     <section id="account" aria-labelledby="account-title">

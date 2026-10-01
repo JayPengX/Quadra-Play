@@ -24,6 +24,7 @@ import { detectLocale, makeT } from './lib/i18n.mjs';
 import { f1Driver, f1Constructor, findTeamLogo, countryFlag, countryCode, leagueLogo, teamLogo, teamZh, LEAGUES, familyOf, isSoccer, isNeutral, isPlayers, normalizeTeamName, playerNation, flagEmoji } from './lib/teams.mjs';
 import { flagUrl } from './lib/logos.mjs';
 import { logoPicture, raceName } from './lib/logos.mjs';
+import { wikiPhoto, knownPhoto } from './lib/photos.mjs';
 import { houseRule, houseCut, minLegsProblem, leagueTier } from './lib/rules.mjs';
 import { gameOptions, crowdPool, f1Podium, f1Markets, f1PoleFromWinner } from './lib/board.mjs';
 import { auditPools } from './lib/audit.mjs';
@@ -604,17 +605,31 @@ function whereFor(sport, en) {
   return whereIndex.map.get(`${sport}|${en}`) || [];
 }
 
+// Two initials of a name ("Sarah De Nutte" → SD; a Chinese name's first character).
+const initialsOf = name => {
+  const n = String(name || '?').trim();
+  if (/[\u3400-\u9fff]/.test(n)) return n.slice(0, 1);
+  return n.split(/\s+/).filter(w => w && !/^(jr|sr)\.?$/i.test(w)).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?';
+};
 // A team logo, or its initials in a circle when there's no logo (or it fails).
 // Players (tennis, table tennis, badminton, snooker, fighters): their nation's flag.
 function logoImg(sport, enName, label, size = '') {
   if (isPlayers(sport)) {
-    // A flag ESPN gave for them (fighters' cards), else the kit's table or where the match is filed.
+    // Their photo, as Quadra Fixtures finds it (the kit's photos.mjs: kept on
+    // the device, else Wikipedia's, asked once); their nation's flag only
+    // until one comes, or when there's none.
     const seen = teamLogo(sport, enName);
     const nation = playerNation(enName, whereFor(sport, enName));
-    const initial = () => el('span', { class: `logo logo-fallback ${size}`, 'aria-hidden': 'true', text: (label || '?').trim().slice(0, 1) });
+    const initial = () => el('span', { class: `logo logo-fallback ${size}`, 'aria-hidden': 'true', text: initialsOf(label || enName) });
     const emoji = () => (nation ? el('span', { class: `logo logo-flag ${size}`, 'aria-hidden': 'true', text: flagEmoji(nation) }) : initial());
-    if (seen || nation) return logoPicture(seen || flagUrl(nation), null, `logo player-flag ${size}`, emoji);
-    return initial();
+    const known = knownPhoto(enName, LEAGUES[sport]?.sport || sport);
+    if (known) return logoPicture(known, null, `logo photo ${size}`, emoji);
+    const flagged = seen && !/flag|countries/i.test(seen) ? logoPicture(seen, null, `logo photo ${size}`, emoji) : seen || nation ? logoPicture(seen || flagUrl(nation), null, `logo player-flag ${size}`, emoji) : initial();
+    if (known === undefined && enName && !/\//.test(enName))
+      wikiPhoto(enName, sport).then(url => {
+        if (url && flagged.isConnected) flagged.replaceWith(logoPicture(url, null, `logo photo ${size}`, emoji));
+      });
+    return flagged;
   }
   // A national team's flag; else one character: a Chinese name's first
   // character, or an English initial.
@@ -1208,7 +1223,7 @@ async function refreshLive() {
 }
 
 setInterval(() => {
-  if (document.visibilityState === 'visible' && (state.tab === 'games' || state.tab === 'home' || (state.tab === 'slip' && state.parlay.some(id => id.startsWith('live|'))))) refreshLive();
+  if (document.visibilityState === 'visible' && (state.tab === 'games' || state.tab === 'home' || (slipOpen() && state.parlay.some(id => id.startsWith('live|'))))) refreshLive();
 }, LIVE_REFRESH_MS);
 
 // ---- Championships and F1: one board each -------------------------------------
@@ -1532,12 +1547,12 @@ function setStake(v) {
 function renderSlipBar() {
   let bar = $('slip-bar');
   if (!bar) {
-    bar = el('button', { id: 'slip-bar', class: 'slip-bar', type: 'button', hidden: '', onclick: () => showTab('slip') });
+    bar = el('button', { id: 'slip-bar', class: 'slip-bar', type: 'button', hidden: '', onclick: () => openSlip() });
     document.body.append(bar);
   }
   const { legs } = slipLegs();
   const n = legs.length;
-  if (!n || state.tab === 'slip' || !state.accountReady) return void (bar.hidden = true);
+  if (!n || slipOpen() || !state.accountReady) return void (bar.hidden = true);
   const t = state.t;
   const slip = legs.map(b => ({ gameId: b.gameId, market: b.market ?? b.kind, odds: effectiveOdds(b), fairChance: b.fairChance }));
   const mode = n >= 2 && state.slipMode !== 'single' ? 'parlay' : 'single';
@@ -2150,14 +2165,21 @@ function renderAccount() {
   const atStake = open.reduce((sum, x) => sum + x.cost, 0);
   // Everything won: slips paid (cashed out too) and lottery prizes.
   const won = account.ledger.filter(e => e.kind === 'payout' || e.kind === 'cashout' || e.kind === 'prize').reduce((sum, e) => sum + Math.max(0, e.amount), 0);
+  // The whole record at a glance: what's riding now, won so far, the net
+  // result of everything settled and how much of the stakes came back.
+  const total = historyStats(account).total || {};
+  const net = Number(total.net) || 0;
+  const cell = (label, value, cls = '', sub = '') => el('div', { class: 'acct-cell' }, [el('span', { text: label }), el('strong', { class: `num ${cls}`, text: value }), sub ? el('small', { text: sub }) : null]);
   $('account-body').replaceChildren(
     el('div', { class: 'card account-card' }, [
       el('div', { class: 'account-top' }, [
-        el('div', {}, [el('p', { class: 'muted', text: t('poolTotal') }), el('p', { class: `account-balance stat-value${money < 0 ? ' back-low' : ''}`, text: fmtMoney(money, { sign: money < 0 }) })]),
-        el('div', { class: 'account-side' }, [
-          el('p', {}, [el('span', { class: 'muted', text: `${t('accountAtStake')} ` }), el('strong', { text: fmtMoney(atStake, { sign: false }) })]),
-          el('p', {}, [el('span', { class: 'muted', text: `${t('accountWon')} ` }), el('strong', { class: won > 0 ? 'back-high' : '', text: fmtMoney(won, { sign: false }) })])
-        ])
+        el('div', {}, [el('p', { class: 'muted', text: t('poolTotal') }), el('p', { class: `account-balance stat-value${money < 0 ? ' back-low' : ''}`, text: fmtMoney(money, { sign: money < 0 }) })])
+      ]),
+      el('div', { class: 'acct-cells' }, [
+        cell(t('accountAtStake'), fmtMoney(atStake, { sign: false }), '', t('sumSlips', { n: open.length })),
+        cell(t('accountWon'), fmtMoney(won, { sign: false }), won > 0 ? 'back-high' : ''),
+        cell(t('accountNet'), fmtMoney(net, { sign: true }), net > 0 ? 'back-high' : net < 0 ? 'back-low' : ''),
+        cell(t('accountBack'), total.back == null ? '—' : `${Math.round(total.back)}%`, '', total.slips ? t('sumSlips', { n: total.slips }) : '')
       ]),
       canClaim(account, now) || state.grantNote ? el('p', { class: 'muted', text: state.grantNote ? t('grantAdded', { v: fmtMoney(WEEKLY_GRANT, { sign: false }) }) : '' }) : null
     ])
@@ -3268,6 +3290,7 @@ async function load() {
     };
     renderAll();
     openWantedGame();
+    if (state.wantSlip) ((state.wantSlip = false), openSlip());
     if (booting) {
       // The loading screen stays until the whole board is in: every league
       // and the games in play (each league drawn as it arrives, behind it),
@@ -3307,18 +3330,36 @@ async function load() {
 
 // ---- Tabs ---------------------------------------------------------------------
 
-const TABS = ['home', 'games', 'lottery', 'slip', 'history'];
+// Four tabs like every Quadra app; the slip (投注單) is a sheet over any of
+// them, opened from the bar above the tab bar (openSlip).
+const TABS = ['home', 'games', 'lottery', 'history'];
 
-function tabAvailable(tab) {
-  if (!state.data) return tab !== 'slip';
+function tabAvailable() {
   return true;
 }
 
-const TAB_ICONS = { home: 'home', games: 'calendar', lottery: 'balls', slip: 'ticket', history: 'history' };
+const TAB_ICONS = { home: 'home', games: 'calendar', lottery: 'balls', history: 'history' };
+
+const slipSheet = $('slip-sheet');
+const slipOpen = () => Boolean(slipSheet?.open);
+function openSlip() {
+  if (!slipSheet) return;
+  renderParlay();
+  if (!slipSheet.open) slipSheet.showModal();
+  slipSheet.scrollTop = 0;
+  renderSlipBar();
+  if (state.parlay.some(id => id.startsWith('live|'))) refreshLive();
+}
+function closeSlip() {
+  if (slipSheet?.open) slipSheet.close();
+}
+slipSheet?.addEventListener('close', () => renderSlipBar());
+// A tap on the dimmed page behind closes it.
+slipSheet?.addEventListener('click', e => e.target === slipSheet && closeSlip());
+$('slip-close')?.addEventListener('click', closeSlip);
 const tabNav = tabBar({ tabs: TABS.map(id => ({ id, label: state.t(`tab_${id}`), icon: TAB_ICONS[id] })), onSelect: (tab, { again }) => !again && showTab(tab) });
 function renderTabs() {
   if (!tabAvailable(state.tab)) state.tab = 'home';
-  tabNav.badge('slip', state.parlay.length, { tone: 'accent' });
   for (const tab of TABS) tabNav.hide(tab, !tabAvailable(tab));
   // Every tab starts at its top: what was opened on it folds when it's left.
   tabNav.select(state.tab, { top: true });
@@ -3351,6 +3392,8 @@ function collapseAll() {
 }
 
 function showTab(tab) {
+  // Going anywhere (a bet placed, a tab tapped) puts the slip away.
+  closeSlip();
   if (tab !== state.tab) collapseAll();
   state.tab = tab;
   renderTabs();
@@ -3370,6 +3413,7 @@ $('game-search').addEventListener('input', event => {
 {
   const fromHash = location.hash.slice(1);
   if (TABS.includes(fromHash)) state.tab = state.wantedTab = fromHash;
+  if (fromHash === 'slip') state.wantSlip = true;
   if (fromHash === 'tickets') ((state.tab = state.wantedTab = 'history'), (state.historyView = 'tickets'));
   // #game=<id>: Quadra Fixtures' "bet on this" opens that game (the address
   // can also carry Fixtures' sign-in, "&qh=…", taken out by the kit).
@@ -3380,6 +3424,7 @@ window.addEventListener('hashchange', () => {
   const hash = location.hash.slice(1);
   // A notice's tap: its tab, or 紀錄's tickets.
   if (hash === 'tickets') return showTickets();
+  if (hash === 'slip') return openSlip();
   if (TABS.includes(hash)) return showTab(hash);
   const wanted = hashGame(hash);
   if (!wanted) return;
@@ -3544,7 +3589,7 @@ if ('ResizeObserver' in window) {
     }
     if (found.size) fitNumbers([...found]);
   });
-  for (const id of ['panel-slip', 'panel-history']) watch.observe($(id), { childList: true, subtree: true, characterData: true });
+  for (const id of ['slip-sheet', 'panel-history']) if ($(id)) watch.observe($(id), { childList: true, subtree: true, characterData: true });
 }
 
 // Tells the page's failsafe (in index.html) that the scripts loaded and started.
@@ -3580,7 +3625,7 @@ function homeCtx() {
     state.modeChosen = false;
     renderGames();
     renderParlay();
-    showTab('slip');
+    openSlip();
   };
   // A live game's card on the games tab, open with its markets (null: the live list's top).
   const openLive = id => {
@@ -3594,7 +3639,9 @@ function homeCtx() {
     showTab('games');
     requestAnimationFrame(() => (id ? document.querySelector(`[data-game="${CSS.escape(id)}"]`) : $('live'))?.scrollIntoView({ block: id ? 'center' : 'start', behavior: 'smooth' }));
   };
-  return { state, q, el, fmtMoney, fmtOdds, fmtTime, pickTitle, pickButton, teamName, gameSeries, matchupText, logoImg, leagueImg, toggleLeg, takeParlay, showTab, openGame: id => ((state.wantedGame = id), openWantedGame()), openLive, liveStateText, betKeys, track, funds, slipRange, cashOutPrice, doCashOut, leagueTier: shownTier, isSoccer, isNeutral, parlayPays, boostPct: n => Math.round(boostRate(n, boostX()) * 100) };
+  return {
+    openSlip: () => openSlip(),
+    slipCount: () => slipLegs().legs.length, state, q, el, fmtMoney, fmtOdds, fmtTime, pickTitle, pickButton, teamName, gameSeries, matchupText, logoImg, leagueImg, toggleLeg, takeParlay, showTab, openGame: id => ((state.wantedGame = id), openWantedGame()), openLive, liveStateText, betKeys, track, funds, slipRange, cashOutPrice, doCashOut, leagueTier: shownTier, isSoccer, isNeutral, parlayPays, boostPct: n => Math.round(boostRate(n, boostX()) * 100) };
 }
 statsUi = mountStats({ state, el, svgEl, fmtMoney, fmtInt, fmtPctShort, fmtOdds, fmtTime, showTab, sportName: key => (key === 'mixed' ? state.t('sportMixed') : state.t(`sport_${key}`) === `sport_${key}` ? String(key).toUpperCase() : state.t(`sport_${key}`)), youCard, crowdCard, funCard, picksCard, breakdownCard });
 lotteryUi = mountLottery({ state, q, el, fmtMoney, funds, commitAccount, track, getAccount: () => state.account, syncNow, showTickets });

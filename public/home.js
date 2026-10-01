@@ -28,6 +28,7 @@ const TXT = {
     vipNone: 'VIP 回饋', vipNoneSub: '本月投注滿 {v} 起，最高回饋 {top}', vipBack: '本月回饋 {p} · 約 {v}', vipNext: '再投注 {v} 升{name}', vipTop: '最高等級', vipPaid: '上月回饋 {v} 已入帳',
     vipTitle: 'VIP 投注回饋', vipBody: '每月投注決定等級，下個月初自動回饋。免費，不用報名。', vipTier: '月投注 {min} 起 · 回饋 {back}',
     welcome: '🎁 第一次下注，就送 {v} 免費投注',
+    goGames: '賽事', goLive: '場中', goSlip: '投注單', goLottery: '彩券',
     combos: '精選串關', comboSafe: '穩膽 3 串', comboBold: '高賠 3 串', comboTag: '{n} 串 1', comboTagBoost: '{n} 串 1 · 加成 +{b}%', comboStake: '投注 {v} · 賠率 ×{x}', comboGo: '加入投注單'
   },
   en: {
@@ -40,6 +41,7 @@ const TXT = {
     vipNone: 'VIP cashback', vipNoneSub: 'From {v} staked this month, up to {top} back', vipBack: '{p} back this month · about {v}', vipNext: '{v} more for {name}', vipTop: 'Top tier', vipPaid: 'Last month’s {v} paid in',
     vipTitle: 'VIP cashback', vipBody: 'A month’s stakes set your tier; the cashback arrives early next month. Free, nothing to sign up for.', vipTier: '{min}+ a month · {back} back',
     welcome: '🎁 Place your first bet and get a {v} free bet',
+    goGames: 'Games', goLive: 'Live', goSlip: 'Bet slip', goLottery: 'Lottery',
     combos: 'Parlays of the day', comboSafe: 'Favourites treble', comboBold: 'Big-price treble', comboTag: '{n}-pick parlay', comboTagBoost: '{n}-pick · +{b}% boost', comboStake: 'Stake {v} · odds ×{x}', comboGo: 'Add to slip'
   }
 };
@@ -271,6 +273,12 @@ export function renderHome(ctx) {
       ? el('button', { class: 'wallet-od', type: 'button', onclick: () => ctx.q.go('stock', 'portfolio') }, [el('span', { text: T.overdrawn }), el('strong', { text: `${T.cover} ›` })])
       : null,
     vipRow(),
+    el('div', { class: 'wallet-actions' }, [
+      el('button', { type: 'button', onclick: () => ctx.showTab('games') }, [el('strong', { text: T.goGames })]),
+      el('button', { type: 'button', onclick: () => ctx.openLive(null), disabled: onNow.length ? null : '' }, [el('strong', { text: T.goLive }), onNow.length ? el('small', { class: 'num', text: String(onNow.length) }) : null]),
+      el('button', { type: 'button', onclick: () => ctx.openSlip() }, [el('strong', { text: T.goSlip }), ctx.slipCount() ? el('small', { class: 'num', text: String(ctx.slipCount()) }) : null]),
+      el('button', { type: 'button', onclick: () => ctx.showTab('lottery') }, [el('strong', { text: T.goLottery })])
+    ]),
     state.wallet && welcomeDue(state.wallet) ? el('p', { class: 'wallet-welcome', text: f('welcome', { v: money(WELCOME.bet) }) }) : null,
     open.length
       ? el('div', { class: 'wallet-stats' }, [
@@ -280,8 +288,8 @@ export function renderHome(ctx) {
       : null
   ]);
 
-  const head = (title, { sub = '', action = null } = {}) =>
-    el('div', { class: 'home-head' }, [el('div', {}, [el('h2', { text: title }), sub ? el('p', { class: 'home-sub', text: sub }) : null]), action]);
+  // A section's title and its way to everything (no line under it: the cards say enough).
+  const head = (title, { action = null } = {}) => el('div', { class: 'home-head' }, [el('div', {}, [el('h2', { text: title })]), action]);
 
   root.replaceChildren(
     ...[

@@ -1189,3 +1189,22 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 .leg-odds .leg-was { font-size: 0.7rem; font-weight: 700; margin-right: 2px; }
 .leg-odds.up .leg-was { color: var(--back-high, #16a34a); }
 .leg-odds.down .leg-was { color: var(--back-low, #dc2626); }
+/* The slip as a sheet over any tab. */
+.slip-sheet #parlay { padding-bottom: env(safe-area-inset-bottom); }
+.slip-sheet .q-sheet-head h2 { margin: 0; }
+/* A player's photo (the kit's photos.mjs): a round crop on the face. */
+.logo.photo { object-fit: cover; object-position: 50% 20%; border-radius: 50%; background: var(--q-surface-2, #eef1f5); }
+/* 紀錄's summary cells. */
+.acct-cells { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding-top: 10px; border-top: 1px solid var(--q-divider, rgba(0, 0, 0, 0.08)); }
+.acct-cell { display: grid; gap: 2px; min-width: 0; }
+.acct-cell span { font-size: 0.72rem; color: var(--q-muted); }
+.acct-cell strong { font-size: 0.98rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct-cell small { font-size: 0.68rem; color: var(--q-muted); }
+@media (max-width: 380px) { .acct-cells { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Home: the balance card's ways in, and calmer live cards. */
+.wallet-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 4px; }
+.wallet-actions button { position: relative; display: grid; place-items: center; min-height: 44px; padding: 8px 4px; border: 1px solid var(--q-border); border-radius: 12px; background: var(--q-surface-2, var(--q-page)); color: var(--q-text); font: inherit; font-size: 0.86rem; cursor: pointer; }
+.wallet-actions button[disabled] { opacity: 0.45; cursor: default; }
+.wallet-actions small { position: absolute; top: -6px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: #fff; font-size: 0.68rem; font-weight: 800; line-height: 18px; }
+.feature.live { border-color: var(--border); }
+.home-live .home-head h2 { color: var(--q-text); }
