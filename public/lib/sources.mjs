@@ -131,9 +131,11 @@ export function useSourcesSession(s) {
 // Kambi's pre-match lists 2 minutes, championship markets 10 minutes, a game's pre-game line an hour.
 function ttlFor(url) {
   if (url.includes('/public-search')) return 10 * 60_000;
-  if (url.includes('/in-play.json')) return 20_000;
+  if (url.includes('/in-play.json')) return LIVE_TTL;
   // A game's own markets (offers.mjs): a live game's at the live pace.
-  if (url.includes('/betoffer/')) return url.includes('live=1') ? 20_000 : 2 * 60_000;
+  if (url.includes('/betoffer/')) return url.includes('live=1') ? LIVE_TTL : 2 * 60_000;
+  // A Kambi match's own score (open bets in play).
+  if (url.includes('/livedata.json')) return LIVE_TTL;
   if (url.includes('/listView/')) return 2 * 60_000;
   if (url.includes('/summary?event=')) return 60 * 60_000;
   if (url.includes('/standings') || url.includes('/rankings')) return 6 * 60 * 60_000;
@@ -141,9 +143,14 @@ function ttlFor(url) {
   if (url.includes('/roster') || url.includes('/statistics/byathlete')) return 3 * 60 * 60_000;
   if (url.startsWith(ASIA_URL)) return 10 * 60_000;
   if (/scoreboard\?dates=\d{6}$/.test(url)) return 10 * 60_000;
+  // A day's scoreboard: live around today (games on now), else a minute.
+  const day = /scoreboard\?dates=(\d{8})$/.exec(url)?.[1];
+  if (day) return Math.abs(Date.parse(`${day.slice(0, 4)}-${day.slice(4, 6)}-${day.slice(6)}T12:00:00Z`) - Date.now()) < 36 * 3_600_000 ? LIVE_TTL : 60_000;
   if (/scoreboard\?dates=/.test(url)) return 60_000;
-  return 20_000;
+  return LIVE_TTL;
 }
+// What's on now is read again after this long (the proxy keeps it 10 s).
+const LIVE_TTL = 10_000;
 export async function getJson(url, trim, retries = 1) {
   const ttl = ttlFor(url);
   try {

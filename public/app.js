@@ -746,7 +746,7 @@ function gameCard(game, bets) {
             logoImg(game.sport, game[side].en, teamName(game[side])),
             el('span', { class: 'team-name' }, [document.createTextNode(teamName(game[side])), duel ? null : el('small', { text: t(side === 'home' ? 'homeTag' : 'awayTag') })])
           ];
-    const score = game.live && side !== 'draw' ? el('span', { class: 'live-score', text: String(game.live[`${side}Score`]) }) : null;
+    const score = game.live && side !== 'draw' ? el('span', { class: `live-score${scoreMoved(`${game.id}|${side}`, game.live[`${side}Score`]) ? ' moved' : ''}`, text: String(game.live[`${side}Score`]) }) : null;
     return el('div', { class: 'team-row' }, [...who, score, bet ? pickButton(bet, '') : null]);
   });
   const others = bets.filter(b => b.kind !== 'ml');
@@ -869,6 +869,21 @@ function propsPanel(game, bets) {
   ]);
 }
 
+// Whether a live score just changed: the score each place last showed, and
+// for a few seconds after it changes the place says so (a brief highlight).
+const shownScores = new Map();
+const SCORE_FLASH_MS = 6_000;
+function scoreMoved(key, value) {
+  const was = shownScores.get(key);
+  const now = Date.now();
+  if (!was) {
+    shownScores.set(key, { value, at: 0 });
+    return false;
+  }
+  if (was.value !== value) shownScores.set(key, { value, at: now });
+  return now - shownScores.get(key).at < SCORE_FLASH_MS;
+}
+
 // A player's headshot (ESPN's), or their initials while it loads or when there's none.
 function playerPhoto(url, name) {
   const fallback = () => el('span', { class: 'prop-avatar', 'aria-hidden': 'true', text: initialsOf(name) });
@@ -886,7 +901,7 @@ function playerPhoto(url, name) {
 const gameOffers = new Map();
 const offersLoading = new Set();
 const OFFERS_FRESH_MS = 2 * 60_000;
-const LIVE_OFFERS_FRESH_MS = 20_000;
+const LIVE_OFFERS_FRESH_MS = 12_000;
 // A game's players (ESPN's rosters and seasons): read once a game is opened,
 // for the model's players' markets and everyone's picture.
 const gamePlayers = new Map();
@@ -1285,7 +1300,10 @@ function renderLive() {
 }
 
 // Live games refresh every 30 seconds while the games tab is on screen.
-const LIVE_REFRESH_MS = 30_000;
+// Live games and open bets on games under way refresh every 15 seconds while
+// on screen (the proxy keeps live answers 10 seconds), at once on coming back
+// to the app or to a tab that shows them.
+const LIVE_REFRESH_MS = 15_000;
 let liveBusy = false;
 let liveAgain = false;
 async function refreshLive() {
@@ -1305,7 +1323,7 @@ async function refreshLive() {
     state.parlay = state.parlay.filter(id => !id.startsWith('live|') || ids.has(id));
     // The day strip (today stays on it while games are on), and 場中 with it.
     if (state.data && !state.query) renderDayFilter();
-    else renderLive();
+    renderLive();
     renderParlay();
     renderTabs();
     if (state.tab === 'home') renderHome(homeCtx());
@@ -1320,9 +1338,15 @@ async function refreshLive() {
   }
 }
 
-setInterval(() => {
-  if (document.visibilityState === 'visible' && (state.tab === 'games' || state.tab === 'home' || (slipOpen() && state.parlay.some(id => id.startsWith('live|'))))) refreshLive();
-}, LIVE_REFRESH_MS);
+// One beat for everything live: the board's games in play (games and home,
+// the slip with a live pick on it) and the open bets' scores and cash-out
+// values (紀錄, home's 你的投注, the slip).
+function livePulse({ force = false } = {}) {
+  if (document.visibilityState !== 'visible') return;
+  if (state.tab === 'games' || state.tab === 'home' || (slipOpen() && state.parlay.some(id => id.startsWith('live|')))) refreshLive();
+  if (state.data && (state.tab === 'history' || state.tab === 'home' || slipOpen())) checkResults(force);
+}
+setInterval(() => livePulse(), LIVE_REFRESH_MS);
 
 // ---- Championships and F1: one board each -------------------------------------
 
@@ -2148,7 +2172,8 @@ async function checkResults(force = false) {
   const now = new Date();
   const pending = open.flatMap(s => s.legs.filter(l => !l.result && (l.kind === 'future' || (l.start && Date.parse(l.start) <= now.getTime()))));
   if (!pending.length || state.checking) return;
-  if (!force && now.getTime() - state.checkedAt < (state.legLive.size ? LIVE_REFRESH_MS : RESULT_CHECK_MS)) return;
+  // (A beat's own timer runs a little early or late: a second's slack.)
+  if (!force && now.getTime() - state.checkedAt < (state.legLive.size ? LIVE_REFRESH_MS - 1000 : RESULT_CHECK_MS)) return;
   state.checking = true;
   state.checkedAt = now.getTime();
   renderSaved();
@@ -2174,6 +2199,8 @@ async function checkResults(force = false) {
   } finally {
     state.checking = false;
     renderSaved();
+    // Home's 你的投注 shows the same scores and cash-out values.
+    if (state.tab === 'home') renderHome(homeCtx());
   }
 }
 
@@ -2368,11 +2395,12 @@ function legLiveLine(leg) {
   const t = state.t;
   const live = state.legLive.get(leg.id);
   if (!live) return null;
-  const score = scoreText(leg, { away: live.awayScore, home: live.homeScore,  });
+  const score = scoreText(leg, { away: live.awayScore, home: live.homeScore });
+  const moved = scoreMoved(`leg|${leg.id}`, score);
   const standing = legStanding(leg);
   const tag = { won: ['winning', 'legNowWinning'], lost: ['losing', 'legNowLosing'], void: ['level', 'legNowLevel'], level: ['level', 'legNowLevel'] }[standing];
   return el('span', { class: 'leg-inplay' }, [
-    el('span', { class: 'leg-live-score', text: score }),
+    el('span', { class: `leg-live-score${moved ? ' moved' : ''}`, text: score }),
     el('span', { class: 'muted', text: ` · ${liveDetail(live, leg.sport)}` }),
     tag ? el('span', { class: `leg-now ${tag[0]}`, text: t(tag[1]) }) : null
   ]);
@@ -3345,10 +3373,9 @@ function showTab(tab) {
   renderSlipBar();
   if (tab === 'home') renderHome(homeCtx());
   if (tab === 'lottery') lotteryUi?.render();
-  if (tab === 'history') {
-    checkResults();
-    renderStats();
-  }
+  if (tab === 'history') renderStats();
+  // The tab's live games and open bets, now rather than at the next beat.
+  livePulse();
 }
 
 $('game-search').addEventListener('input', event => {
@@ -3575,10 +3602,6 @@ async function boot() {
   if (state.tab === 'home') renderHome(homeCtx());
 }
 if (!gated) boot();
-// Open slips with games in play update every 30 seconds while 紀錄 is on screen.
-setInterval(() => {
-  if (document.visibilityState === 'visible' && state.tab === 'history' && state.data) checkResults();
-}, LIVE_REFRESH_MS);
 
 // Back on the tab: pick up what another device did, and any games that ended.
 // After ten minutes or more away, everything opened is folded again.
@@ -3591,7 +3614,8 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   applyGrant();
   syncNow();
-  if (state.tab === 'history') checkResults();
+  // Whatever moved while away, at once.
+  livePulse({ force: true });
 });
 
 // Offline and installable: the page's own files, kept by the service worker.
