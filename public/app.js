@@ -2152,18 +2152,31 @@ const LEG_ICON = { won: '✓', lost: '✗', void: '↺', live: '●', waiting: '
 // A pick's price right now: its own on the board before the game, the same
 // market on the live board once it's under way (win, total, run line, team
 // total), or null (no cash out on it now).
-function currentOdds(leg, now = Date.now()) {
+// The board's bet a pick is on now (before the start, or live).
+function currentBet(leg, now = Date.now()) {
   if (leg.result) return null;
-  const priced = b => (b && !b.lock && b.estOdds > 1 ? effectiveOdds(b) : null);
-  if (!leg.start || Date.parse(leg.start) > now) return priced([...state.bets, ...state.futures].find(b => b.id === leg.id));
+  if (!leg.start || Date.parse(leg.start) > now) return [...state.bets, ...state.futures].find(b => b.id === leg.id) ?? null;
   const game = state.liveGames.find(g => g.sport === leg.sport && g.away.en === leg.away && g.home.en === leg.home);
   if (!game) return null;
   const line = b => b.totalLine ?? b.runLine ?? b.teamLine ?? null;
-  return priced(state.liveBets.find(b => b.gameId === game.id && b.kind === leg.kind && b.side === leg.side && (leg.kind === 'ml' || line(b) === leg.line) && (leg.kind !== 'teamtotal' || b.team === leg.team)));
+  return state.liveBets.find(b => b.gameId === game.id && b.kind === leg.kind && b.side === leg.side && (leg.kind === 'ml' || line(b) === leg.line) && (leg.kind !== 'teamtotal' || b.team === leg.team)) ?? null;
 }
-function cashOutPrice(slip) {
-  const keep = plusMember(q.wallet) ? PLUS.odds.cashOutKeep : CASHOUT_KEEP;
-  return cashOutValue(slip, slip.legs.map(leg => currentOdds(leg)), { keep });
+function currentOdds(leg, now = Date.now()) {
+  const b = currentBet(leg, now);
+  return b && !b.lock && b.estOdds > 1 ? effectiveOdds(b) : null;
+}
+// A pick's fair chance now, for cash out: the board's own (its odds less the
+// margin). Without one (an odd market), its odds' chance less a full margin.
+function currentChance(leg, now = Date.now()) {
+  const odds = currentOdds(leg, now);
+  if (odds == null) return null;
+  const bet = currentBet(leg, now);
+  return bet?.fairChance > 0 && bet.fairChance < 1 ? bet.fairChance : (1 / odds) * (1 - FALLBACK_MARGIN);
+}
+const FALLBACK_MARGIN = 0.1;
+function cashOutPrice(slip, { plus = plusMember(q.wallet) } = {}) {
+  const keep = plus ? PLUS.odds.cashOutKeep : CASHOUT_KEEP;
+  return cashOutValue(slip, slip.legs.map(leg => currentChance(leg)), { keep });
 }
 async function doCashOut(slip, value) {
   const t = state.t;
@@ -2190,7 +2203,7 @@ function cashOutRow(slip) {
       el('span', { text: t('cashOut') }),
       el('strong', { class: 'num', text: value == null ? t('cashOutPaused') : fmtMoney(value, { sign: false }) })
     ]),
-    value != null && !plus ? el('button', { class: 'q-plus-hint', type: 'button', onclick: () => openPlus(q), text: t('cashOutPlus', { v: fmtMoney(cashOutValue(slip, slip.legs.map(leg => currentOdds(leg)), { keep: PLUS.odds.cashOutKeep }) ?? value, { sign: false }) }) }) : null
+    value != null && !plus ? el('button', { class: 'q-plus-hint', type: 'button', onclick: () => openPlus(q), text: t('cashOutPlus', { v: fmtMoney(cashOutPrice(slip, { plus: true }) ?? value, { sign: false }) }) }) : null
   ]);
 }
 

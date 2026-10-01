@@ -6,23 +6,28 @@ import { newAccount, placeSlip, cashOut, applyResults, balance, recoverFromWalle
 
 const leg = (gameId, odds, result = null) => ({ gameId, odds, result, kind: 'ml', side: 'home' });
 
-test('cash out: an untouched single sells back at its price less the keep', () => {
+test('cash out: an untouched single sells back at its fair worth less the keep', () => {
+  // 1.85 on a 51% pick: the board's margin is in the odds (held, it pays 94.35% back on average).
   const slip = { id: 's', status: 'open', mode: 'single', sizes: [1], stake: 1000, cost: 1000, legs: [leg('g1', 1.85)] };
-  assert.equal(cashOutValue(slip, [1.85]), Math.floor(1000 * (1 - CASHOUT_KEEP)));
-  // The price moved its way: worth more.
-  assert.ok(cashOutValue(slip, [1.4]) > 1000);
+  assert.equal(cashOutValue(slip, [0.51]), Math.floor(1000 * 1.85 * 0.51 * (1 - CASHOUT_KEEP)));
+  // Never worth more than holding it, Plus or not, while nothing's changed.
+  for (const keep of [CASHOUT_KEEP, 0.02]) assert.ok(cashOutValue(slip, [0.51], { keep }) < 1000 * 1.85 * 0.51);
+  // Odds that wobble a little don't make a profit; the pick really getting likelier does.
+  assert.ok(cashOutValue(slip, [0.53], { keep: 0.02 }) < 1000);
+  assert.ok(cashOutValue(slip, [0.7]) > 1000);
   // No price now: suspended.
   assert.equal(cashOutValue(slip, [null]), null);
+  assert.equal(cashOutValue(slip, [1]), null);
 });
 
 test('cash out: a parlay with a won leg carries that leg; a lost one leaves nothing', () => {
   const slip = { id: 'p', status: 'open', mode: 'parlay', sizes: [2], stake: 100, cost: 100, legs: [leg('g1', 2, 'won'), leg('g2', 2)] };
-  assert.equal(cashOutValue(slip, [null, 2]), Math.floor(100 * 2 * 2 * 0.5 * (1 - CASHOUT_KEEP)));
-  assert.equal(cashOutValue({ ...slip, legs: [leg('g1', 2, 'lost'), leg('g2', 2)] }, [null, 2]), null);
+  assert.equal(cashOutValue(slip, [null, 0.45]), Math.floor(100 * 2 * 2 * 0.45 * (1 - CASHOUT_KEEP)));
+  assert.equal(cashOutValue({ ...slip, legs: [leg('g1', 2, 'lost'), leg('g2', 2)] }, [null, 0.45]), null);
   // Two undecided picks of one game aren't independent: suspended.
-  assert.equal(cashOutValue({ ...slip, legs: [leg('g1', 2), leg('g1', 2)] }, [2, 2]), null);
+  assert.equal(cashOutValue({ ...slip, legs: [leg('g1', 2), leg('g1', 2)] }, [0.45, 0.45]), null);
   // Plus keeps less.
-  assert.ok(cashOutValue(slip, [null, 2], { keep: 0.02 }) > cashOutValue(slip, [null, 2]));
+  assert.ok(cashOutValue(slip, [null, 0.45], { keep: 0.02 }) > cashOutValue(slip, [null, 0.45]));
 });
 
 test('cash out: paid once, as the payout; a late result changes nothing; recoverable', () => {

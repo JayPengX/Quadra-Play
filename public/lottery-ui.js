@@ -468,8 +468,8 @@ export function mountLottery(ctx) {
     const r = buyScratch(ctx.getAccount(), { id: newSlipId(), card: id }, new Date(), { extra: extra() });
     if (r.error) return void tell({ lang, icon: '💸', title: t('funds'), body: t('fundsBody', { v: money(CARDS[id].price) }) });
     ctx.commitAccount(r.account);
-    ctx.track('lottery', [`scratch:${id}`], 1);
-    // Rewards' mission: a scratch card bought.
+    ctx.track(null, [`scratch:${id}`], 1);
+    // Rewards' bonus mission: a scratch card bought (a draw ticket is 'lottery').
     ctx.track('scratch');
     openScratch(r.ticket.id);
   }
