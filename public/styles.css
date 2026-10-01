@@ -1201,3 +1201,23 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 .home-live .home-head h2 { color: var(--q-text); }
 /* A free bet chosen that the slip can't take: said by the button. */
 .free-off { font-weight: 650; }
+/* In the sheet the slip is the sheet's own content: no card inside it (no
+   second frame, no ticket notches), the full width; the stake on one line. */
+.slip-sheet .ticket { border: 0; border-radius: 0; box-shadow: none; background: none; padding: 0; margin: 0; }
+.slip-sheet .ticket::before, .slip-sheet .ticket::after { display: none; }
+.stake-box strong { white-space: nowrap; }
+.slip-field > span small { font-weight: 500; color: var(--text-muted); }
+/* The place button: one line, and with a free bet a smaller one under it
+   saying how it's paid. */
+.place-button { white-space: nowrap; }
+.place-button.two-line { display: grid; justify-items: center; gap: 1px; padding-top: 9px; padding-bottom: 9px; }
+.place-button.two-line small { font-size: 0.76rem; font-weight: 600; opacity: 0.88; }
+.slip-sheet .stake-quick { margin-bottom: 14px; }
+/* A pick's tags and name: the name goes under the tags when it doesn't fit
+   beside them, broken only between words (an English team name never
+   squeezed into a narrow column, letters apart). */
+.leg-pick { flex-wrap: wrap; row-gap: 2px; }
+.leg-pick .market-tag { flex: none; }
+.leg-pick strong, .leg-main strong { overflow-wrap: break-word; min-width: 0; }
+.slip-leg-game { overflow-wrap: break-word; }
+.slip-sheet .stake-quick { margin-bottom: 14px; }

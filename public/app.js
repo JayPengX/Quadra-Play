@@ -1389,11 +1389,10 @@ function renderParlay() {
   if (tokens.length) ticket.push(freeBetRow(tokens, free, freeOn, rerender, freeShape));
   ticket.push(
     el('label', { class: 'slip-field' }, [
-      el('span', { text: t('slipStake') }),
+      el('span', {}, [document.createTextNode(t('slipStake')), el('small', { text: ` · ${t('slipStakeHint', { unit: SLIP_RULES.unit })}` })]),
       el('span', { class: 'stake-box' }, [
         stakeInput,
-        el('strong', { text: t('slipStakeEquals', { v: fmtMoney(stake, { sign: false }) }) }),
-        el('small', { text: t('slipStakeHint', { unit: SLIP_RULES.unit }) })
+        el('strong', { text: t('slipStakeEquals', { v: fmtMoney(stake, { sign: false }) }) })
       ])
     ])
   );
@@ -1403,8 +1402,6 @@ function renderParlay() {
       el('button', { type: 'button', 'aria-pressed': String(stake === v), text: fmtMoney(v, { sign: false }).replace('NT$', ''), onclick: () => (setStake(v), rerender()) })
     ))
   );
-  // With a free bet: what it takes off, and what's left to pay.
-  if (freeOn) ticket.push(el('p', { class: 'note free-cut', text: t('freeCut', { stake: fmtMoney(stake, { sign: false }), f: fmtMoney(free.value, { sign: false }), v: fmtMoney(stake - free.value, { sign: false }) }) }));
   if (errors.length) {
     ticket.push(el('ul', { class: 'slip-errors' }, errors.map(e => el('li', { text: t(`slipError_${e}`, { max: SLIP_RULES.maxLegs, min: fmtMoney(SLIP_RULES.minTicket, { sign: false }), maxTicket: fmtMoney(SLIP_RULES.maxTicket, { sign: false }), unit: SLIP_RULES.unit, need: minLegsProblem(slip, sizes) }) }))));
   }
@@ -1847,12 +1844,14 @@ function placeButton(legs, sizes, cost, errors, free = null) {
   // Opened on the last board saved: bets wait for today's odds.
   const updating = Boolean(state.fromSnapshot);
   const blocked = errors.length > 0 || sizes.length === 0 || short || !state.accountReady || updating;
-  return el('div', { class: 'place-row' }, [
-    el('button', {
-      class: 'primary-button place-button',
+  const paidBy = free && !short && !updating ? (cost > 0 ? t('placeFreePlus', { f: fmtMoney(free.value, { sign: false }), v: fmtMoney(cost, { sign: false }) }) : t('placeFree', { v: fmtMoney(free.value, { sign: false }) })) : '';
+  const button = el('button', {
+      class: `primary-button place-button${paidBy ? ' two-line' : ''}`,
       type: 'button',
       disabled: blocked ? '' : null,
-      text: updating ? t('placeUpdating') : free && !short ? (cost > 0 ? t('placeFreePlus', { f: fmtMoney(free.value, { sign: false }), v: fmtMoney(cost, { sign: false }) }) : t('placeFree', { v: fmtMoney(free.value, { sign: false }) })) : short ? t('placeShort', { v: fmtMoney(money, { sign: money < 0 }) }) : t('placeSlip', { v: fmtMoney(cost, { sign: false }) }),
+      // One line: what's bought for how much; with a free bet, a smaller
+      // second line says how it's paid (free + yours).
+      text: updating ? t('placeUpdating') : free && !short ? t('placeSlip', { v: fmtMoney(free.value + cost, { sign: false }) }) : short ? t('placeShort', { v: fmtMoney(money, { sign: money < 0 }) }) : t('placeSlip', { v: fmtMoney(cost, { sign: false }) }),
       onclick: async () => {
         // Bought in one tap at the board's odds now: the slip redraws with
         // every refresh (moved odds marked there), so what it shows is what's
@@ -1921,9 +1920,9 @@ function placeButton(legs, sizes, cost, errors, free = null) {
         slipChanged();
         showTab('history');
       }
-    }),
-    el('small', { class: 'muted', text: t('placeNote', { v: fmtMoney(money, { sign: money < 0 }) }) })
-  ]);
+    });
+  if (paidBy) button.append(el('small', { text: paidBy }));
+  return el('div', { class: 'place-row' }, [button, el('small', { class: 'muted', text: t('placeNote', { v: fmtMoney(money, { sign: money < 0 }) }) })]);
 }
 
 // Legs of open slips whose games are over get their results; a slip is paid
