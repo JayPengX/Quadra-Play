@@ -639,7 +639,6 @@ img[src*='thesportsdb'] { object-fit: contain; }
 
 .lotto-seg { display: flex; width: 100%; margin-bottom: 14px; }
 .lotto-seg button { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
-.lotto-count { min-width: 18px; padding: 1px 6px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 0.72rem; }
 .lotto-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 10px; }
 .lotto-card { position: relative; display: grid; align-content: start; gap: 4px; min-height: 124px; padding: 14px; overflow: hidden; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); color: var(--text-primary); text-align: left; font: inherit; cursor: pointer; }
 .lotto-card::before { content: ''; position: absolute; inset: 0 0 auto; height: 4px; background: var(--lotto); }

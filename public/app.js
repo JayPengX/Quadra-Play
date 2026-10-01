@@ -1580,7 +1580,8 @@ function payoutBox(legs, sizes, stake, mode, plusLift = 0, free = 0) {
   if (plusLift > 0) rows.push(payLine(t('payLift'), `+${Math.round(plusLift * 100)}%`, 'pay-boost'));
   if (free) rows.push(payLine(t('payFree'), `−${fmtMoney(free, { sign: false })}`, 'pay-boost'));
   rows.push(payLine(t('payCost', { c: fmtInt(combos) }), fmtMoney(cost, { sign: false }), 'pay-cost'));
-  const taxed = gross[all] - net[all] > 0.5;
+  // Tax is the payout table's own (the free part taken off isn't tax).
+  const taxed = gross[all] - table.net[all] > 0.5;
   return el('div', { class: 'pay-box' }, [
     el('p', { class: 'pay-title', text: t('payTitle') }),
     ...rows,
@@ -1589,7 +1590,7 @@ function payoutBox(legs, sizes, stake, mode, plusLift = 0, free = 0) {
       el('strong', { text: fmtMoney(net[all], { sign: false }) }),
       el('small', { class: net[all] > cost ? 'back-high' : 'back-low', text: t('payProfit', { v: fmtMoney(net[all] - cost) }) })
     ]),
-    taxed ? el('p', { class: 'pay-note', text: t('payTaxed', { gross: fmtMoney(gross[all], { sign: false }), tax: fmtMoney(gross[all] - net[all], { sign: false }) }) }) : null,
+    taxed ? el('p', { class: 'pay-note', text: t('payTaxed', { gross: fmtMoney(gross[all], { sign: false }), tax: fmtMoney(gross[all] - table.net[all], { sign: false }) }) }) : null,
     mode !== 'parlay' && least < net[all] ? el('p', { class: 'pay-note', text: t('payLeast', { v: fmtMoney(least, { sign: false }) }) }) : null
   ]);
 }
@@ -2482,7 +2483,6 @@ function applyHistoryView() {
   const t = state.t;
   if (!state.accountReady) return;
   const view = ['stats', 'tickets'].includes(state.historyView) ? state.historyView : 'slips';
-  const openTickets = (state.account.tickets || []).filter(x => x.status === 'open').length;
   $('history-tabs').hidden = false;
   $('history-tabs').replaceChildren(
     ...['slips', 'tickets', 'stats'].map(key =>
@@ -2497,7 +2497,7 @@ function applyHistoryView() {
             renderStats();
           }
         },
-        [document.createTextNode(t(`historyView_${key}`)), key === 'tickets' && openTickets ? el('span', { class: 'lotto-count', text: String(openTickets) }) : null]
+        [document.createTextNode(t(`historyView_${key}`))]
       )
     )
   );

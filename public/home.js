@@ -26,7 +26,7 @@ const TXT = {
     lottery: '彩券', drawIn: '{when} 開獎', none: '賽事載入中，或目前沒有開賣的比賽。', draw: '和',
     overdrawn: '透支 · 月息 1%', cover: '賣出持股補足',
     vipNone: 'VIP 回饋', vipNoneSub: '本月投注滿 {v} 起，最高回饋 {top}', vipBack: '本月回饋 {p} · 約 {v}', vipNext: '再投注 {v} 升{name}', vipTop: '最高等級', vipPaid: '上月回饋 {v} 已入帳',
-    vipTitle: 'VIP 投注回饋', vipBody: '每個月的投注（運彩、彩券、刮刮樂，退款不算）決定當月等級，下個月 1 日起第一次打開 App 時，依等級回饋當月投注額：{tiers}。免費加入，不用報名。',
+    vipTitle: 'VIP 投注回饋', vipBody: '每月投注決定等級，下個月初自動回饋。免費，不用報名。', vipTier: '月投注 {min} 起 · 回饋 {back}',
     welcome: '🎁 第一次下注，就送 {v} 免費投注',
     combos: '精選串關', comboSafe: '穩膽 3 串', comboBold: '高賠 3 串', comboTag: '{n} 串 1', comboTagBoost: '{n} 串 1 · 加成 +{b}%', comboStake: '投注 {v} · 賠率 ×{x}', comboGo: '加入投注單'
   },
@@ -38,7 +38,7 @@ const TXT = {
     lottery: 'Lottery', drawIn: 'Draw {when}', none: 'Games are loading, or none are on sale right now.', draw: 'Draw',
     overdrawn: 'Overdrawn · 1% a month', cover: 'Sell to cover',
     vipNone: 'VIP cashback', vipNoneSub: 'From {v} staked this month, up to {top} back', vipBack: '{p} back this month · about {v}', vipNext: '{v} more for {name}', vipTop: 'Top tier', vipPaid: 'Last month’s {v} paid in',
-    vipTitle: 'VIP cashback', vipBody: 'What you stake in a month (bets, lottery and scratch cards; refunds don’t count) sets that month’s tier, and a share of it comes back the first time you open an app after the month ends: {tiers}. Nothing to sign up for.',
+    vipTitle: 'VIP cashback', vipBody: 'A month’s stakes set your tier; the cashback arrives early next month. Free, nothing to sign up for.', vipTier: '{min}+ a month · {back} back',
     welcome: '🎁 Place your first bet and get a {v} free bet',
     combos: 'Parlays of the day', comboSafe: 'Favourites treble', comboBold: 'Big-price treble', comboTag: '{n}-pick parlay', comboTagBoost: '{n}-pick · +{b}% boost', comboStake: 'Stake {v} · odds ×{x}', comboGo: 'Add to slip'
   }
@@ -246,7 +246,7 @@ export function renderHome(ctx) {
     if (!state.wallet) return null;
     const v = vipStatus(state.wallet, now);
     const explain = () =>
-      tell({ lang, icon: '◆', title: T.vipTitle, body: f('vipBody', { tiers: VIP.tiers.map(x => `${vipName(x, lang)} ${money(x.min)}+ ${pct(x.back)}`).join('、') }) });
+      tell({ lang, icon: '◆', title: T.vipTitle, body: T.vipBody, points: VIP.tiers.map(x => [x.icon, vipName(x, lang), f('vipTier', { min: money(x.min), back: pct(x.back) })]) });
     const top = VIP.tiers.at(-1);
     const share = v.next ? Math.min(1, v.stakes / v.next.min) : 1;
     const paidNow = v.paid && Date.now() - v.paid.t < 7 * 86_400_000 ? f('vipPaid', { v: money(v.paid.amount) }) : '';

@@ -144,14 +144,15 @@ export function mountLottery(ctx) {
     }
     settleDue();
     if (ui.view === 'mine') ui.view = 'draws';
-    const open = (ctx.getAccount().tickets || []).filter(x => x.status === 'open').length;
     const seg = el(
       'div',
       { class: 'segmented lotto-seg', role: 'group' },
       ['draws', 'scratch'].map(v => el('button', { type: 'button', 'aria-pressed': String(ui.view === v), onclick: () => ((ui.view = v), render()) }, [document.createTextNode(t(v))]))
     );
     // Tickets bought live in 紀錄 (next to the slips); a link to them here.
-    const mine = el('button', { class: 'lotto-mine-link', type: 'button', onclick: () => ctx.showTickets() }, [el('span', { text: `🎟️ ${t('mine')}` }), open ? el('span', { class: 'lotto-count', text: String(open) }) : null, el('span', { class: 'chev', 'aria-hidden': 'true', text: '›' })]);
+    // No count on it: nothing else in Play or Securities counts what's open
+    // (a card still to scratch shows above the shelf).
+    const mine = el('button', { class: 'lotto-mine-link', type: 'button', onclick: () => ctx.showTickets() }, [el('span', { text: `🎟️ ${t('mine')}` }), el('span', { class: 'chev', 'aria-hidden': 'true', text: '›' })]);
     const body = ui.view === 'draws' ? drawGames() : scratchCards();
     root.replaceChildren(seg, body, mine);
   }
