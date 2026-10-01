@@ -26,20 +26,10 @@ export const CUT = {
 // size of results against the closing line.
 export const SCORE_SPREAD = {
   nfl: { margin: 13.5, total: 10.5, bands: [[1, 6], [7, 12], [13, 18], [19, null]], step: 3 },
-  ncaaf: { margin: 16, total: 14, bands: [[1, 7], [8, 14], [15, 21], [22, null]], step: 3.5 },
   nba: { margin: 12.5, total: 18, bands: [[1, 5], [6, 10], [11, 15], [16, 20], [21, null]], step: 4 },
   wnba: { margin: 11, total: 14, bands: [[1, 5], [6, 10], [11, 15], [16, null]], step: 4 },
-  // EuroLeague and B.League: shorter games (40 minutes), lower scoring than the NBA.
-  euroleague: { margin: 11, total: 15, bands: [[1, 5], [6, 10], [11, 15], [16, null]], step: 4 },
-  bleague: { margin: 11.5, total: 16, bands: [[1, 5], [6, 10], [11, 15], [16, null]], step: 4 },
-  // Spain's ACB and Australia's NBL: 40 minutes, like the EuroLeague.
-  acb: { margin: 11, total: 15, bands: [[1, 5], [6, 10], [11, 15], [16, null]], step: 4 },
-  nbl: { margin: 12, total: 16, bands: [[1, 5], [6, 10], [11, 15], [16, null]], step: 4 },
-  // China's CBA and Korea's KBL: 48 and 40 minutes, the CBA scoring more.
-  cba: { margin: 12.5, total: 17, bands: [[1, 5], [6, 10], [11, 15], [16, null]], step: 4 },
-  kbl: { margin: 11, total: 15, bands: [[1, 5], [6, 10], [11, 15], [16, null]], step: 4 },
-  // Rugby union (tests and the Champions Cup): the margin's usual spread against the line.
-  rugbyunion: { margin: 13, total: 12, bands: [[1, 7], [8, 14], [15, 21], [22, null]], step: 3 }
+  // EuroLeague: shorter games (40 minutes), lower scoring than the NBA.
+  euroleague: { margin: 11, total: 15, bands: [[1, 5], [6, 10], [11, 15], [16, null]], step: 4 }
 };
 
 export function normalCdf(z) {
@@ -422,7 +412,7 @@ export function marketOdds(market, fair, k = market.cut) {
   return market.cut >= CUT.bands ? bandOdds(fair, k) : oddsAt(fair, k);
 }
 
-// ---- Played in sets (tennis, badminton, table tennis, volleyball) -----------------
+// ---- Played in sets (badminton) ------------------------------------------------------
 
 const choose = (n, k) => {
   let c = 1;
@@ -488,22 +478,19 @@ export function setsMarkets({ homeWin, bestOf }) {
   return out;
 }
 
-// ---- Games, points and frames across a match ------------------------------------
+// ---- Points across a match ------------------------------------------------------
 //
-// The bookmaker lists one handicap and one total in games (tennis), points
-// (badminton, table tennis, volleyball) or frames (snooker), when it lists
+// The bookmaker lists one handicap and one total in points, when it lists
 // them at all. For more lines, and for matches it lists none on, a small
-// model: every game or point is won by the home side with the same chance r
-// (the one that gives its chance of winning a set), a set goes to `target`
-// won by 2 (tennis: a tiebreak at 6-6; badminton: 30 wins at 29-29), and
-// sets are played until one side has won the match. A frame is a set of one.
+// model: every point is won by the home side with the same chance r (the one
+// that gives its chance of winning a set), a set goes to `target` won by 2
+// (30 wins at 29-29), and sets are played until one side has won the match.
 
 // One set's final scores [{ h, a, p }] for unit chance r.
 function setUnits(r, { unit, target, cap }) {
-  if (unit === 'frames') return [{ h: 1, a: 0, p: r }, { h: 0, a: 1, p: 1 - r }];
   const T = target;
-  // Sudden death: tennis's tiebreak at 6-6 (7-6), badminton's point at 29-29.
-  const sudden = unit === 'games' ? T : cap ? cap - 1 : Infinity;
+  // Sudden death: the point at 29-29.
+  const sudden = cap ? cap - 1 : Infinity;
   const out = [];
   for (let k = 0; k <= T - 2; k++) {
     const c = choose(T - 1 + k, k);
@@ -534,12 +521,12 @@ export function unitModel({ homeWin, bestOf, spec }) {
   // The unit chance that wins a set with chance q.
   let lo = 0.01;
   let hi = 0.99;
-  for (let i = 0; i < 40 && spec.unit !== 'frames'; i++) {
+  for (let i = 0; i < 40; i++) {
     const mid = (lo + hi) / 2;
     if (setWin(setUnits(mid, spec)) < q) lo = mid;
     else hi = mid;
   }
-  const r = spec.unit === 'frames' ? q : (lo + hi) / 2;
+  const r = (lo + hi) / 2;
   const sets = setUnits(r, spec);
   const lastSets = spec.last ? setUnits(r, { ...spec, target: spec.last }) : sets;
   const need = Math.ceil(bestOf / 2);
@@ -580,15 +567,14 @@ export function unitModel({ homeWin, bestOf, spec }) {
 const overAt = (model, line) => model.total.reduce((s, p, u) => (u > line ? s + p : s), 0);
 const marginOver = (model, line) => model.diff.reduce((s, p, i) => (i - model.off > line ? s + p : s), 0);
 
-// Units per line step: games and frames 1, points by the sport's scale.
-const UNIT_STEP = { games: [1, 1], frames: [1, 1], points: [2, 2] };
 
 // Handicap and total lines in units around the bookmaker's own (its line is
 // left to the bookmaker's price; the model's lines are shifted so it agrees
 // with that price), or around the model's middle when it lists none.
 export function unitLineMarkets(model, { spread, total, spec }) {
   if (!model) return [];
-  const [hStep, tStep] = spec.unit === 'points' ? [Math.max(2, Math.round(spec.target / 8)), Math.max(2, Math.round(spec.target / 5))] : UNIT_STEP[spec.unit];
+  // Points per line step, by the sport's scale.
+  const [hStep, tStep] = [Math.max(2, Math.round(spec.target / 8)), Math.max(2, Math.round(spec.target / 5))];
   const out = [];
   // Where the model's own over chance at `line` matches `fair`: the line
   // shift that puts the model on the bookmaker's price.
@@ -635,23 +621,4 @@ export function unitLineMarkets(model, { spread, total, spec }) {
     }
   }
   return out;
-}
-
-// Snooker matches run to different lengths (best of 7 to 35 frames) and the
-// feed doesn't say which: the length whose frame total agrees best with the
-// bookmaker's total line.
-const SNOOKER_LENGTHS = [7, 9, 11, 13, 17, 19, 25, 33, 35];
-export function guessBestOf({ homeWin, total }) {
-  if (!total || !(homeWin > 0 && homeWin < 1)) return null;
-  let best = null;
-  let err = Infinity;
-  for (const bestOf of SNOOKER_LENGTHS) {
-    const need = Math.ceil(bestOf / 2);
-    if (total.line < need || total.line > bestOf) continue;
-    const scores = setScores(setChance(homeWin, bestOf), bestOf);
-    const over = scores.filter(x => x.home + x.away > total.line).reduce((s, x) => s + x.p, 0);
-    const e = Math.abs(over - total.overFair);
-    if (e < err) [best, err] = [bestOf, e];
-  }
-  return best;
 }

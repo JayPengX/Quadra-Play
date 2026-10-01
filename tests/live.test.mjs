@@ -85,14 +85,14 @@ test('every league with a game on is read live, with the pregame line from its s
   const now = new Date('2026-09-29T18:00:00Z');
   const side = (homeAway, name, score = '0') => ({ homeAway, score, team: { displayName: name } });
   // A Championship game kicked off an hour ago; an NBA game tomorrow.
-  parseEspnScoreboard({ events: [{ id: '77', date: '2026-09-29T17:00Z', competitions: [{ status: { type: { state: 'pre' } }, competitors: [side('home', 'Ajax'), side('away', 'PSV Eindhoven')], odds: [{ moneyline: { home: { close: { odds: '-150' } }, draw: { close: { odds: '+280' } }, away: { close: { odds: '+400' } } } }] }] }] }, 'eredivisie');
+  parseEspnScoreboard({ events: [{ id: '77', date: '2026-09-29T17:00Z', competitions: [{ status: { type: { state: 'pre' } }, competitors: [side('home', 'Celtic'), side('away', 'Rangers')], odds: [{ moneyline: { home: { close: { odds: '-150' } }, draw: { close: { odds: '+280' } }, away: { close: { odds: '+400' } } } }] }] }] }, 'scotland');
   parseEspnScoreboard({ events: [{ id: '78', date: '2026-09-30T23:00Z', competitions: [{ status: { type: { state: 'pre' } }, competitors: [side('home', 'Boston Celtics'), side('away', 'New York Knicks')] }] }] }, 'nba');
   const leagues = liveLeagues(now);
-  assert.ok(leagues.includes('eredivisie'));
+  assert.ok(leagues.includes('scotland'));
   assert.ok(leagues.includes('mlb') && leagues.includes('epl'));
   assert.ok(!leagues.includes('nba'));
   // Two hours later the game is over: no longer read.
-  assert.ok(!liveLeagues(new Date('2026-09-29T20:00:00Z')).includes('eredivisie'));
+  assert.ok(!liveLeagues(new Date('2026-09-29T20:00:00Z')).includes('scotland'));
 });
 
 test('hockey, football and basketball in progress', async () => {
@@ -128,7 +128,7 @@ test('hockey, football and basketball in progress', async () => {
   const hockey = liveMarkets(dist, { sport: 'nhl', awayScore: 2, homeScore: 2 });
   assert.deepEqual(hockey.filter(m => m.kind === 'ml').map(m => m.side), ['away', 'home']);
   // Any soccer league gets the three-way winner.
-  const soccer = liveMarkets(liveSoccer({ means: fitGoals(0.45, 0.28), awayScore: 0, homeScore: 0, minutesLeft: 60 }), { sport: 'eredivisie', awayScore: 0, homeScore: 0 });
+  const soccer = liveMarkets(liveSoccer({ means: fitGoals(0.45, 0.28), awayScore: 0, homeScore: 0, minutesLeft: 60 }), { sport: 'scotland', awayScore: 0, homeScore: 0 });
   assert.deepEqual(soccer.filter(m => m.kind === 'ml').map(m => m.side), ['home', 'draw', 'away']);
 });
 
@@ -136,18 +136,15 @@ test('Kambi\'s matches in play: its live prices, open ones only', async () => {
   const { parseKambiInPlay } = await import('../public/lib/kambi.mjs');
   const offer = (type, label, outcomes) => ({ betOfferType: { englishName: type }, criterion: { englishLabel: label }, outcomes });
   const data = { events: [
-    { event: { id: 1, homeName: 'A Player', awayName: 'B Player', start: '2026-09-29T15:00:00Z', state: 'STARTED', group: 'WTT Champions', path: ['table_tennis', 'wtt_champions'] },
+    { event: { id: 1, homeName: 'A Player', awayName: 'B Player', start: '2026-09-29T15:00:00Z', state: 'STARTED', group: 'China Open', path: ['badminton', 'china_open'] },
       betOffers: [offer('Match', 'Match Odds', [{ type: 'OT_ONE', odds: 1400, status: 'OPEN' }, { type: 'OT_TWO', odds: 2900, status: 'OPEN' }])],
-      liveData: { score: { home: '4', away: '2' }, statistics: { sets: { home: [11, 5, -1], away: [8, 11, -1] } } } },
-    { event: { id: 2, homeName: 'C Player', awayName: 'D Player', start: '2026-09-29T15:10:00Z', state: 'STARTED', group: 'WTT Star Contender', path: ['table_tennis', 'wtt_star_contender'] },
+      liveData: { score: { home: '4', away: '2' }, statistics: { sets: { home: [21, 15, -1], away: [18, 21, -1] } } } },
+    { event: { id: 2, homeName: 'C Player', awayName: 'D Player', start: '2026-09-29T15:10:00Z', state: 'STARTED', group: 'China Open', path: ['badminton', 'china_open'] },
       betOffers: [offer('Match', 'Match Odds', [{ type: 'OT_ONE', odds: 16000, status: 'OPEN' }, { type: 'OT_TWO', odds: null, status: 'SUSPENDED' }])],
       liveData: { score: { home: '1', away: '0' } } },
-    { event: { id: 3, homeName: 'E', awayName: 'F', start: '2026-09-29T19:00:00Z', state: 'NOT_STARTED' }, betOffers: [] },
-    // Table tennis's betting leagues aren't the pro tour: left off.
-    { event: { id: 5, homeName: 'G', awayName: 'H', start: '2026-09-29T15:20:00Z', state: 'STARTED', group: 'Czech Liga Pro', path: ['table_tennis', 'czech_republic', 'czech_liga_pro'] },
-      betOffers: [offer('Match', 'Match Odds', [{ type: 'OT_ONE', odds: 1800, status: 'OPEN' }, { type: 'OT_TWO', odds: 2000, status: 'OPEN' }])] }
+    { event: { id: 3, homeName: 'E', awayName: 'F', start: '2026-09-29T19:00:00Z', state: 'NOT_STARTED' }, betOffers: [] }
   ] };
-  const [a, b, ...rest] = parseKambiInPlay(data, 'tabletennis');
+  const [a, b, ...rest] = parseKambiInPlay(data, 'badminton');
   assert.equal(rest.length, 0);
   assert.ok(a.ml.home > 0.6 && Math.abs(a.ml.home + a.ml.away - 1) < 1e-9);
   assert.deepEqual([a.homeScore, a.awayScore, a.setNo], [1, 1, 3]);

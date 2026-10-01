@@ -258,7 +258,7 @@ test('every text the page builds from a key exists in both languages', async () 
     ...['games', 'points', 'frames'].map(u => `unit_${u}`),
     ...['low', 'high'].map(l => `lock_${l}`),
     ...['locked', 'minLegs'].map(e => `slipError_${e}`),
-    ...['baseball', 'basketball', 'soccer', 'football', 'hockey', 'tennis', 'badminton', 'tabletennis', 'volleyball', 'snooker', 'f1'].map(g => `group_${g}`),
+    ...['baseball', 'basketball', 'soccer', 'football', 'hockey', 'badminton', 'f1'].map(g => `group_${g}`),
     ...['secHtft', 'secGoalBands', 'secQ1', 'secFirstSet', 'secSets', 'secTotalSets', 'secSetHcap', 'secGameHcap', 'secGameTotal', 'secHalfTotal', 'secDoubleChance'],
     ...['givePoints', 'f1Podium', 'f1PodiumShort', 'f1PodiumSub', 'f1PodiumNote']
   ];
@@ -269,19 +269,11 @@ test('every text the page builds from a key exists in both languages', async () 
 });
 
 test('fairness audit: no sport or kind of fan does better or worse just from how it is modelled', async () => {
-  const { auditPools, auditCrowd, poolBack } = await import('../public/lib/audit.mjs');
-  const { gameOptions, crowdPool } = await import('../public/lib/board.mjs');
-  const { parseKambiEvents } = await import('../public/lib/kambi.mjs');
-  const { readFileSync } = await import('node:fs');
+  const { auditPools, auditCrowd } = await import('../public/lib/audit.mjs');
   // Every sport's typical week in line with the rest.
   const templates = Object.fromEntries(SPORTS.map(sp => [sp, sportTemplate(sp)]));
   assert.deepEqual(auditPools(templates), []);
   for (const [sport, pool] of Object.entries(templates)) assert.ok(pool.every(b => !b.lock && b.odds > 1), sport);
-  // A real board and the typical week of its sport return the same, within 3.
-  const data = JSON.parse(readFileSync(new URL('./fixtures/kambi-atp-2026-09-26.json', import.meta.url), 'utf8'));
-  const games = parseKambiEvents(data, 'tennis', new Date('2026-09-26T00:00:00Z'));
-  const real = crowdPool(games.flatMap(g => gameOptions(g)));
-  assert.ok(Math.abs(poolBack(real) - poolBack(templates.tennis)) < 3, `${poolBack(real)} vs ${poolBack(templates.tennis)}`);
   // An inflated stand-in (winners only, a lower cut) is caught.
   const cheap = templates.nba.filter(b => b.kind === 'ml').map(b => ({ ...b, odds: b.odds * 1.08 }));
   assert.deepEqual(auditPools({ ...templates, nba: cheap }).map(x => x.sport), ['nba']);

@@ -7,7 +7,7 @@ import { slipErrors, estimateF1LotteryOdds, f1Phase } from '../public/lib/odds.m
 import { parseKambiEvents, parseKambiLive, decidedFromLive, setsWon } from '../public/lib/kambi.mjs';
 import { setsMarkets, matchChance, setChance, goalMarkets } from '../public/lib/markets.mjs';
 import { legResult } from '../public/lib/account.mjs';
-import { parseEspnTennis, parseF1Schedule, parseFutures, EXTRA_FUTURES, futureTeamName } from '../public/lib/sources.mjs';
+import { parseF1Schedule, parseFutures, EXTRA_FUTURES, futureTeamName } from '../public/lib/sources.mjs';
 import { LEAGUES } from '../public/lib/teams.mjs';
 
 const fixture = name => JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
@@ -65,8 +65,19 @@ test('recommendations: tagged on single picks, never on locked or near-certain o
   assert.equal(recommend(bets.slice(0, 5)).size, 0);
 });
 
+// A Kambi badminton list: the winner, a point handicap and a point total.
+const offer = (type, label, outcomes) => ({ betOfferType: { englishName: type }, criterion: { englishLabel: label }, outcomes });
+const badmintonList = { events: [
+  { event: { id: 101, homeName: 'Tai Tzu-Ying', awayName: 'Chen Yufei', start: '2026-09-26T05:00:00Z', state: 'NOT_STARTED', group: 'China Open' },
+    betOffers: [offer('Match', 'Match Odds', [{ type: 'OT_ONE', odds: 2350 }, { type: 'OT_TWO', odds: 1580 }]), offer('Handicap', 'Points Handicap', [{ type: 'OT_ONE', odds: 2080, line: 4500 }, { type: 'OT_TWO', odds: 1700, line: -4500 }]), offer('Over/Under', 'Total Points', [{ type: 'OT_OVER', odds: 1970, line: 80500 }, { type: 'OT_UNDER', odds: 1780, line: 80500 }])] },
+  { event: { id: 102, homeName: 'Viktor Axelsen', awayName: 'Shi Yuqi', start: '2026-09-26T07:00:00Z', state: 'NOT_STARTED', group: 'China Open' },
+    betOffers: [offer('Match', 'Match Odds', [{ type: 'OT_ONE', odds: 1900 }, { type: 'OT_TWO', odds: 1900 }])] },
+  { event: { id: 103, homeName: 'An Se-young', awayName: 'Akane Yamaguchi', start: '2026-09-26T09:00:00Z', state: 'NOT_STARTED', group: 'China Open' },
+    betOffers: [offer('Match', 'Match Odds', [{ type: 'OT_ONE', odds: 1400 }, { type: 'OT_TWO', odds: 2900 }])] }
+] };
+
 test('Kambi odds become games with the margin removed, and live scores settle decided matches', () => {
-  const games = parseKambiEvents(fixture('kambi-atp-2026-09-26.json'), 'tennis', new Date('2026-09-26T00:00:00Z'));
+  const games = parseKambiEvents(badmintonList, 'badminton', new Date('2026-09-26T00:00:00Z'));
   assert.ok(games.length >= 3);
   for (const g of games) {
     close(g.draftKings.home + g.draftKings.away, 1);
@@ -74,11 +85,11 @@ test('Kambi odds become games with the margin removed, and live scores settle de
     assert.ok(g.kambiId > 0);
   }
   const first = games[0];
-  assert.equal(first.home.en, 'Juan Manuel Cerundolo');
-  assert.equal(first.total.line, 22.5);
-  assert.ok(first.spread.awayLine === -1.5 && first.spread.awayFair > 0.5);
-  // Nothing already started; every match listed, none cut off.
-  assert.equal(parseKambiEvents(fixture('kambi-atp-2026-09-26.json'), 'tennis', new Date('2027-01-01T00:00:00Z')).length, 0);
+  assert.equal(first.home.en, 'Tai Tzu-Ying');
+  assert.equal(first.total.line, 80.5);
+  assert.ok(first.spread.awayLine === -4.5 && first.spread.awayFair > 0.5);
+  // Nothing already started.
+  assert.equal(parseKambiEvents(badmintonList, 'badminton', new Date('2027-01-01T00:00:00Z')).length, 0);
   // A match listed without a winner price: sold at the house's price when asked.
   const bare = { events: [{ event: { id: 9, homeName: 'A Player', awayName: 'B Player', start: '2026-09-27T10:00:00Z', state: 'NOT_STARTED' }, betOffers: [] }] };
   assert.equal(parseKambiEvents(bare, 'badminton', new Date('2026-09-26T00:00:00Z')).length, 0);
@@ -88,17 +99,12 @@ test('Kambi odds become games with the margin removed, and live scores settle de
 
   const live = parseKambiLive(fixture('kambi-live-2026-09-26.json'));
   assert.ok(live.size > 0);
-  // Table tennis to 11, best of 5: 3 sets won decides it.
-  const tt = LEAGUES.tabletennis.sets;
-  assert.deepEqual(setsWon({ home: [11, 9, 11, 5], away: [9, 11, 7, 11] }, tt), { home: 2, away: 2 });
-  assert.equal(decidedFromLive({ sets: { home: [11, 9, 11, 5], away: [9, 11, 7, 11] } }, 'tabletennis'), null);
-  assert.deepEqual(decidedFromLive({ sets: { home: [11, 9, 11, 5, 11], away: [9, 11, 7, 11, 8] } }, 'tabletennis'), { status: 'final', homeScore: 3, awayScore: 2, homeSets: [11, 9, 11, 5, 11], awaySets: [9, 11, 7, 11, 8] });
-  // Volleyball to 25, the fifth to 15; an unfinished set doesn't count.
-  const vb = LEAGUES.volleyball.sets;
-  assert.deepEqual(setsWon({ home: [25, 22, 25, 20, 15], away: [20, 25, 23, 25, 13] }, vb), { home: 3, away: 2 });
-  assert.deepEqual(setsWon({ home: [25, 12], away: [20, 10] }, vb), { home: 1, away: 0 });
-  // Tennis: 6 games two clear, or 7 (a tiebreak).
-  assert.deepEqual(setsWon({ home: [6, 6, 7], away: [4, 7, 6] }, LEAGUES.tennis.sets), { home: 2, away: 1 });
+  // Badminton to 21 two clear (30 wins at 29-29), best of 3: 2 sets won decides it.
+  const bd = LEAGUES.badminton.sets;
+  assert.deepEqual(setsWon({ home: [21, 19], away: [18, 21] }, bd), { home: 1, away: 1 });
+  assert.deepEqual(setsWon({ home: [30, 12], away: [29, 10] }, bd), { home: 1, away: 0 });
+  assert.equal(decidedFromLive({ sets: { home: [21, 19], away: [18, 21] } }, 'badminton'), null);
+  assert.deepEqual(decidedFromLive({ sets: { home: [21, 19, 21], away: [18, 21, 15] } }, 'badminton'), { status: 'final', homeScore: 2, awayScore: 1, homeSets: [21, 19, 21], awaySets: [18, 21, 15] });
 });
 
 test('matches in sets: set chances, correct set scores, totals and handicaps', () => {
@@ -112,13 +118,13 @@ test('matches in sets: set chances, correct set scores, totals and handicaps', (
     assert.ok(markets.some(m => m.kind === 'totalsets') && markets.some(m => m.kind === 'firstset'));
   }
   // Settled from the sets won and each set's score.
-  const outcome = { status: 'final', homeScore: 2, awayScore: 1, homeSets: [6, 4, 6], awaySets: [3, 6, 4] };
+  const outcome = { status: 'final', homeScore: 2, awayScore: 1, homeSets: [21, 15, 21], awaySets: [17, 21, 18] };
   assert.equal(legResult({ kind: 'sets', score: '2-1' }, outcome), 'won');
   assert.equal(legResult({ kind: 'sets', score: '2-0' }, outcome), 'lost');
   assert.equal(legResult({ kind: 'totalsets', side: 'over', line: 2.5 }, outcome), 'won');
   assert.equal(legResult({ kind: 'sethcap', side: 'home', line: -1.5 }, outcome), 'lost');
   assert.equal(legResult({ kind: 'firstset', side: 'home' }, outcome), 'won');
-  assert.equal(legResult({ kind: 'gametotal', side: 'over', line: 28.5 }, outcome), 'won');
+  assert.equal(legResult({ kind: 'gametotal', side: 'over', line: 110.5 }, outcome), 'won');
   assert.equal(legResult({ kind: 'gamehcap', side: 'away', line: 3.5 }, outcome), 'won');
   assert.equal(legResult({ kind: 'ml', side: 'home' }, outcome), 'won');
 });
@@ -165,15 +171,6 @@ test('more championships: any Polymarket winner market, named by its short name'
   assert.equal(futureTeamName({ question: 'Will the Dodgers win the 2026 World Series?' }), 'Dodgers');
 });
 
-test('tennis results from ESPN, whichever side each player is on', () => {
-  const data = fixture('espn-tennis-2026-09-25.json');
-  const result = parseEspnTennis(data, 'Alexandre Muller', 'Luka Pavlovic');
-  assert.deepEqual(result, { status: 'final', homeScore: 2, awayScore: 1, homeSets: [6, 6, 6], awaySets: [4, 7, 3] });
-  const flipped = parseEspnTennis(data, 'Luka Pavlovic', 'Alexandre Muller');
-  assert.deepEqual([flipped.homeScore, flipped.awayScore], [1, 2]);
-  assert.equal(parseEspnTennis(data, 'Nobody', 'Someone'), null);
-});
-
 test('every match gets a full set of plays', async () => {
   const { gameOptions } = await import('../public/lib/board.mjs');
   const kinds = game => new Set(gameOptions(game).map(o => o.kind));
@@ -181,10 +178,8 @@ test('every match gets a full set of plays', async () => {
     const got = kinds(game);
     for (const k of list) assert.ok(got.has(k), `${game.sport} missing ${k}`);
   };
-  // A table-tennis match with no bookmaker lines still gets point lines.
-  has({ id: 'tt', sport: 'tabletennis', draftKings: { home: 0.6, away: 0.4 } }, ['ml', 'firstset', 'sets', 'totalsets', 'sethcap', 'gamehcap', 'gametotal']);
-  // Snooker: the match length guessed from the frame total, then frame score and first frame.
-  has({ id: 'sn', sport: 'snooker', draftKings: { home: 0.6, away: 0.4 }, total: { line: 8.5, overFair: 0.5 }, spread: { awayLine: 1.5, awayFair: 0.55 } }, ['sets', 'firstset', 'gamehcap', 'gametotal']);
+  // A badminton match with no bookmaker lines still gets point lines.
+  has({ id: 'bd', sport: 'badminton', draftKings: { home: 0.6, away: 0.4 } }, ['ml', 'firstset', 'sets', 'totalsets', 'sethcap', 'gamehcap', 'gametotal']);
   // Soccer: team totals, first-half total and double chance.
   has({ id: 'so', sport: 'epl', draftKings: { home: 0.45, draw: 0.27, away: 0.28 }, total: { line: 2.5, overFair: 0.5 } }, ['teamtotal', 'htotal', 'dc', 'htft', 'goalbands']);
   // Basketball: team totals and a first-half total.
@@ -192,21 +187,21 @@ test('every match gets a full set of plays', async () => {
   // Every baseball league has the top-scoring inning.
   has({ id: 'np', sport: 'npb', draftKings: { home: 0.55, away: 0.45 }, total: { line: 7.5, overFair: 0.5 } }, ['inning', 'teamtotal', 'f5']);
   // Nothing ever pays back less than the stake.
-  const heavy = gameOptions({ id: 'h', sport: 'ncaaf', draftKings: { home: 0.96, away: 0.04 }, spread: { awayLine: 24.5, awayFair: 0.5 }, total: { line: 52.5, overFair: 0.5 } });
+  const heavy = gameOptions({ id: 'h', sport: 'nfl', draftKings: { home: 0.96, away: 0.04 }, spread: { awayLine: 24.5, awayFair: 0.5 }, total: { line: 52.5, overFair: 0.5 } });
   assert.ok(heavy.every(o => o.estOdds >= 1.01), 'odds under 1.01');
 });
 
 test('model lines agree with the bookmaker\'s own line', async () => {
   const { unitModel, unitLineMarkets } = await import('../public/lib/markets.mjs');
-  const spec = LEAGUES.tennis.sets;
+  const spec = LEAGUES.badminton.sets;
   const model = unitModel({ homeWin: 0.7, bestOf: 3, spec });
   close(model.total.reduce((a, b) => a + b, 0), 1, 1e-6);
   close(model.diff.reduce((a, b) => a + b, 0), 1, 1e-6);
-  const total = { line: 22.5, overFair: 0.5 };
+  const total = { line: 80.5, overFair: 0.5 };
   const lines = unitLineMarkets(model, { total, spec }).filter(m => m.kind === 'gametotal');
   // Lines either side of the bookmaker's, over less likely the higher the line.
   const overs = lines.sort((a, b) => a.line - b.line).map(m => m.picks[0].fair);
-  assert.ok(lines.every(m => m.line !== 22.5));
+  assert.ok(lines.every(m => m.line !== 80.5));
   assert.ok(overs.every((p, i) => i === 0 || p <= overs[i - 1]));
   assert.ok(overs[0] > 0.5 && overs.at(-1) < 0.5);
 });

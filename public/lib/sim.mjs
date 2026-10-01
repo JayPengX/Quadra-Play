@@ -739,9 +739,7 @@ const euroLeague = perWeek => w => (between(w, 33, 21) && !EURO_BREAKS.has(w) ? 
 const F1_RACE_WEEKS = new Set([10, 11, 13, 14, 15, 17, 20, 22, 24, 26, 27, 29, 30, 35, 36, 38, 39, 40, 42, 43, 44, 46, 48, 49]);
 // UEFA club competitions: league-phase matchdays (18 games), then knockouts.
 const UEFA_WEEKS = { 37: 18, 39: 18, 42: 18, 44: 18, 47: 18, 49: 18, 3: 18, 4: 18, 7: 8, 8: 8, 10: 8, 11: 8, 14: 4, 15: 4, 17: 2, 18: 2, 22: 1 };
-// Tennis tours run all year but for the December break; the BWF and WTT
-// tours hold events about three weeks in five.
-const tourWeek = perWeek => w => (between(w, 1, 47) ? perWeek : 0);
+// The BWF tour holds events about three weeks in five.
 const eventWeeks = perWeek => w => (between(w, 1, 49) && w % 5 !== 2 && w % 5 !== 4 ? perWeek : 0);
 
 export const SIM_SPORTS = {
@@ -756,22 +754,13 @@ export const SIM_SPORTS = {
   // NFL: 272 games from 10 September (week 36) to 10 January (week 1), then
   // the playoffs and the Super Bowl (14 February, week 6).
   nfl: { family: 'football', kind: 'football', pop: 2, headline: true, games: w => (between(w, 36, 1) ? 16 : { 2: 6, 3: 4, 4: 2, 6: 1 }[w] ?? 0) },
-  // College football: late August (week 34) to early December, then bowls.
-  ncaaf: { family: 'football', kind: 'football', pop: 0.5, games: w => (between(w, 34, 49) ? 45 : between(w, 50, 1) ? 10 : 0) },
   // NBA: 1,230 games, opening night 20 October (week 41) to 11 April (week
   // 14), then the play-in and playoffs to mid-June (~90 games).
   nba: { family: 'basketball', kind: 'basketball', pop: 10, headline: true, games: w => (w === 41 ? 15 : w === 14 ? 39 : between(w, 42, 13) ? 49 : between(w, 15, 24) ? 9 : 0) },
   // WNBA: mid-May (week 19) to mid-September, then the playoffs.
   wnba: { family: 'basketball', kind: 'basketball', pop: 1, games: w => (between(w, 19, 37) ? 10 : between(w, 38, 41) ? 4 : 0) },
-  // College basketball: November (week 45) to the March tournaments (week 14).
-  // EuroLeague (20 clubs, double rounds some weeks) and Japan's B1 League:
-  // October to May.
+  // EuroLeague (20 clubs, double rounds some weeks): October to May.
   euroleague: { family: 'basketball', kind: 'basketball', pop: 1, games: w => (between(w, 40, 20) ? 14 : 0) },
-  bleague: { family: 'basketball', kind: 'basketball', pop: 1.5, games: w => (between(w, 40, 18) ? 26 : 0) },
-  acb: { family: 'basketball', kind: 'basketball', pop: 0.3, games: w => (between(w, 39, 23) ? 9 : 0) },
-  cba: { family: 'basketball', kind: 'basketball', pop: 0.4, games: w => (between(w, 42, 15) ? 20 : 0) },
-  kbl: { family: 'basketball', kind: 'basketball', pop: 0.2, games: w => (between(w, 41, 14) ? 14 : 0) },
-  nbl: { family: 'basketball', kind: 'basketball', pop: 0.3, games: w => (between(w, 38, 8) ? 5 : 0) },
   // NHL: 1,312 games, 7 October (week 40) to mid-April (week 15), then the playoffs.
   nhl: { family: 'hockey', kind: 'hockey', pop: 1, headline: true, games: w => (between(w, 40, 15) ? 47 : between(w, 16, 24) ? 10 : 0) },
   // Premier League: 380 games, 22 August 2026 (week 33) to 30 May 2027 (week
@@ -781,60 +770,22 @@ export const SIM_SPORTS = {
   seriea: { family: 'soccer', kind: 'soccer', pop: 1.5, games: euroLeague(10) },
   bundesliga: { family: 'soccer', kind: 'soccer', pop: 1.5, games: w => (between(w, 52, 1) ? 0 : euroLeague(9)(w)) },
   ligue1: { family: 'soccer', kind: 'soccer', pop: 1, games: euroLeague(9) },
-  eredivisie: { family: 'soccer', kind: 'soccer', pop: 0.3, games: euroLeague(9) },
-  primeira: { family: 'soccer', kind: 'soccer', pop: 0.3, games: euroLeague(9) },
   ucl: { family: 'soccer', kind: 'soccer', pop: 3, headline: true, games: w => UEFA_WEEKS[w] ?? 0 },
   uel: { family: 'soccer', kind: 'soccer', pop: 1, games: w => UEFA_WEEKS[w] ?? 0 },
   // MLS: late February (week 8) to October, then the playoffs.
   mls: { family: 'soccer', kind: 'soccer', pop: 0.5, games: w => (between(w, 8, 42) ? 14 : between(w, 43, 48) ? 4 : 0) },
-  // Liga MX: Clausura January-May, Apertura July-December.
-  ligamx: { family: 'soccer', kind: 'soccer', pop: 0.3, games: w => (between(w, 1, 21) || between(w, 28, 50) ? 9 : 0) },
   // J1 League (autumn-spring from August 2026, a winter break December-February).
   jleague: { family: 'soccer', kind: 'soccer', pop: 0.8, games: w => (between(w, 31, 50) || between(w, 7, 21) ? 10 : 0) },
-  // Brasileirão and Argentina: calendar-year seasons (April-December, February-December).
-  brasileirao: { family: 'soccer', kind: 'soccer', pop: 0.3, games: w => (between(w, 14, 49) ? 10 : 0) },
-  argentina: { family: 'soccer', kind: 'soccer', pop: 0.2, games: w => (between(w, 5, 49) ? 12 : 0) },
-  superlig: { family: 'soccer', kind: 'soccer', pop: 0.3, games: euroLeague(9) },
   scotland: { family: 'soccer', kind: 'soccer', pop: 0.2, games: euroLeague(6) },
-  belgium: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(8) },
-  saudi: { family: 'soccer', kind: 'soccer', pop: 0.1, games: euroLeague(9) },
   uecl: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
-  libertadores: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
-  sudamericana: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
   nationsleague: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
   kleague: { family: 'soccer', kind: 'soccer', pop: 0.3, games: w => (between(w, 9, 48) ? 6 : 0) },
-  acl: { family: 'soccer', kind: 'soccer', pop: 0.3, games: w => UEFA_WEEKS[w] ? 8 : 0 },
-  // The Asian Cup every four years (January); friendlies in the international windows.
-  asiancup: { family: 'soccer', kind: 'soccer', pop: 0.3, games: w => (between(w, 1, 6) ? 9 : 0) },
-  friendly: { family: 'soccer', kind: 'soccer', pop: 0.2, games: w => ([12, 23, 37, 41, 46].includes(w) ? 20 : 0) },
-  // The World Cup, the Euro and the Copa América every four years (June-July), the Club World Cup.
+  // The World Cup every four years (June-July).
   worldcup: { family: 'soccer', kind: 'soccer', pop: 0.5, games: w => (between(w, 24, 29) ? 17 : 0) },
-  euro: { family: 'soccer', kind: 'soccer', pop: 0.3, games: w => (between(w, 24, 28) ? 10 : 0) },
-  copaamerica: { family: 'soccer', kind: 'soccer', pop: 0.2, games: w => (between(w, 25, 28) ? 8 : 0) },
-  clubworldcup: { family: 'soccer', kind: 'soccer', pop: 0.2, games: w => (between(w, 25, 28) ? 12 : 0) },
-  wcqeurope: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
-  leaguecup: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
-  copadelrey: { family: 'soccer', kind: 'soccer', pop: 0.1, games: w => UEFA_WEEKS[w] ? 6 : 0 },
   // FA Cup: the first round in November (40 ties) to the final in May.
   facup: { family: 'soccer', kind: 'soccer', pop: 0.2, games: w => ({ 44: 40, 48: 20, 1: 32, 5: 16, 9: 8, 11: 4, 16: 2, 20: 1 })[w] ?? 0 },
-  // UFC: a card most weeks (about 12 bouts), a few weeks off a year.
-  ufc: { family: 'mma', kind: 'mma', pop: 0.4, games: w => (w % 6 === 5 || w === 51 ? 0 : 12) },
-  // International cricket all year, the Asian Games and World Cups on top; the big boxing cards.
-  cricket: { family: 'cricket', kind: 'cricket', pop: 0.1, games: () => 4 },
-  boxing: { family: 'boxing', kind: 'boxing', pop: 0.1, games: w => (w % 2 === 0 ? 3 : 1) },
-  // Rugby union: the Six Nations (Feb-Mar), the Rugby Championship (Aug-Sep), November's tests, the Champions Cup (Dec-Jan).
-  rugbyunion: { family: 'rugby', kind: 'rugby', pop: 0.1, games: w => (between(w, 6, 11) || between(w, 32, 39) ? 3 : between(w, 45, 47) ? 8 : between(w, 50, 3) ? 10 : 0) },
-  // NRL: March to the grand final in early October; AFL: March to late September.
-  // Tennis: ATP and WTA main-draw singles, about 60 and 50 matches a week.
-  tennis: { family: 'sets', kind: 'tennis', pop: 2, headline: true, games: tourWeek(60) },
-  wta: { family: 'sets', kind: 'tennis', pop: 1, games: tourWeek(50) },
-  // Badminton (BWF World Tour) and table tennis (WTT): event weeks.
+  // Badminton (BWF World Tour): event weeks.
   badminton: { family: 'sets', kind: 'badminton', pop: 1.5, games: eventWeeks(40) },
-  tabletennis: { family: 'sets', kind: 'tabletennis', pop: 1, games: eventWeeks(30) },
-  // Volleyball: the club leagues October-April, the Nations League May-July.
-  volleyball: { family: 'sets', kind: 'volleyball', pop: 0.7, games: w => (between(w, 40, 16) ? 20 : between(w, 21, 30) ? 30 : 0) },
-  // Snooker: ranking events most weeks from July to April.
-  snooker: { family: 'sets', kind: 'snooker', pop: 0.3, games: w => (between(w, 27, 17) ? 16 : 0) },
   // F1: the 24 races of the 2027 calendar, Bahrain 14 March to Abu Dhabi 12 December.
   f1: { family: 'racing', kind: 'f1', pop: 1.2, headline: true, games: w => (F1_RACE_WEEKS.has(w) ? 1 : 0) }
 };
@@ -846,7 +797,7 @@ export const SPORTS = Object.keys(SIM_SPORTS);
 // their series while any is in season; in their off-season, on whatever else
 // is on that week in OFFSEASON_SWITCH of the weeks (never, if loyal; always,
 // if hoppers). F1 is one race at a time, so F1-only people bet single picks.
-const MIXES = [['mlb', 'nba'], ['cpbl', 'mlb'], ['cpbl', 'npb'], ['nba', 'epl'], ['epl', 'ucl'], ['mlb', 'epl'], ['nba', 'nfl'], ['cpbl', 'bleague'], ['tennis', 'badminton'], ['nba', 'f1']];
+const MIXES = [['mlb', 'nba'], ['cpbl', 'mlb'], ['cpbl', 'npb'], ['nba', 'epl'], ['epl', 'ucl'], ['mlb', 'epl'], ['nba', 'nfl'], ['cpbl', 'badminton'], ['nba', 'f1']];
 const SHARE_OF = { one: 0.55, kind: 0.3, mix: 0.25, all: 0.12 };
 const pop = sports => sports.reduce((s, sp) => s + SIM_SPORTS[sp].pop, 0);
 const KINDS = [...new Set(SPORTS.map(sp => SIM_SPORTS[sp].kind))];
@@ -884,17 +835,16 @@ export function weekOfYear(date) {
 // (board.mjs), so they get the same markets, the same house cut for the
 // league and the same locks. A sport off the board is then no cheaper, or
 // dearer, to bet on than one on it. Seeded, so it's the same every time.
-const TEMPLATE_WIN = { baseball: [0.35, 0.65], basketball: [0.15, 0.85], football: [0.2, 0.8], hockey: [0.35, 0.65], sets: [0.12, 0.88], mma: [0.2, 0.8], rugby: [0.2, 0.8], cricket: [0.25, 0.75], boxing: [0.15, 0.85] };
+const TEMPLATE_WIN = { baseball: [0.35, 0.65], basketball: [0.15, 0.85], football: [0.2, 0.8], hockey: [0.35, 0.65], sets: [0.12, 0.88] };
 // Each sport's usual total line (none: its own model sets one).
-const TEMPLATE_TOTAL = { mlb: 8.5, npb: 7.5, kbo: 9.5, cpbl: 9.5, nfl: 44.5, ncaaf: 52.5, nba: 224.5, wnba: 162.5, euroleague: 160.5, bleague: 158.5, nhl: 5.5 };
+const TEMPLATE_TOTAL = { mlb: 8.5, npb: 7.5, kbo: 9.5, cpbl: 9.5, nfl: 44.5, nba: 224.5, wnba: 162.5, euroleague: 160.5, nhl: 5.5 };
 // An F1 field as the market usually prices it: the average shape of two real
 // 2026 boards (Polymarket, one flat before qualifying, one with a 64%
 // favourite after), so a typical race returns what a real one does
 // (NT$62 per NT$100 for the crowd's usual pick, against 59 and 65).
 const F1_FIELD = [0.5165, 0.1703, 0.105, 0.077, 0.0431, 0.0323, 0.0261, 0.0095, 0.0041, 0.0018, 0.0014, 0.0012, 0.0012, 0.0012, 0.0012, 0.0009, 0.0009, 0.0009, 0.0009, 0.0009, 0.0009, 0.0009, 0.0009, 0.0007, 0.0002];
-// Matches in sets: the bookmaker's handicap and total in games (tennis),
-// points or frames, as it lists them.
-const TEMPLATE_UNITS = { tennis: [3.5, 22.5], wta: [3.5, 21.5], badminton: [4.5, 80.5], tabletennis: [3.5, 75.5], volleyball: [4.5, 180.5], snooker: [1.5, 8.5], rugbyunion: [6.5, 44.5] };
+// Matches in sets: the bookmaker's handicap and total in points, as it lists them.
+const TEMPLATE_UNITS = { badminton: [4.5, 80.5] };
 const templates = new Map();
 export function sportTemplate(sport, seed = 7) {
   const key = `${sport}|${seed}`;

@@ -28,7 +28,7 @@ import {
   GOALS_DISPERSION,
   TOP_INNING_ODDS
 } from './odds.mjs';
-import { pointsModel, pointsMarkets, goalMarkets, fitHockey, baseballMarkets, setsMarkets, marketOdds, unitModel, guessBestOf, unitLineMarkets } from './markets.mjs';
+import { pointsModel, pointsMarkets, goalMarkets, fitHockey, baseballMarkets, setsMarkets, marketOdds, unitModel, unitLineMarkets } from './markets.mjs';
 import { fitGoals } from './live.mjs';
 import { houseCut, houseRule } from './rules.mjs';
 import { withModelLines } from './lines.mjs';
@@ -236,21 +236,14 @@ function sideOptions(game, base, probs) {
   const homeWin = probs.home / (probs.home + probs.away);
   let markets = [];
   if (family === 'baseball') markets = baseballMarkets({ homeWin, total: game.total });
-  else if (family === 'football' || family === 'basketball' || family === 'rugby') {
+  else if (family === 'football' || family === 'basketball') {
     const model = pointsModel(game.sport, { homeWin, spread: game.spread, total: game.total });
     if (model) markets = pointsMarkets(model, { spreadLine: game.spread?.awayLine ?? null, totalLine: game.total?.line ?? null });
-    // Rugby league plays halves, Aussie rules quarters: their period scores
-    // aren't read back reliably, so only whole-game markets.
-    if (family === 'rugby') markets = markets.filter(m => !['half', 'htotal', 'q1'].includes(m.kind));
   } else if (family === 'hockey') markets = goalMarkets(fitHockey(homeWin, game.total), { family, totalLine: game.total?.line ?? null });
   else if (family === 'sets') {
     const spec = LEAGUES[game.sport]?.sets ?? {};
-    // Snooker's length isn't in the feed: guessed from the frame total. Its
-    // frame lines are the bookmaker's (below), so only the frame score and
-    // the first frame come from the set markets.
-    const frames = spec.unit === 'frames';
-    const bestOf = spec.bestOf ?? (frames ? guessBestOf({ homeWin, total: game.total }) : null);
-    markets = setsMarkets({ homeWin, bestOf }).filter(m => !frames || m.kind === 'sets' || m.kind === 'firstset');
+    const bestOf = spec.bestOf ?? null;
+    markets = setsMarkets({ homeWin, bestOf });
     markets.push(...unitLineMarkets(unitModel({ homeWin, bestOf, spec }), { spread: game.spread, total: game.total, spec }));
   }
   else if (family === 'soccer' && probs.draw != null) {
@@ -291,7 +284,7 @@ function sideOptions(game, base, probs) {
 }
 
 // The bookmaker's own handicap and total in games or points, for matches in
-// sets (tennis games; points in badminton, table tennis and volleyball).
+// sets (badminton's points).
 function unitLineOptions(game, base) {
   const k = houseCut({ base: 'twoWay' });
   const out = [];

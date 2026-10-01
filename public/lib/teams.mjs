@@ -19,20 +19,18 @@ export const LEAGUES = Object.fromEntries(
       else {
         league.kambi = l.kambi;
         // Its own schedule besides Kambi's list (schedules.mjs): the league's
-        // month lists (Asian baseball) or ESPN's (cards, draws, matches).
+        // month lists (Asian baseball).
         if (l.data === 'asia') league.schedule = { asia: l.asia };
-        else if (l.data === 'espn') league.schedule = { espn: l.espn, kind: l.kind };
       }
-      for (const k of ['logo', 'icon', 'badge', 'neutral', 'sets', 'results', 'scores', 'cap', 'players', 'top', 'notable', 'off']) if (l[k] !== undefined) league[k] = l[k];
+      for (const k of ['logo', 'icon', 'badge', 'neutral', 'sets', 'cap', 'players', 'top']) if (l[k] !== undefined) league[k] = l[k];
       return [l.bet, league];
     })
 );
 
-// On sale: every league Taiwan can watch. The others (`off`: no broadcast
-// in Taiwan) stay in LEAGUES only so bets already placed on them settle.
-export const onSale = key => Boolean(LEAGUES[key]) && !LEAGUES[key].off;
-// Leagues from Kambi (on sale).
-export const KAMBI_LEAGUES = Object.keys(LEAGUES).filter(key => LEAGUES[key].kambi && onSale(key));
+// On sale: every league in the catalogue.
+export const onSale = key => Boolean(LEAGUES[key]);
+// Leagues from Kambi.
+export const KAMBI_LEAGUES = Object.keys(LEAGUES).filter(key => LEAGUES[key].kambi);
 export const isSets = sport => LEAGUES[sport]?.family === 'sets';
 // Played at a neutral venue by players, not home and away clubs.
 export const isNeutral = sport => Boolean(LEAGUES[sport]?.neutral);

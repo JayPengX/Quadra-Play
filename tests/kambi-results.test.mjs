@@ -64,13 +64,13 @@ test('the Worker\'s kept copy of a dropped match settles at once', () => {
 
 test('every Kambi match settles: dropped with no deciding score, it is void', async () => {
   const { kambiUnresolvable } = await import('../public/lib/sources.mjs');
-  const leg = { sport: 'tabletennis', start: '2026-09-28T09:45:00Z' };
+  const leg = { sport: 'badminton', start: '2026-09-28T09:45:00Z' };
   const at = h => new Date(Date.parse(leg.start) + h * 3_600_000);
-  // The Worker saw it end mid-set (a short Czech Liga Pro match): void.
+  // The Worker saw it end mid-set: void.
   assert.equal(kambiUnresolvable(leg, { gone: true, live: { score: {} } }, at(1)), true);
   // Nothing kept at all: void once it's surely over, not three days later.
-  assert.equal(kambiUnresolvable(leg, null, at(3)), false);
-  assert.equal(kambiUnresolvable(leg, null, at(4.5)), true);
+  assert.equal(kambiUnresolvable(leg, null, at(4)), false);
+  assert.equal(kambiUnresolvable(leg, null, at(5.5)), true);
   // Still being watched with a score: wait.
   assert.equal(kambiUnresolvable(leg, { gone: false, live: { score: {} } }, at(5)), false);
 });

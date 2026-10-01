@@ -6,22 +6,20 @@
 //   price puts it on the slip, the card opens the game's live markets.
 // - 焦點賽事: the games worth betting on, as the board shows them (the win
 //   prices, a tap puts one on the slip). Ranked by the shared recommender
-//   (quadra.mjs's rank): what's followed in Quadra Fixtures weighs most (the
-//   wallet's 'follow:match'), then the teams, leagues and sports the person
-//   bets on and opens; each game's own weight is its league (the big leagues
-//   first, thinly traded ones last) and how soon it starts. One per game.
+//   (quadra.mjs's rank): the teams, leagues and sports the person bets on
+//   and opens; each game's own weight is its league (the big leagues first,
+//   thinly traded ones last) and how soon it starts. One per game.
 // - 你的投注: the open slips, each with its cash-out price.
 // - The lottery's jackpots.
 // - Quadra Plus, once, for someone who isn't a member.
-import { rank, affinity, setting, plusMember, plusCard, vipStatus, vipName, VIP, tell, welcomeDue, WELCOME } from './lib/quadra.mjs';
+import { rank, affinity, plusMember, plusCard, vipStatus, vipName, VIP, tell, welcomeDue, WELCOME } from './lib/quadra.mjs';
 import { GAMES, nextDraw, latestResults, gameName } from './lib/lottery.mjs';
-import { familyOfSport } from './lib/catalog.mjs';
 
 const TXT = {
   zh: {
     balance: 'Quadra 餘額', atStake: '投注中', slipsN: '{n} 張', cashNow: '可兌現', most: '全中最多',
     live: '場中焦點', liveSub: '正在進行，賠率隨比分即時更新', allLive: '全部場中 {n} 場',
-    featured: '焦點賽事', featuredSub: '依你追蹤和常玩的聯盟排序', allGames: '全部賽事', following: '追蹤中', markets: '{n} 種玩法',
+    featured: '焦點賽事', featuredSub: '依你常玩的聯盟排序', allGames: '全部賽事', markets: '{n} 種玩法',
     mine: '你的投注', seeAll: '全部', legs: '{n} 場', cashOut: '兌現', paused: '兌現暫停',
     lottery: '彩券', drawIn: '{when} 開獎', none: '賽事載入中，或目前沒有開賣的比賽。', draw: '和',
     overdrawn: '透支 · 月息 1%', cover: '賣出持股補足',
@@ -34,7 +32,7 @@ const TXT = {
   en: {
     balance: 'Quadra balance', atStake: 'In play', slipsN: '{n} slips', cashNow: 'Cash out now', most: 'Most to win',
     live: 'Live now', liveSub: 'On now: prices move with the score', allLive: 'All {n} live',
-    featured: 'Featured', featuredSub: 'By what you follow and play', allGames: 'All games', following: 'Following', markets: '{n} markets',
+    featured: 'Featured', featuredSub: 'By what you play', allGames: 'All games', markets: '{n} markets',
     mine: 'Your bets', seeAll: 'See all', legs: '{n} picks', cashOut: 'Cash out', paused: 'Suspended',
     lottery: 'Lottery', drawIn: 'Draw {when}', none: 'Games are loading, or none are on sale right now.', draw: 'Draw',
     overdrawn: 'Overdrawn · 1% a month', cover: 'Sell to cover',
@@ -65,19 +63,6 @@ const norm = name =>
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 
-// What's followed in Fixtures, as affinity keys: a followed team weighs as
-// much as the strongest habit, a followed league a little less, the first
-// sports more than the later ones.
-export function followAffinity(follow, top = 1) {
-  const out = {};
-  if (!follow) return out;
-  const sports = follow.sports || [];
-  sports.forEach((sp, i) => (out[`sport:${sp === 'racket' ? 'sets' : familyOfSport(sp)}`] = top * (0.6 - (0.3 * i) / Math.max(1, sports.length))));
-  for (const k of follow.leagues || []) out[`league:${k}`] = Math.max(out[`league:${k}`] || 0, top * 0.7);
-  for (const t of follow.teams || []) out[`team:${t.league}:${norm(t.name)}`] = top * 1.2;
-  return out;
-}
-
 const TIER_WEIGHT = { major: 0.6, minor: 0.3, thin: 0.05 };
 
 export function renderHome(ctx) {
@@ -91,14 +76,9 @@ export function renderHome(ctx) {
   const money = v => fmtMoney(v, { sign: false });
 
   // ---- 焦點賽事: upcoming games with a win price on sale
-  const follow = setting(state.wallet, 'follow:match', null);
-  const habits = affinity(state.wallet, now);
-  const top = Math.max(1, ...Object.values(habits));
-  const fromFixtures = followAffinity(follow, top);
-  const aff = { ...habits };
-  for (const [k, v] of Object.entries(fromFixtures)) aff[k] = Math.max(aff[k] || 0, v);
+  // Quadra's own apps (Fixtures, an add-on, isn't one of them).
+  const aff = affinity(state.wallet, now, ['odds', 'stock', 'vocab']);
   const teamKey = (g, side) => `team:${g.sport}:${norm(g[side]?.en ?? g[side])}`;
-  const followed = g => Boolean(fromFixtures[teamKey(g, 'away')] || fromFixtures[teamKey(g, 'home')]);
   const betsOf = new Map();
   for (const b of state.bets || []) {
     if (!b.gameId) continue;
@@ -155,7 +135,6 @@ export function renderHome(ctx) {
       el('button', { class: 'feature-top', type: 'button', onclick: () => ctx.openGame(g.id) }, [
         ctx.leagueImg(g.sport, 'logo-xs'),
         el('span', { class: 'feature-series', text: ctx.gameSeries(g) }),
-        followed(g) ? el('span', { class: 'feature-tag', text: T.following }) : null,
         el('span', { class: 'feature-time', text: fmtTime(g.startUtc) })
       ]),
       el('div', { class: 'feature-rows' }, sides.map(side => {

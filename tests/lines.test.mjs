@@ -34,7 +34,7 @@ test('a game with only a winner price gets the full board', () => {
   for (const k of ['ml', 'total', 'runline', 'teamtotal', 'f5', 'margin', 'firstinning', 'oddeven']) assert.ok(mlb.has(k), `mlb ${k}`);
   const nba = kinds(game('nba', { polymarket: { home: 0.7, away: 0.3 } }));
   for (const k of ['ml', 'runline', 'total', 'teamtotal', 'htotal', 'half', 'q1', 'margin']) assert.ok(nba.has(k), `nba ${k}`);
-  const soccer = kinds(game('brasileirao', { draftKings: { home: 0.48, draw: 0.28, away: 0.24 } }));
+  const soccer = kinds(game('scotland', { draftKings: { home: 0.48, draw: 0.28, away: 0.24 } }));
   for (const k of ['ml', 'total', 'btts', 'score', 'dc', 'htft', 'goalbands']) assert.ok(soccer.has(k), `soccer ${k}`);
   // The model's lines are never shown as the lottery's own line.
   const totals = gameOptions(game('mlb', { polymarket: { home: 0.56, away: 0.44 } })).filter(o => o.kind === 'total');

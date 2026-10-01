@@ -196,9 +196,6 @@ button.pick:active { transform: scale(0.98); }
 .market-picks .pick { min-width: 0; }
 .market.wide { grid-column: 1 / -1; }
 .market.wide .market-picks { grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); }
-.game-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font-size: 0.75rem; color: var(--text-muted); }
-.game-foot .ghost-button { font-size: 0.78rem; padding: 4px 12px; }
-.game-foot p { margin: 0; }
 
 @media (max-width: 520px) {
   .pick { min-width: 84px; padding: 5px 8px; }
@@ -1174,7 +1171,6 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 
 /* 紀錄 with no slips yet. */
 .empty-slips { display: grid; justify-items: center; gap: 14px; padding: 28px 18px; text-align: center; color: var(--text-muted); font-size: 0.92rem; }
-.wanted-note { margin: 4px 0 10px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--accent, #2563eb) 10%, var(--surface, #fff)); color: var(--text, inherit); font-size: 13.5px; line-height: 1.45; }
 .logo.player-flag { border-radius: 50%; object-fit: cover; }
 /* 首頁's live games */
 .feature.live { border-color: color-mix(in srgb, var(--bad-strong) 35%, var(--border)); }

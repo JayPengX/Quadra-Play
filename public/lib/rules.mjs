@@ -31,7 +31,7 @@ export const HOUSE_RULES = {
 // Markets whose outcomes are many and long by design.
 const EXOTIC = new Set(['score', 'margin', 'inning', 'nextrun', 'htft', 'goalbands', 'sets', 'f1podium', 'f1top']);
 // Priced one by one by the lottery: only a runaway favourite is locked.
-const OUTRIGHT = new Set(['f1', 'f1pole', 'future', 'f1team', 'moto']);
+const OUTRIGHT = new Set(['f1', 'f1pole', 'future', 'f1team']);
 
 // { lock: 'low' | 'high' | null, minLegs } for an option at `odds`.
 export function houseRule(kind, odds) {
@@ -72,7 +72,7 @@ export const BASE_CUT = {
 
 // Leagues by how well known they are (what home leads with; not the cut).
 const MAJOR = new Set(['mlb', 'nba', 'nfl', 'nhl', 'epl', 'laliga', 'seriea', 'bundesliga', 'ligue1', 'ucl', 'f1']);
-const THIN = new Set(['tennis', 'wta', 'badminton', 'tabletennis', 'volleyball', 'snooker', 'npb', 'kbo', 'cpbl', 'euroleague', 'bleague']);
+const THIN = new Set(['badminton', 'npb', 'kbo', 'cpbl', 'euroleague']);
 export function leagueTier(sport) {
   return MAJOR.has(sport) ? 'major' : THIN.has(sport) ? 'thin' : 'minor';
 }

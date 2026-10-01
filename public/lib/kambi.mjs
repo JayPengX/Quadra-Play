@@ -1,13 +1,12 @@
 // Kambi's public odds feed (the bookmaker behind Unibet and others): the
-// sports ESPN doesn't carry, from Asian baseball to tennis, badminton, table
-// tennis, volleyball and snooker. Read through the shared sports proxy, which
+// leagues ESPN doesn't carry: Asian baseball, EuroLeague, K League and
+// badminton. Read through the shared sports proxy, which
 // caches each list for every viewer (2 minutes) and trims it to the fields
 // read here, so the feed sees one request per league per few minutes. Odds come as thousandths (1950 = 1.95) and lines as
 // thousandths too (1500 = 1.5); a match lists its home player first.
 import { devigProportional } from './odds.mjs';
 import { LEAGUES, normalizeTeamName, teamZh } from './teams.mjs';
 import { housePrices } from './house.mjs';
-import { kambiKept } from './catalog.mjs';
 
 export const KAMBI = 'https://eu-offering-api.kambicdn.com/offering/v2018/ub';
 
@@ -47,7 +46,7 @@ export function parseKambiEvents(data, sport, now = new Date(), { unpriced = fal
   for (const item of data?.events || []) {
     const e = item.event;
     if (!e || e.state !== 'NOT_STARTED' || Date.parse(e.start) <= now.getTime()) continue;
-    if (!e.homeName || !e.awayName || !kambiKept(sport, e)) continue;
+    if (!e.homeName || !e.awayName) continue;
     const offers = item.betOffers || [];
     const match = offers.find(o => o.betOfferType?.englishName === 'Match' || /match odds|moneyline/i.test(o.criterion?.englishLabel || ''));
     // Two-way winner; a three-way one (a draw after regulation) is split
@@ -71,7 +70,7 @@ export function parseKambiEvents(data, sport, now = new Date(), { unpriced = fal
       book: 'kambi',
       kambiId: e.id,
       group: e.group || '',
-      // Where Kambi files it ("table_tennis/czech_republic/…"): a player's country when the kit's table doesn't know them.
+      // Where Kambi files it ("badminton/denmark/…"): a player's country when the kit's table doesn't know them.
       where: kambiWhere(e),
       // Soccer from Kambi settles on the final score alone: no halves.
       ...(soccer ? { scoreOnly: true } : {})
@@ -117,11 +116,11 @@ const PART = /\b(\d(st|nd|rd|th)|set|frame|game \d|quarter|half|inning|period|by
 export function parseKambiInPlay(data, sport) {
   const league = LEAGUES[sport];
   // Team sports with a main handicap and total worth selling live.
-  const team = ['baseball', 'basketball', 'rugby'].includes(league?.family);
+  const team = ['baseball', 'basketball'].includes(league?.family);
   const games = [];
   for (const item of data?.events || []) {
     const e = item.event;
-    if (!e || e.state !== 'STARTED' || !e.homeName || !e.awayName || !kambiKept(sport, e)) continue;
+    if (!e || e.state !== 'STARTED' || !e.homeName || !e.awayName) continue;
     const offers = item.betOffers || [];
     const match = offers.find(o => o.betOfferType?.englishName === 'Match' || /match odds|moneyline/i.test(o.criterion?.englishLabel || ''));
     const one = outcome(match || { outcomes: [] }, 'OT_ONE');
@@ -189,7 +188,7 @@ export function parseKambiLive(data) {
 
 // Sets each side has won from the set scores. A set counts once someone has
 // won it: reached the set's target (the deciding set's, if it has its own)
-// two clear, or the cap (badminton's 30), or in tennis 7 games (a tiebreak).
+// two clear, or the cap (badminton's 30).
 export function setsWon(sets, spec) {
   const won = { home: 0, away: 0 };
   if (!sets || !spec) return won;
@@ -199,7 +198,7 @@ export function setsWon(sets, spec) {
     const a = sets.away[i];
     const hi = Math.max(h, a);
     const target = spec.last && i === spec.bestOf - 1 ? spec.last : spec.target;
-    const done = (hi >= target && Math.abs(h - a) >= 2) || (spec.cap && hi >= spec.cap) || (spec.unit === 'games' && hi === 7);
+    const done = (hi >= target && Math.abs(h - a) >= 2) || (spec.cap && hi >= spec.cap);
     if (done) won[h > a ? 'home' : 'away']++;
   }
   return won;

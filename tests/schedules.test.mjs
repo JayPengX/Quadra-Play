@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAsiaSchedule, asiaRecords, parseEspnCard, parseEspnDraw, parseRankings } from '../public/lib/schedules.mjs';
-import { pointsStrengths, parseRecord, sameSide } from '../public/lib/house.mjs';
+import { parseAsiaSchedule, asiaRecords } from '../public/lib/schedules.mjs';
+import { sameSide } from '../public/lib/house.mjs';
 import { mergeGames, pricedByKambi, asiaResult } from '../public/lib/sources.mjs';
 import { gameOptions } from '../public/lib/board.mjs';
 import { LEAGUES } from '../public/lib/teams.mjs';
@@ -11,10 +11,8 @@ const asia = (id, start, home, away, state = 'pre', homeScore = null, awayScore 
 
 test('every Kambi league has a schedule of its own, or sells what Kambi lists', () => {
   assert.deepEqual(LEAGUES.cpbl.schedule, { asia: 'cpbl' });
-  assert.equal(LEAGUES.ufc.schedule.kind, 'card');
-  assert.equal(LEAGUES.tennis.schedule.kind, 'draw');
-  assert.equal(LEAGUES.rugbyunion.schedule, undefined);
-  assert.equal(LEAGUES.tabletennis.schedule, undefined);
+  assert.equal(LEAGUES.badminton.schedule, undefined);
+  assert.equal(LEAGUES.euroleague.schedule, undefined);
 });
 
 test('Asian baseball: the games to come, priced from this season\'s results, only markets a final score settles', () => {
@@ -45,40 +43,4 @@ test('a schedule\'s game Kambi prices already is Kambi\'s', () => {
   assert.equal(pricedByKambi({ ...game, home: 'Wei Chuan Dragons', away: 'Rakuten Monkeys' }, kambi), true);
   assert.equal(pricedByKambi({ ...game, startUtc: '2026-10-04T10:35:00.000Z' }, kambi), false);
   assert.ok(sameSide('Penrith Panthers', 'Panthers'));
-});
-
-test('UFC: every bout on a card not yet fought, the better record favoured, TBA left out', () => {
-  assert.deepEqual(parseRecord('23-14-0'), { wins: 23, games: 37 });
-  const fighter = (name, record, order) => ({ order, athlete: { displayName: name }, records: [{ type: 'total', summary: record }] });
-  const card = { events: [{ date: '2026-10-03T20:00Z', competitions: [
-    { date: '2026-10-03T20:00Z', status: { type: { state: 'pre' } }, competitors: [fighter('Court McGee', '23-14-0', 1), fighter('Eric Nolan', '8-5-0', 2)] },
-    { date: '2026-10-03T21:00Z', status: { type: { state: 'pre' } }, competitors: [fighter('Unbeaten', '20-0-0', 1), fighter('Newcomer', '2-3-0', 2)] },
-    { date: '2026-10-03T22:00Z', status: { type: { state: 'pre' } }, competitors: [fighter('TBA', '', 1), fighter('Opponent TBA', '', 2)] }
-  ] }] };
-  const bouts = parseEspnCard(card, 'ufc', now);
-  assert.equal(bouts.length, 2);
-  assert.equal(bouts[0].home, 'Court McGee');
-  assert.ok(bouts[1].house.home > 0.7, `${bouts[1].house.home}`);
-  assert.ok(gameOptions(mergeGames(bouts, [])[0]).some(o => o.kind === 'ml'));
-});
-
-test('tennis: singles matches with both players known, priced by ranking points', () => {
-  const table = pointsStrengths(parseRankings({ rankings: [{ ranks: [{ athlete: { displayName: 'Jannik Sinner' }, points: 11000 }, { athlete: { displayName: 'Matteo Arnaldi' }, points: 1000 }] }] }));
-  const player = (name, order, homeAway) => ({ order, homeAway, athlete: { displayName: name } });
-  const draw = { events: [{ groupings: [
-    { grouping: { displayName: "Men's Singles" }, competitions: [
-      { date: '2026-10-01T08:30Z', status: { type: { state: 'pre' } }, competitors: [player('Matteo Arnaldi', 1, 'home'), player('Jannik Sinner', 2, 'away')] },
-      { date: '2026-10-01T09:30Z', status: { type: { state: 'pre' } }, competitors: [player('Rei Sakamoto', 1, 'home'), player('Matteo Arnaldi', 2, 'away')] },
-      { date: '2026-10-01T10:30Z', status: { type: { state: 'pre' } }, competitors: [player('TBD', 1, 'home'), player('Jannik Sinner', 2, 'away')] }
-    ] },
-    { grouping: { displayName: "Men's Doubles" }, competitions: [{ date: '2026-10-01T08:30Z', status: { type: { state: 'pre' } }, competitors: [player('A / B', 1, 'home'), player('C / D', 2, 'away')] }] },
-    { grouping: { displayName: "Women's Singles" }, competitions: [{ date: '2026-10-01T08:30Z', status: { type: { state: 'pre' } }, competitors: [player('Katie Boulter', 1, 'home'), player('Mai Hontama', 2, 'away')] }] }
-  ] }] };
-  const matches = parseEspnDraw(draw, 'tennis', table, now);
-  assert.equal(matches.length, 2);
-  // The women's draw on the same scoreboard is the WTA's.
-  assert.deepEqual(parseEspnDraw(draw, 'wta', table, now).map(m => m.home), ['Katie Boulter']);
-  assert.ok(matches[0].house.away > 0.85, `${matches[0].house.away}`);
-  // An unranked player against a ranked one.
-  assert.ok(matches[1].house.away > 0.5);
 });
