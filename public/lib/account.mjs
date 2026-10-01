@@ -107,8 +107,13 @@ export const liftFits = (cost, max) => cost > 0 && cost <= max;
 // balance, and the token is marked spent ('fb-<token id>', so the same token
 // is never staked twice). Winning pays all but the free part's stake
 // (applyResults): a top-up's stake comes back as usual.
+// Like a sportsbook's free bet terms: every pick at FREE_MIN_ODDS or longer
+// (no near-certain picks), and never cashed out early.
+export const FREE_MIN_ODDS = 1.5;
+export const freeOddsOk = legs => legs.length > 0 && legs.every(l => Number(l.odds) >= FREE_MIN_ODDS);
 export function placeFreeSlip(account, slip, token, now = new Date(), { extra = 0 } = {}) {
   if (!token?.id || !(token.value > 0) || account.ledger.some(e => e.id === `fb-${token.id}`)) return { error: 'token' };
+  if (!freeOddsOk(slip.legs || [])) return { error: 'freeOdds' };
   // More than the free bet on it: the rest from the balance (the free bet
   // a cut off the stake).
   const cash = Math.max(0, Math.round((Number(slip.stake) || 0) - token.value));

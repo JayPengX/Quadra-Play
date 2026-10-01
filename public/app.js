@@ -9,7 +9,7 @@ import { useSourcesSession, loadOdds, loadExtraLeagues, loadExtraFutures, taipei
 import { inningsLeft, liveBaseball, liveSoccer, liveGoals, livePoints, fitGoals, liveMarkets, liveOdds, pregameRuns, nextRunChances, nextRunOdds, LIVE_MIN_LIQUIDITY, LIVE_THREE_WAY, PERIODS } from './lib/live.mjs';
 import { fitHockey } from './lib/markets.mjs';
 import {
-  WEEKLY_GRANT, newAccount, balance, canClaim, claimGrant, newSlipId, placeSlip, placeFreeSlip, legResult, applyResults, mergeAccounts, recoverFromWallet, refundLost, mergeDistinct, poolEntries, compactAccount, cashOut, isAccount, liftUsedToday, liftFits
+  WEEKLY_GRANT, newAccount, balance, canClaim, claimGrant, newSlipId, placeSlip, placeFreeSlip, FREE_MIN_ODDS, freeOddsOk, legResult, applyResults, mergeAccounts, recoverFromWallet, refundLost, mergeDistinct, poolEntries, compactAccount, cashOut, isAccount, liftUsedToday, liftFits
 } from './lib/account.mjs';
 import { cashOutValue, CASHOUT_KEEP } from './lib/cashout.mjs';
 import { renderHome } from './home.js';
@@ -1347,7 +1347,8 @@ function renderParlay() {
   // cut off a bigger bet.
   const tokens = freeBetList();
   const free = tokens.find(x => x.id === state.useFree) || null;
-  const freeOn = Boolean(free) && (mode === 'parlay' || (mode === 'single' && n === 1));
+  const freeShape = Boolean(free) && (mode === 'parlay' || (mode === 'single' && n === 1));
+  const freeOn = freeShape && freeOddsOk(legs.map(b => ({ odds: effectiveOdds(b) })));
   const stake = freeOn ? free.value + (state.freeTopUp || 0) : state.slipStake;
   const slip = legs.map(b => ({ gameId: b.gameId, market: b.market ?? b.kind, odds: effectiveOdds(b), fairChance: b.fairChance, minLegs: b.minLegs ?? 1, lock: b.lock ?? null }));
   const errors = slipErrors({ mode, legs: slip, sizes, stake });
@@ -1458,7 +1459,7 @@ function renderParlay() {
     }
   });
   numberField(stakeInput, { digits: 5 });
-  if (tokens.length) ticket.push(freeBetRow(tokens, free, freeOn, rerender));
+  if (tokens.length) ticket.push(freeBetRow(tokens, free, freeOn, rerender, freeShape));
   ticket.push(
     el('label', { class: 'slip-field' }, [
       el('span', { text: freeOn ? t('freeTotal', { v: fmtMoney(free.value, { sign: false }) }) : t('slipStake') }),
@@ -1959,7 +1960,7 @@ function freeBetList() {
   return freeBets(state.wallet, Date.now(), state.account.ledger.filter(e => e.kind === 'freebet').map(e => e.id.slice(3)));
 }
 // Above the stake: the free bets to use, one tap each.
-function freeBetRow(tokens, free, freeOn, rerender) {
+function freeBetRow(tokens, free, freeOn, rerender, freeShape = true) {
   const t = state.t;
   const days = x => Math.max(1, Math.ceil((x.until - Date.now()) / 86_400_000));
   return el('div', { class: 'free-bets' }, [
@@ -1970,7 +1971,7 @@ function freeBetRow(tokens, free, freeOn, rerender) {
         el('small', { text: x.id === 'eco:fb:welcome' ? `${t('freeBetWelcome')} · ${t('freeBetDays', { n: days(x) })}` : x.id.startsWith('eco:fb:') ? `✦ ${t('freeBetPlus')} · ${t('freeBetDays', { n: days(x) })}` : t('freeBetDays', { n: days(x) }) })
       ])
     )),
-    free && !freeOn ? el('p', { class: 'note back-low', text: t('freeBetOneSlip') }) : free ? el('p', { class: 'note', text: t('freeBetNote') }) : null
+    free && !freeOn ? el('p', { class: 'note back-low', text: freeShape ? t('freeBetMinOdds', { v: FREE_MIN_ODDS.toFixed(2) }) : t('freeBetOneSlip') }) : free ? el('p', { class: 'note', text: t('freeBetNote') }) : null
   ]);
 }
 
