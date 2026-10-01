@@ -56,6 +56,7 @@ const state = {
   liveRecs: new Map(),
   liveAt: null,
   parlay: [],
+  pickedOdds: {},
   slipMode: 'single',
   // Chosen 過關組合 sizes; 'all' stands for 全過, whatever the leg count.
   slipSizes: new Set([2, 'all']),
@@ -1270,6 +1271,18 @@ function renderFutures() {
 
 // ---- Bet slip -----------------------------------------------------------------
 
+// A pick's odds on the slip: as now, and the way they moved since it was
+// picked (the old figure beside them).
+function legOdds(b) {
+  const now = effectiveOdds(b);
+  const was = state.pickedOdds[b.id];
+  const moved = was && Math.abs(now - was) >= 0.005 ? (now > was ? 'up' : 'down') : '';
+  return el('span', { class: `leg-odds${moved ? ` moved ${moved}` : ''}` }, [
+    moved ? el('small', { class: 'leg-was', text: `${moved === 'up' ? '▲' : '▼'} ${fmtOdds(was)}` }) : null,
+    el('small', { text: '@' }),
+    document.createTextNode(fmtOdds(now))
+  ]);
+}
 function toggleLeg(bet) {
   if (bet.lock && !state.parlay.includes(bet.id)) return;
   if (state.parlay.includes(bet.id)) {
@@ -1278,6 +1291,8 @@ function toggleLeg(bet) {
     // Picks of one game can all be chosen: singles buy each, a parlay or
     // system combination never holds two of the same game (odds.mjs).
     state.parlay.push(bet.id);
+    // The odds when it was picked: the slip shows if they move after.
+    state.pickedOdds[bet.id] = effectiveOdds(bet);
     if (state.parlay.length > SLIP_RULES.maxLegs) state.parlay.shift();
     // Two picks or more make a parlay unless another way was chosen.
     if (!state.modeChosen && state.parlay.length >= 2) state.slipMode = 'parlay';
@@ -1389,7 +1404,7 @@ function renderParlay() {
         el('li', {}, [
           betIcon(b),
           legMain(b),
-          el('span', { class: 'leg-odds' }, [el('small', { text: '@' }), document.createTextNode(fmtOdds(effectiveOdds(b)))]),
+          legOdds(b),
           el('button', { class: 'leg-remove', type: 'button', 'aria-label': t('removeLeg'), text: '×', onclick: () => toggleLeg(b) })
         ])
       )
@@ -1974,16 +1989,13 @@ function placeButton(legs, sizes, cost, errors, free = null) {
       disabled: blocked ? '' : null,
       text: updating ? t('placeUpdating') : free && !short ? (cost > 0 ? t('placeFreePlus', { f: fmtMoney(free.value, { sign: false }), v: fmtMoney(cost, { sign: false }) }) : t('placeFree', { v: fmtMoney(free.value, { sign: false }) })) : short ? t('placeShort', { v: fmtMoney(money, { sign: money < 0 }) }) : t('placeSlip', { v: fmtMoney(cost, { sign: false }) }),
       onclick: async () => {
-        // The slip is bought at the odds it shows. The board is checked now
-        // (no waiting): a pick gone, locked or started stops it, and odds
-        // that moved since the slip was drawn redraw it with the new ones
-        // and stop, so the person sees them before betting again.
-        const shown = legs.map(b => effectiveOdds(b));
+        // Bought in one tap at the board's odds now: the slip redraws with
+        // every refresh (moved odds marked there), so what it shows is what's
+        // bought. Only a pick gone, locked or started stops it.
         const current = () => {
           const board = new Map(slipCandidates().map(b => [b.id, b]));
           const now = legs.map(b => board.get(b.id));
-          if (!now.every(b => b && !b.lock && b.estOdds > 1 && !started(b))) return null;
-          return now.every((b, i) => Math.abs(effectiveOdds(b) - shown[i]) < 0.005) ? now : 'moved';
+          return now.every(b => b && !b.lock && b.estOdds > 1 && !started(b)) ? now : null;
         };
         // 單場: each pick its own slip (its own bet, its own line in 紀錄),
         // the stake the same on each; the others, one slip.
@@ -2003,9 +2015,9 @@ function placeButton(legs, sizes, cost, errors, free = null) {
           }
           return { records, slips };
         };
-        const stop = why => (renderParlay(), tell({ lang: state.locale, icon: why === 'moved' ? '📈' : '⏳', title: t(why === 'moved' ? 'oddsMoved' : 'pickGone'), body: t(why === 'moved' ? 'oddsMovedBody' : 'pickGoneBody') }));
+        const stop = () => (renderParlay(), tell({ lang: state.locale, icon: '⏳', title: t('pickGone'), body: t('pickGoneBody') }));
         let picks = current();
-        if (!picks || picks === 'moved') return stop(picks);
+        if (!picks) return stop();
         let { records, slips } = build(picks);
         if (cost > funds()) return;
         // Every purchase asks first: what it costs, and the most it can pay.
@@ -2020,7 +2032,7 @@ function placeButton(legs, sizes, cost, errors, free = null) {
         });
         if (!asked || cost > funds()) return;
         picks = current();
-        if (!picks || picks === 'moved') return stop(picks);
+        if (!picks) return stop();
         ({ records, slips } = build(picks));
         let account = state.account;
         const now = new Date();
