@@ -1327,11 +1327,13 @@ function renderParlay() {
   const chosen = [...state.slipSizes].map(k => (k === 'all' ? n : k));
   const sizes = slipSizes(mode, n, chosen);
   // A free bet (Plus's weekly one, the welcome offer; Rewards' missions gave
-  // them before v7): one slip, its value the stake, nothing paid.
+  // them before v7): one slip, the free bet part of its stake; the person can
+  // put more on it with their own money (state.freeTopUp), so it works as a
+  // cut off a bigger bet.
   const tokens = freeBetList();
   const free = tokens.find(x => x.id === state.useFree) || null;
   const freeOn = Boolean(free) && (mode === 'parlay' || (mode === 'single' && n === 1));
-  const stake = freeOn ? free.value : state.slipStake;
+  const stake = freeOn ? free.value + (state.freeTopUp || 0) : state.slipStake;
   const slip = legs.map(b => ({ gameId: b.gameId, market: b.market ?? b.kind, odds: effectiveOdds(b), fairChance: b.fairChance, minLegs: b.minLegs ?? 1, lock: b.lock ?? null }));
   const errors = slipErrors({ mode, legs: slip, sizes, stake });
   const rerender = () => renderParlay();
@@ -1428,6 +1430,11 @@ function renderParlay() {
     onchange: event => {
       const units = Math.max(0, Math.round(Number(event.target.value) || 0));
       const value = units * SLIP_RULES.unit;
+      if (freeOn) {
+        // The total: never below the free bet; the rest is the top-up.
+        state.freeTopUp = Math.max(0, value - free.value);
+        return void setTimeout(rerender);
+      }
       if (value === state.slipStake) return;
       setStake(value);
       // Redraw after the event: redrawing removes this input, and removing a
@@ -1437,9 +1444,9 @@ function renderParlay() {
   });
   numberField(stakeInput, { digits: 5 });
   if (tokens.length) ticket.push(freeBetRow(tokens, free, freeOn, rerender));
-  if (!freeOn) ticket.push(
+  ticket.push(
     el('label', { class: 'slip-field' }, [
-      el('span', { text: t('slipStake') }),
+      el('span', { text: freeOn ? t('freeTotal', { v: fmtMoney(free.value, { sign: false }) }) : t('slipStake') }),
       el('span', { class: 'stake-box' }, [
         stakeInput,
         el('strong', { text: t('slipStakeEquals', { v: fmtMoney(stake, { sign: false }) }) }),
@@ -1448,15 +1455,20 @@ function renderParlay() {
     ])
   );
   // Quick stakes: one tap to the usual amounts.
-  if (!freeOn) ticket.push(
-    el('div', { class: 'stake-quick', role: 'group', 'aria-label': t('slipStake') }, QUICK_STAKES.map(v =>
-      el('button', { type: 'button', 'aria-pressed': String(stake === v), text: fmtMoney(v, { sign: false }).replace('NT$', ''), onclick: () => (setStake(v), rerender()) })
-    ))
+  ticket.push(
+    freeOn
+      ? el('div', { class: 'stake-quick', role: 'group', 'aria-label': t('freeTopUp') }, [0, 100, 300, 500, 1_000].map(v =>
+          el('button', { type: 'button', 'aria-pressed': String((state.freeTopUp || 0) === v), text: v ? `+${fmtMoney(v, { sign: false }).replace('NT$', '')}` : t('freeOnly'), onclick: () => ((state.freeTopUp = v), rerender()) })
+        ))
+      : el('div', { class: 'stake-quick', role: 'group', 'aria-label': t('slipStake') }, QUICK_STAKES.map(v =>
+          el('button', { type: 'button', 'aria-pressed': String(stake === v), text: fmtMoney(v, { sign: false }).replace('NT$', ''), onclick: () => (setStake(v), rerender()) })
+        ))
   );
   if (errors.length) {
     ticket.push(el('ul', { class: 'slip-errors' }, errors.map(e => el('li', { text: t(`slipError_${e}`, { max: SLIP_RULES.maxLegs, min: fmtMoney(SLIP_RULES.minTicket, { sign: false }), maxTicket: fmtMoney(SLIP_RULES.maxTicket, { sign: false }), unit: SLIP_RULES.unit, need: minLegsProblem(slip, sizes) }) }))));
   }
-  const cost = freeOn ? 0 : comboCount(slip, sizes) * stake;
+  // What comes off the balance: a free bet's top-up only.
+  const cost = freeOn ? stake - free.value : comboCount(slip, sizes) * stake;
   // Quadra Plus's daily boost: on this slip (or the first of several singles).
   const multi = mode === 'single' && n > 1;
   const each = multi ? stake : cost;
@@ -1465,7 +1477,7 @@ function renderParlay() {
     const row = liftRow(slip, sizes, stake, mode, each, lift, multi);
     if (row) ticket.push(row);
   }
-  if (sizes.length && !errors.includes('stakeUnit') && (cost > 0 || freeOn)) ticket.push(payoutBox(slip, sizes, stake, mode, multi ? 0 : lift));
+  if (sizes.length && !errors.includes('stakeUnit') && (cost > 0 || freeOn)) ticket.push(payoutBox(slip, sizes, stake, mode, multi ? 0 : lift, freeOn ? free.value : 0));
   if (mode !== 'single' && n >= 2 && !errors.includes('stakeUnit')) ticket.push(boostLadder(mode === 'parlay' ? n : Math.max(...sizes, 0)));
   ticket.push(placeButton(legs, sizes, cost, errors, freeOn ? free : null));
   ticket.push(el('details', { class: 'info' }, [el('summary', { text: t('slipRulesTitle') }), el('p', { text: t('slipRulesNote') })]));
@@ -1537,13 +1549,16 @@ function legMain(leg) {
 // Payout at a glance: for a parlay the odds multiplied out, for singles each
 // pick's return, for a system each size; then cost, what all correct pays
 // (after tax) and the least a winning ticket pays.
-function payoutBox(legs, sizes, stake, mode, plusLift = 0) {
+// `free`: the free bet part of the stake (its stake isn't paid back).
+function payoutBox(legs, sizes, stake, mode, plusLift = 0, free = 0) {
   const t = state.t;
   const n = legs.length;
   const combos = comboCount(legs, sizes);
   const bySize = combosBySize(legs);
-  const cost = combos * stake;
-  const { gross, net } = slipPayoutTable({ legs, sizes, stake, boost: mode === 'single' ? 0 : boostX(), lift: plusLift });
+  const cost = combos * stake - free;
+  const table = slipPayoutTable({ legs, sizes, stake, boost: mode === 'single' ? 0 : boostX(), lift: plusLift });
+  const gross = table.gross;
+  const net = free ? table.net.map(v => Math.max(0, v - free)) : table.net;
   const all = (1 << n) - 1;
   let least = Infinity;
   for (let won = 1; won < gross.length; won++) if (gross[won] > 0) least = Math.min(least, net[won]);
@@ -1563,6 +1578,7 @@ function payoutBox(legs, sizes, stake, mode, plusLift = 0) {
   const lift = mode === 'single' ? 0 : boostRate(Math.max(...sizes, 0), boostX());
   if (lift > 0) rows.push(payLine(t('payBoost'), `+${Math.round(lift * 100)}%`, 'pay-boost'));
   if (plusLift > 0) rows.push(payLine(t('payLift'), `+${Math.round(plusLift * 100)}%`, 'pay-boost'));
+  if (free) rows.push(payLine(t('payFree'), `−${fmtMoney(free, { sign: false })}`, 'pay-boost'));
   rows.push(payLine(t('payCost', { c: fmtInt(combos) }), fmtMoney(cost, { sign: false }), 'pay-cost'));
   const taxed = gross[all] - net[all] > 0.5;
   return el('div', { class: 'pay-box' }, [
@@ -1933,7 +1949,7 @@ function freeBetRow(tokens, free, freeOn, rerender) {
   return el('div', { class: 'free-bets' }, [
     el('div', { class: 'free-bets-head' }, [el('strong', { text: t('freeBetsTitle') }), el('small', { class: 'muted', text: t('freeBetsSub') })]),
     el('div', { class: 'free-bets-row', role: 'group' }, tokens.map(x =>
-      el('button', { type: 'button', class: 'free-bet', 'aria-pressed': String(free?.id === x.id), onclick: () => ((state.useFree = free?.id === x.id ? null : x.id), rerender()) }, [
+      el('button', { type: 'button', class: 'free-bet', 'aria-pressed': String(free?.id === x.id), onclick: () => ((state.useFree = free?.id === x.id ? null : x.id), (state.freeTopUp = 0), rerender()) }, [
         el('strong', { class: 'num', text: `🎁 ${fmtMoney(x.value, { sign: false })}` }),
         el('small', { text: x.id === 'eco:fb:welcome' ? `${t('freeBetWelcome')} · ${t('freeBetDays', { n: days(x) })}` : x.id.startsWith('eco:fb:') ? `✦ ${t('freeBetPlus')} · ${t('freeBetDays', { n: days(x) })}` : t('freeBetDays', { n: days(x) }) })
       ])
@@ -1946,7 +1962,7 @@ function freeBetRow(tokens, free, freeOn, rerender) {
 function placeButton(legs, sizes, cost, errors, free = null) {
   const t = state.t;
   const money = funds();
-  const short = !free && cost > money;
+  const short = cost > money;
   // Opened on the last board saved: bets wait for today's odds.
   const updating = Boolean(state.fromSnapshot);
   const blocked = errors.length > 0 || sizes.length === 0 || short || !state.accountReady || updating;
@@ -1955,31 +1971,43 @@ function placeButton(legs, sizes, cost, errors, free = null) {
       class: 'primary-button place-button',
       type: 'button',
       disabled: blocked ? '' : null,
-      text: updating ? t('placeUpdating') : free ? t('placeFree', { v: fmtMoney(free.value, { sign: false }) }) : short ? t('placeShort', { v: fmtMoney(money, { sign: money < 0 }) }) : t('placeSlip', { v: fmtMoney(cost, { sign: false }) }),
-      onclick: () => {
+      text: updating ? t('placeUpdating') : free && !short ? (cost > 0 ? t('placeFreePlus', { f: fmtMoney(free.value, { sign: false }), v: fmtMoney(cost, { sign: false }) }) : t('placeFree', { v: fmtMoney(free.value, { sign: false }) })) : short ? t('placeShort', { v: fmtMoney(money, { sign: money < 0 }) }) : t('placeSlip', { v: fmtMoney(cost, { sign: false }) }),
+      onclick: async () => {
         // 單場: each pick its own slip (its own bet, its own line in 紀錄),
         // the stake the same on each; the others, one slip.
         const records = legs.map(legRecord);
         // The parlay boost as it stands now (doubled for Quadra Plus), kept with the slip.
         const boost = boostX();
         const slips = free
-          ? [{ id: newSlipId(), mode: state.slipMode, sizes, stake: free.value, cost: 0, legs: records, ...(state.slipMode !== 'single' ? { boost } : {}) }]
+          ? [{ id: newSlipId(), mode: state.slipMode, sizes, stake: free.value + cost, cost, legs: records, ...(state.slipMode !== 'single' ? { boost } : {}) }]
           : state.slipMode === 'single' && records.length > 1
             ? records.map(leg => ({ id: newSlipId(), mode: 'single', sizes: [1], stake: state.slipStake, cost: cost / records.length, legs: [leg] }))
             : [{ id: newSlipId(), mode: state.slipMode, sizes, stake: state.slipStake, cost, legs: records, ...(state.slipMode !== 'single' ? { boost } : {}) }];
-        if (!free && cost > funds()) return;
+        if (cost > funds()) return;
         // Quadra Plus's daily boost goes with the first paid slip it fits.
         if (!free) {
           const lift = liftFor(slips[0].cost);
           if (lift > 0) slips[0] = { ...slips[0], lift };
         }
+        // Every purchase asks first: what it costs, and the most it can pay.
+        const most = slips.reduce((sum, one) => sum + Math.max(0, slipRange(free ? { ...one, free: true, freeValue: free.value } : one).most), 0);
+        const asked = await ask({
+          lang: state.locale,
+          icon: free ? '🎁' : '🎫',
+          title: free ? (cost > 0 ? t('placeAskFreePlus', { f: fmtMoney(free.value, { sign: false }), v: fmtMoney(cost, { sign: false }) }) : t('placeAskFree', { v: fmtMoney(free.value, { sign: false }) })) : t('placeAsk', { v: fmtMoney(cost, { sign: false }) }),
+          body: t('placeAskBody', { n: records.length, most: fmtMoney(most, { sign: false }) }),
+          ok: t('placeOk'),
+          cancel: t('askCancel')
+        });
+        if (!asked || cost > funds()) return;
         let account = state.account;
         const now = new Date();
         if (free) {
-          const placed = placeFreeSlip(account, slips[0], free, now);
+          const placed = placeFreeSlip(account, slips[0], free, now, { extra: Infinity });
           if (placed.error) return;
           account = placed.account;
           state.useFree = null;
+          state.freeTopUp = 0;
         } else for (const one of slips) {
           // The whole cost was checked above: each part goes through.
           const placed = placeSlip(account, one, now, { extra: Infinity });
@@ -2138,7 +2166,7 @@ function legState(leg, now = Date.now()) {
 function slipRange(slip) {
   const as = result => slip.legs.map(leg => ({ gameId: leg.gameId, odds: leg.odds, result: leg.result ?? result }));
   // A free bet pays its winnings only, not the stake.
-  const less = x => (slip.free ? Math.max(0, x - slip.stake) : x);
+  const less = x => (slip.free ? Math.max(0, x - (slip.freeValue ?? slip.stake)) : x);
   return {
     locked: less(settleSlip({ legs: as('lost'), sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0, lift: slip.lift ?? 0 }).net),
     most: less(settleSlip({ legs: as('won'), sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0, lift: slip.lift ?? 0 }).net)
@@ -2146,6 +2174,9 @@ function slipRange(slip) {
 }
 
 const LEG_ICON = { won: '✓', lost: '✗', void: '↺', live: '●', waiting: '⏳', cashed: '–' };
+
+// A free bet's slip: the free part, and what was put on top.
+const freeCellText = slip => (slip.cost > 0 ? `${fmtMoney(slip.freeValue ?? slip.stake - slip.cost, { sign: false })} + ${fmtMoney(slip.cost, { sign: false })}` : fmtMoney(slip.stake, { sign: false }));
 
 // ---- Cash out ------------------------------------------------------------------------
 
@@ -2356,12 +2387,12 @@ function savedSlipCard(slip) {
     ),
     el('div', { class: 'saved-pay' }, settled
       ? [
-          slip.free ? payCell(t('freeBetTag'), fmtMoney(slip.stake, { sign: false })) : payCell(t('slipCost'), fmtMoney(slip.cost, { sign: false })),
+          slip.free ? payCell(t('freeBetTag'), freeCellText(slip)) : payCell(t('slipCost'), fmtMoney(slip.cost, { sign: false })),
           payCell(t('slipPaidLabel'), fmtMoney(slip.payout, { sign: false })),
           profit > 0 ? payCell(t('slipResult'), fmtMoney(profit), 'back-high') : null
         ]
       : [
-          slip.free ? payCell(t('freeBetTag'), fmtMoney(slip.stake, { sign: false })) : payCell(t('slipCost'), fmtMoney(slip.cost, { sign: false })),
+          slip.free ? payCell(t('freeBetTag'), freeCellText(slip)) : payCell(t('slipCost'), fmtMoney(slip.cost, { sign: false })),
           slip.mode === 'parlay' ? payCell(t('payOdds'), `×${fmtOdds(slip.legs.reduce((p, l) => p * l.odds, 1))}`) : null,
           decided && range.locked > 0 ? payCell(t('slipLocked'), fmtMoney(range.locked, { sign: false }), 'back-high') : null,
           payCell(decided ? t('slipMost') : t('payAll'), fmtMoney(range.most, { sign: false }), dead ? 'back-low' : '')

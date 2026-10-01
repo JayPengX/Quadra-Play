@@ -123,6 +123,20 @@ test('a free bet: no cost, the token spent once, only the winnings paid, no cash
   assert.equal(balance(lost), START_BALANCE);
 });
 
+test('a free bet with more on it: the free bet comes off the stake; a win returns the paid part', () => {
+  let account = newAccount(at('2026-09-25T00:00:00Z'));
+  const token = { id: 'eco:fb:2026-09-21', value: 200 };
+  ({ account } = placeFreeSlip(account, slip('t', 0, [{ id: 'a', odds: 2 }, { id: 'b', odds: 1.5 }], { stake: 500 }), token));
+  // NT$500 on it: NT$200 free, NT$300 from the balance.
+  assert.equal(balance(account), START_BALANCE - 300);
+  assert.deepEqual([account.slips[0].stake, account.slips[0].cost, account.slips[0].freeValue], [500, 300, 200]);
+  // ×3 on NT$500 is NT$1,500 back, less the free NT$200.
+  assert.equal(applyResults(account, 't', ['won', 'won']).slips[0].payout, 1_300);
+  assert.equal(balance(applyResults(account, 't', ['won', 'lost'])), START_BALANCE - 300);
+  // Not enough for the top-up: refused.
+  assert.equal(placeFreeSlip(newAccount(at('2026-09-25T00:00:00Z')), slip('u', 0, [{ id: 'c', odds: 2 }], { stake: START_BALANCE + 1_000 }), token).error, 'funds');
+});
+
 test('Plus daily boost: +10% of the winnings, paid as its own entry, one slip a Taiwan day', () => {
   let account = newAccount(at('2026-09-25T00:00:00Z'));
   const now = at('2026-09-25T04:00:00Z');

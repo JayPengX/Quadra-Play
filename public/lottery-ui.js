@@ -6,11 +6,11 @@ import { GAMES, GAME_ORDER, gameName, nextDraw, quickPick, betCount, checkSelect
 import { CARDS, CARD_ORDER, face, facePays, buyScratch, revealScratch, topPrize } from './lib/scratch.mjs';
 import { balance, newSlipId } from './lib/account.mjs';
 import { compactMoney } from './home.js';
-import { tell } from './lib/quadra.mjs';
+import { ask, tell } from './lib/quadra.mjs';
 
 const T = {
   zh: {
-    draws: '電腦彩券', scratch: '刮刮樂', mine: '我的彩券', nextDraw: '下一期', closes: '截止', jackpot: '頭獎累積', price: '每注', buy: '購買', cost: '共', bets: '注', multiple: '倍數',
+    draws: '電腦彩券', scratch: '刮刮樂', mine: '我的彩券', nextDraw: '下一期', closes: '截止', jackpot: '頭獎累積', price: '每注', buy: '購買', cancel: '取消', buyAsk: '買 {n} 注，共 {v}？', buyAskBody: '{name}，開獎後自動對獎。', scratchAsk: '買一張「{name}」？', scratchAskBody: '{v}，買了馬上刮。', cost: '共', bets: '注', multiple: '倍數',
     quick: '電腦選號', clear: '清除', pickN: '選 {n} 個號碼', zone2: '第二區', straight: '正彩', box: '組彩', pair: '對彩', size: '玩法', combos: '{n} 組',
     stars: '星數', sideTitle: '其他玩法', big: '大', small: '小', odd: '單', even: '雙', bullseye: '超級獎號', latest: '最近開獎', open: '待開獎', won: '中獎', lost: '未中獎',
     today: '今天', yesterday: '昨天', filterAll: '全部', filterWins: '只看中獎', noWins: '還沒有中獎', daySum: '花 {spent}', dayNone: '沒中', outWon: '中 {v}', outNone: '未中', dayNet: '淨 {v}', earlier: '更早的 {n} 天', groupWon: '{n} 張中 {k} 張，共 {v}', groupLost: '{n} 注都沒中', cardsLost: '{n} 張都沒中',
@@ -20,7 +20,7 @@ const T = {
     quick1: '快選 1 注', quickN: '快選 {n} 注', addLine: '加入這注', lines: '已選 {n} 注', remove: '移除', buyAll: '購買 {n} 注 · {v}', boughtN: '已買 {n} 注，共 {v}', seeTickets: '看我的彩券', again: '再買', inMin: '{n} 分鐘後開獎', inHour: '{h} 小時 {m} 分後開獎', picked: '已選 {k}/{n}', starsN: '{n} 星', pickHint: '點下面的號碼，或用快選', slipN: '第 {n} 注', topPrize: '最高獎金', fillRest: '隨機補滿', addNext: '加入，選下一注', quickLines: '快選整注', clearAll: '全部清除', zone1: '第一區', bingoHint: '點 1–10 個號碼，或下面選大小單雙', lastLegend: '上期開出', anyPrize: '任一獎 1/{n}', odds: '機率', oneIn: '1/{n}', yourPick: '你的號碼', waiting: '等待開獎', drawnList: '已開獎', openSum: '{n} 張待開獎', wonSum: '累計中獎 {v}', basketHint: '可以一次買好幾注', sureTitle: '確定購買？', sureBody: '{what} · {v}', sureOk: '購買 {v}'
   },
   en: {
-    draws: 'Draw games', scratch: 'Scratch cards', mine: 'My tickets', nextDraw: 'Next draw', closes: 'Closes', jackpot: 'Jackpot', price: 'A bet', buy: 'Buy', cost: 'Total', bets: 'bets', multiple: 'Multiple',
+    draws: 'Draw games', scratch: 'Scratch cards', mine: 'My tickets', nextDraw: 'Next draw', closes: 'Closes', jackpot: 'Jackpot', price: 'A bet', buy: 'Buy', cancel: 'Cancel', buyAsk: 'Buy {n} for {v}?', buyAskBody: '{name}; checked by itself after the draw.', scratchAsk: 'Buy a {name} card?', scratchAskBody: '{v}; scratch it straight away.', cost: 'Total', bets: 'bets', multiple: 'Multiple',
     quick: 'Quick pick', clear: 'Clear', pickN: 'Pick {n} numbers', zone2: 'Zone 2', straight: 'Straight', box: 'Box', pair: 'Pair', size: 'Play', combos: '{n} combinations',
     stars: 'Stars', sideTitle: 'Other plays', big: 'Big', small: 'Small', odd: 'Odd', even: 'Even', bullseye: 'Super number', latest: 'Latest draw', open: 'Awaiting draw', won: 'Won', lost: 'No win',
     today: 'Today', yesterday: 'Yesterday', filterAll: 'All', filterWins: 'Wins only', noWins: 'No wins yet', daySum: 'Spent {spent}', dayNone: 'No wins', outWon: 'Won {v}', outNone: 'No prize', dayNet: 'Net {v}', earlier: '{n} earlier days', groupWon: '{k} of {n} won, {v}', groupLost: 'No win on {n} bets', cardsLost: 'No win on {n} cards',
@@ -81,6 +81,7 @@ export function mountLottery(ctx) {
   }
   // Every purchase asks first: a tile or button bought on one tap, and a
   // stray tap spent money.
+  const confirmBuy = (icon, title, body) => ask({ lang, icon, title, body, ok: t('buy'), cancel: t('cancel') });
   // Buys a list of selections, one ticket each; { bought, cost } or { error }.
   function buyLines(id, lines, multiple) {
     let account = ctx.getAccount();
@@ -259,6 +260,7 @@ export function mountLottery(ctx) {
             text: t('buy'),
             disabled: bets && d ? null : '',
             onclick: async () => {
+              if (!(await confirmBuy(GAMES[id].icon || '🎱', t('buyAsk', { n: bets, v: money(cost) }), t('buyAskBody', { name: GAMES[id][lang] || '' })))) return;
               const r = buyLines(id, lines, st.multiple);
               if (r.error) return void ((st.msg = t(r.error === 'funds' ? 'funds' : 'closed')), paint());
               st.done = r;
@@ -465,6 +467,7 @@ export function mountLottery(ctx) {
     ]);
   }
   async function buyCard(id) {
+    if (!(await confirmBuy(CARDS[id].icon, t('scratchAsk', { name: CARDS[id][lang] }), t('scratchAskBody', { v: money(CARDS[id].price) })))) return;
     const r = buyScratch(ctx.getAccount(), { id: newSlipId(), card: id }, new Date(), { extra: extra() });
     if (r.error) return void tell({ lang, icon: '💸', title: t('funds'), body: t('fundsBody', { v: money(CARDS[id].price) }) });
     ctx.commitAccount(r.account);

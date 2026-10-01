@@ -103,15 +103,20 @@ export const liftUsedToday = (account, now = new Date()) => account.slips.some(s
 export const liftFits = (cost, max) => cost > 0 && cost <= max;
 
 // Buys a slip with a free bet (a Rewards token or Plus's weekly bonus bet, kit freeBets): the token's
-// value is the stake, nothing comes off the balance, and the token is marked
-// spent ('fb-<token id>', so the same token is never staked twice). Winning
-// pays the winnings only (applyResults), never the stake back.
-export function placeFreeSlip(account, slip, token, now = new Date()) {
+// value is (part of) the stake; only a top-up beyond it comes off the
+// balance, and the token is marked spent ('fb-<token id>', so the same token
+// is never staked twice). Winning pays all but the free part's stake
+// (applyResults): a top-up's stake comes back as usual.
+export function placeFreeSlip(account, slip, token, now = new Date(), { extra = 0 } = {}) {
   if (!token?.id || !(token.value > 0) || account.ledger.some(e => e.id === `fb-${token.id}`)) return { error: 'token' };
+  // More than the free bet on it: the rest from the balance (the free bet
+  // a cut off the stake).
+  const cash = Math.max(0, Math.round((Number(slip.stake) || 0) - token.value));
+  if (cash > 0 && cash > balance(account) + extra) return { error: 'funds' };
   const t = now.toISOString();
-  const saved = { ...slip, stake: token.value, cost: 0, free: token.id, t, status: 'open', legs: slip.legs.map(leg => compactLeg({ ...leg, result: null })) };
+  const saved = { ...slip, stake: token.value + cash, cost: cash, free: token.id, freeValue: token.value, t, status: 'open', legs: slip.legs.map(leg => compactLeg({ ...leg, result: null })) };
   const entries = [
-    { id: `stake-${slip.id}`, t, kind: 'stake', amount: 0, slipId: slip.id },
+    { id: `stake-${slip.id}`, t, kind: 'stake', amount: -cash, slipId: slip.id },
     { id: `fb-${token.id}`, t, kind: 'freebet', amount: 0, slipId: slip.id }
   ];
   return { account: touched({ ...account, ledger: [...account.ledger, ...entries], slips: [saved, ...account.slips] }, now) };
@@ -300,7 +305,7 @@ export function applyResults(account, slipId, results, now = new Date(), finals 
   if (legs.every(leg => leg.result)) {
     const { gross, net } = settleSlip({ legs, sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0, lift: slip.lift ?? 0 });
     // A free bet pays what it won, less the stake it never cost.
-    const payout = slip.free ? Math.max(0, Math.round(net) - slip.stake) : Math.round(net);
+    const payout = slip.free ? Math.max(0, Math.round(net) - (slip.freeValue ?? slip.stake)) : Math.round(net);
     // Quadra Plus's daily boost is paid as its own entry ('plus-<slip>', kind
     // 'plusboost'), so the statement and the Plus sheet show what it gave.
     const plain = slip.lift ? Math.round(settleSlip({ legs, sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0 }).net) : payout;
