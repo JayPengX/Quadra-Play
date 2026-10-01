@@ -107,3 +107,13 @@ test('live: Kambi\'s in-play prices on ESPN\'s live games, turned to ESPN\'s sid
   const [h] = parseKambiInPlay(nhl, 'nhl');
   assert.ok(Math.abs(h.ml.home - (1 / 1.8) / (1 / 1.8 + 1 / 2)) < 1e-9);
 });
+
+test('soccer settles on 90 minutes: a cup tie that went to extra time counts its two halves', async () => {
+  const { parseEspnResults } = await import('../public/lib/sources.mjs');
+  const side = (homeAway, name, score, halves) => ({ homeAway, team: { displayName: name }, score: String(score), linescores: halves.map(value => ({ value })) });
+  const board = name => ({ events: [{ id: '1', date: '2026-10-01T19:00Z', competitions: [{ status: { type: { name, state: 'post', completed: true } }, competitors: [side('home', 'Arsenal', 2, [0, 1, 1, 0]), side('away', 'Leeds United', 1, [1, 0, 0, 0])] }] }] });
+  const [aet] = parseEspnResults(board('STATUS_FINAL_AET'), 'facup');
+  assert.deepEqual([aet.homeScore, aet.awayScore], [1, 1]);
+  const [ft] = parseEspnResults(board('STATUS_FULL_TIME'), 'facup');
+  assert.deepEqual([ft.homeScore, ft.awayScore], [2, 1]);
+});

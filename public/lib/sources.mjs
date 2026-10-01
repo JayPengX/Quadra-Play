@@ -703,6 +703,10 @@ export function parseEspnResults(data, sport) {
     if (!away || !home) continue;
     const type = comp.status?.type || {};
     const status = VOID_STATUS.test(type.name || '') ? 'void' : type.completed && type.state === 'post' ? 'final' : 'pending';
+    // Soccer settles on 90 minutes: a tie that went to extra time (or
+    // penalties) counts its two halves only.
+    const halves = side => (side.linescores || []).slice(0, 2).reduce((sum, l) => sum + (Number(l.value) || 0), 0);
+    const ninety = isSoccer(sport) && /AET|PEN|EXTRA|SHOOTOUT/i.test(type.name || '') && (away.linescores?.length ?? 0) >= 2 && (home.linescores?.length ?? 0) >= 2;
     games.push({
       sport,
       espnId: event.id,
@@ -710,8 +714,8 @@ export function parseEspnResults(data, sport) {
       away: away.team.displayName,
       home: home.team.displayName,
       status,
-      awayScore: Number(away.score),
-      homeScore: Number(home.score),
+      awayScore: ninety ? halves(away) : Number(away.score),
+      homeScore: ninety ? halves(home) : Number(home.score),
       awayInnings: (away.linescores || []).map(l => Number(l.value) || 0),
       homeInnings: (home.linescores || []).map(l => Number(l.value) || 0),
       // Where a game in progress is: 'in', ESPN's short detail ("Top 7th",
@@ -938,7 +942,10 @@ export async function fetchOutcomes(legs, now = new Date()) {
             if (!summary) return;
             if (leg.kind === 'nextrun') out.set(leg.id, { ...game, runOrder: runOrder(summary.plays) });
             else if (leg.kind === 'prop') {
-              const prop = propOutcome(leg, summary);
+              // Kambi settles players' soccer markets on 90 minutes; ESPN's
+              // numbers count extra time: a tie that went on is void.
+              const status = summary.header?.competitions?.[0]?.status?.type?.name || '';
+              const prop = /AET|PEN|EXTRA|SHOOTOUT/i.test(status) && isSoccer(leg.sport) ? { status: 'void' } : propOutcome(leg, summary);
               if (prop) out.set(leg.id, { ...game, prop });
             } else {
               const corners = teamCorners(summary);

@@ -397,7 +397,9 @@ export function gameOptions(game) {
   // Kambi's own markets of the game, once its page has them (offers.mjs):
   // each kind Kambi prices takes the place of the model's.
   if (game.offers?.markets?.length) {
-    const real = marketOptions(game, base, game.offers.markets, { real: true });
+    // Corners settle from ESPN's team stats: not for a league ESPN doesn't carry.
+    const markets = LEAGUES[game.sport]?.path ? game.offers.markets : game.offers.markets.filter(m => m.kind !== 'corners');
+    const real = marketOptions(game, base, markets, { real: true });
     const kinds = new Set(real.map(o => o.kind));
     for (let i = out.length - 1; i >= 0; i--) if (out[i].kind !== 'ml' && kinds.has(out[i].kind)) out.splice(i, 1);
     out.push(...real);
