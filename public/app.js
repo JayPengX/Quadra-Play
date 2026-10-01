@@ -1973,22 +1973,40 @@ function placeButton(legs, sizes, cost, errors, free = null) {
       disabled: blocked ? '' : null,
       text: updating ? t('placeUpdating') : free && !short ? (cost > 0 ? t('placeFreePlus', { f: fmtMoney(free.value, { sign: false }), v: fmtMoney(cost, { sign: false }) }) : t('placeFree', { v: fmtMoney(free.value, { sign: false }) })) : short ? t('placeShort', { v: fmtMoney(money, { sign: money < 0 }) }) : t('placeSlip', { v: fmtMoney(cost, { sign: false }) }),
       onclick: async () => {
+        // The slip is bought at the odds it shows. The board is checked now
+        // (no waiting): a pick gone, locked or started stops it, and odds
+        // that moved since the slip was drawn redraw it with the new ones
+        // and stop, so the person sees them before betting again.
+        const shown = legs.map(b => effectiveOdds(b));
+        const current = () => {
+          const board = new Map(slipCandidates().map(b => [b.id, b]));
+          const now = legs.map(b => board.get(b.id));
+          if (!now.every(b => b && !b.lock && b.estOdds > 1 && !started(b))) return null;
+          return now.every((b, i) => Math.abs(effectiveOdds(b) - shown[i]) < 0.005) ? now : 'moved';
+        };
         // 單場: each pick its own slip (its own bet, its own line in 紀錄),
         // the stake the same on each; the others, one slip.
-        const records = legs.map(legRecord);
-        // The parlay boost as it stands now (doubled for Quadra Plus), kept with the slip.
-        const boost = boostX();
-        const slips = free
-          ? [{ id: newSlipId(), mode: state.slipMode, sizes, stake: free.value + cost, cost, legs: records, ...(state.slipMode !== 'single' ? { boost } : {}) }]
-          : state.slipMode === 'single' && records.length > 1
-            ? records.map(leg => ({ id: newSlipId(), mode: 'single', sizes: [1], stake: state.slipStake, cost: cost / records.length, legs: [leg] }))
-            : [{ id: newSlipId(), mode: state.slipMode, sizes, stake: state.slipStake, cost, legs: records, ...(state.slipMode !== 'single' ? { boost } : {}) }];
+        const build = picks => {
+          const records = picks.map(legRecord);
+          // The parlay boost as it stands now (doubled for Quadra Plus), kept with the slip.
+          const boost = boostX();
+          const slips = free
+            ? [{ id: newSlipId(), mode: state.slipMode, sizes, stake: free.value + cost, cost, legs: records, ...(state.slipMode !== 'single' ? { boost } : {}) }]
+            : state.slipMode === 'single' && records.length > 1
+              ? records.map(leg => ({ id: newSlipId(), mode: 'single', sizes: [1], stake: state.slipStake, cost: cost / records.length, legs: [leg] }))
+              : [{ id: newSlipId(), mode: state.slipMode, sizes, stake: state.slipStake, cost, legs: records, ...(state.slipMode !== 'single' ? { boost } : {}) }];
+          // Quadra Plus's daily boost goes with the first paid slip it fits.
+          if (!free) {
+            const lift = liftFor(slips[0].cost);
+            if (lift > 0) slips[0] = { ...slips[0], lift };
+          }
+          return { records, slips };
+        };
+        const stop = why => (renderParlay(), tell({ lang: state.locale, icon: why === 'moved' ? '📈' : '⏳', title: t(why === 'moved' ? 'oddsMoved' : 'pickGone'), body: t(why === 'moved' ? 'oddsMovedBody' : 'pickGoneBody') }));
+        let picks = current();
+        if (!picks || picks === 'moved') return stop(picks);
+        let { records, slips } = build(picks);
         if (cost > funds()) return;
-        // Quadra Plus's daily boost goes with the first paid slip it fits.
-        if (!free) {
-          const lift = liftFor(slips[0].cost);
-          if (lift > 0) slips[0] = { ...slips[0], lift };
-        }
         // Every purchase asks first: what it costs, and the most it can pay.
         const most = slips.reduce((sum, one) => sum + Math.max(0, slipRange(free ? { ...one, free: true, freeValue: free.value } : one).most), 0);
         const asked = await ask({
@@ -2000,6 +2018,9 @@ function placeButton(legs, sizes, cost, errors, free = null) {
           cancel: t('askCancel')
         });
         if (!asked || cost > funds()) return;
+        picks = current();
+        if (!picks || picks === 'moved') return stop(picks);
+        ({ records, slips } = build(picks));
         let account = state.account;
         const now = new Date();
         if (free) {
