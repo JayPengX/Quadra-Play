@@ -1041,7 +1041,7 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 .wallet-balance.neg { color: var(--bad-strong); }
 .wallet-od { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 10px; padding: 10px 12px; border: 0; border-radius: 12px; background: var(--bad-wash); color: var(--bad-strong); font: inherit; font-size: 0.84rem; text-align: left; cursor: pointer; }
 .wallet-od strong { white-space: nowrap; }
-.wallet-vip { display: grid; gap: 6px; width: 100%; margin-top: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.wallet-vip { display: grid; gap: 6px; width: 100%; margin-top: 12px; padding: 12px 0 0; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .wallet-vip .vip-line { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; min-width: 0; }
 .wallet-vip .vip-line strong { font-size: 0.86rem; white-space: nowrap; }
 .wallet-vip .vip-line small, .wallet-vip .vip-next { font-size: 0.76rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1198,9 +1198,5 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 .acct-cell small { font-size: 0.68rem; color: var(--q-muted); }
 @media (max-width: 380px) { .acct-cells { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* Home: the balance card's ways in, and calmer live cards. */
-.wallet-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 4px; }
-.wallet-actions button { position: relative; display: grid; place-items: center; min-height: 44px; padding: 8px 4px; border: 1px solid var(--q-border); border-radius: 12px; background: var(--q-surface-2, var(--q-page)); color: var(--q-text); font: inherit; font-size: 0.86rem; cursor: pointer; }
-.wallet-actions button[disabled] { opacity: 0.45; cursor: default; }
-.wallet-actions small { position: absolute; top: -6px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: #fff; font-size: 0.68rem; font-weight: 800; line-height: 18px; }
 .feature.live { border-color: var(--border); }
 .home-live .home-head h2 { color: var(--q-text); }

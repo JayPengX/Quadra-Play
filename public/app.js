@@ -415,7 +415,7 @@ const SPORT_GROUPS_ALL = {
 // Only leagues on sale (Taiwan can watch them); a kind with none left goes.
 const SPORT_GROUPS = Object.fromEntries(
   Object.entries(SPORT_GROUPS_ALL)
-    .map(([g, x]) => [g, { ...x, leagues: x.leagues.filter(k => k === 'f1' || (LEAGUES[k] && !LEAGUES[k].off)) }])
+    .map(([g, x]) => [g, { ...x, leagues: x.leagues.filter(k => k === 'f1' || LEAGUES[k]) }])
     .filter(([, x]) => x.leagues.length)
 );
 const groupOfSport = sport => Object.keys(SPORT_GROUPS).find(g => SPORT_GROUPS[g].leagues.includes(sport));
