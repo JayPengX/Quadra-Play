@@ -1,27 +1,18 @@
 // The leagues Play sells: from the shared catalogue, the purged ones gone
-// badminton players' flags, K League's prices.
+// K League's prices.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parseKambiEvents } from '../public/lib/kambi.mjs';
-import { LEAGUES, familyOf, isNeutral, isPlayers, playerNation } from '../public/lib/teams.mjs';
+import { LEAGUES, familyOf } from '../public/lib/teams.mjs';
 import { gameOptions } from '../public/lib/board.mjs';
 import { legResult } from '../public/lib/account.mjs';
 
 test('Play leagues come from the shared catalogue; the purged sports are gone, not hidden', () => {
   assert.equal(LEAGUES.facup.path, 'soccer/eng.fa');
   assert.equal(familyOf('euroleague'), 'basketball');
-  assert.ok(isNeutral('badminton') && isPlayers('badminton'));
-  assert.equal(familyOf('badminton'), 'sets');
-  for (const key of ['ufc', 'boxing', 'tennis', 'wta', 'tabletennis', 'volleyball', 'snooker', 'cricket', 'rugbyunion', 'acb', 'nbl', 'cba', 'kbl', 'bleague', 'ncaaf', 'acl', 'asiancup', 'eredivisie', 'wcqeurope', 'nrl', 'afl']) assert.equal(LEAGUES[key], undefined, key);
+  for (const key of ['badminton', 'ufc', 'boxing', 'tennis', 'wta', 'tabletennis', 'volleyball', 'snooker', 'cricket', 'rugbyunion', 'acb', 'nbl', 'cba', 'kbl', 'bleague', 'ncaaf', 'acl', 'asiancup', 'eredivisie', 'wcqeurope', 'nrl', 'afl']) assert.equal(LEAGUES[key], undefined, key);
   for (const l of Object.values(LEAGUES)) assert.equal(l.off, undefined);
-});
-
-test("badminton players' nations: the kit's table, else where Kambi files the match", () => {
-  assert.equal(playerNation('Tai Tzu-Ying'), 'TW');
-  assert.equal(playerNation('Viktor Axelsen'), 'DK');
-  assert.equal(playerNation('Someone New', ['China Open', 'badminton', 'china']), 'CN');
-  assert.equal(playerNation('Nobody Known', ['Some Open']), null);
 });
 
 test('K League from Kambi: three-way prices, full-time markets only, a draw settles from the last score', async () => {

@@ -6,7 +6,7 @@ import { proxyJson } from './quadra.mjs';
 import { americanToProbability, devigProportional, devigPower } from './odds.mjs';
 import { normalizeTeamName, teamZh, LEAGUES, familyOf, isSoccer, rememberLogo, rememberTeams, hasTeams } from './teams.mjs';
 import { runOrder, shareLeft } from './live.mjs';
-import { KAMBI, kambiUrl, parseKambiInPlay, useKambiToken, fetchKambiLeague, decidedFromLive, decidedTeamGame, parseKambiLiveData, kambiLiveDataUrl, setsWon, watchKambiMatches, fetchKeptKambi } from './kambi.mjs';
+import { KAMBI, kambiUrl, parseKambiInPlay, useKambiToken, fetchKambiLeague, decidedTeamGame, parseKambiLiveData, kambiLiveDataUrl, watchKambiMatches, fetchKeptKambi } from './kambi.mjs';
 import { KAMBI_LEAGUES } from './teams.mjs';
 import { withHousePrices, sameSide } from './house.mjs';
 import { SOLD_DAYS, ASIA_URL, asiaMonth, asiaMonthOf } from './catalog.mjs';
@@ -796,12 +796,12 @@ export async function fetchOutcomes(legs, now = new Date()) {
         return;
       }
       // Kambi's sports: the result from the match's own live data, once the
-      // score shows it decided (see decidedTeamGame / decidedFromLive). Once
+      // score shows it decided (see decidedTeamGame). Once
       // Kambi has dropped it, from the Worker's kept copy (below).
       if (league?.kambi && leg.kambiId) {
         const live = parseKambiLiveData(await page(kambiLiveDataUrl(leg.kambiId)));
         if (!live) return kambiGone.push(leg);
-        const result = decidedFromLive(live, leg.sport) ?? decidedTeamGame(live, leg.sport, leg.start, now);
+        const result = decidedTeamGame(live, leg.sport, leg.start, now);
         out.set(leg.id, result ?? kambiInPlay(live, leg.sport));
         return;
       }
@@ -829,7 +829,7 @@ export async function fetchOutcomes(legs, now = new Date()) {
     for (const leg of kambiGone) {
       const entry = kept?.get(String(leg.kambiId));
       const live = entry?.live && parseKambiLiveData({ liveData: entry.live });
-      const result = live && (decidedFromLive(live, leg.sport) ?? decidedTeamGame(live, leg.sport, leg.start, now, { ended: Boolean(entry.gone) }));
+      const result = live && decidedTeamGame(live, leg.sport, leg.start, now, { ended: Boolean(entry.gone) });
       if (result) out.set(leg.id, result);
       else if (kambiUnresolvable(leg, entry, now, Boolean(kept))) out.set(leg.id, { status: 'void', reason: 'noResult' });
       else if (live && !entry.gone) out.set(leg.id, kambiInPlay(live, leg.sport));
@@ -1113,7 +1113,7 @@ async function storeTeams(url, teams) {
 // lottery does with a match that has no official result. That's once the
 // kept copy is marked gone, or, with nothing kept at all, once the match is
 // surely over (its sport's longest usual length, plus two hours).
-const KAMBI_LONGEST_H = { badminton: 3, npb: 6, kbo: 6, cpbl: 6, euroleague: 4, kleague: 4 };
+const KAMBI_LONGEST_H = { npb: 6, kbo: 6, cpbl: 6, euroleague: 4, kleague: 4 };
 export function kambiUnresolvable(leg, entry, now = new Date(), watchReachable = true) {
   if (entry?.gone) return true;
   const past = now.getTime() - Date.parse(leg.start);
@@ -1122,14 +1122,8 @@ export function kambiUnresolvable(leg, entry, now = new Date(), watchReachable =
   return !entry?.live && past > (watchReachable ? longest : longest + 12 * 3_600_000);
 }
 
-// A Kambi match in play as an outcome still pending: sets won so far (or the
-// score, for baseball and basketball) and each set's score.
-export function kambiInPlay(live, sport) {
-  const spec = LEAGUES[sport]?.sets;
-  if (spec && live.sets) {
-    const won = setsWon(live.sets, spec);
-    return { status: 'pending', state: 'in', homeScore: won.home, awayScore: won.away, homeSets: live.sets.home, awaySets: live.sets.away, detail: '' };
-  }
+// A Kambi match in play as an outcome still pending: the score so far.
+export function kambiInPlay(live) {
   return { status: 'pending', state: 'in', homeScore: live.score.home, awayScore: live.score.away, detail: '' };
 }
 

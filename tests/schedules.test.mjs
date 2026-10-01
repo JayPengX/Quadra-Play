@@ -11,7 +11,6 @@ const asia = (id, start, home, away, state = 'pre', homeScore = null, awayScore 
 
 test('every Kambi league has a schedule of its own, or sells what Kambi lists', () => {
   assert.deepEqual(LEAGUES.cpbl.schedule, { asia: 'cpbl' });
-  assert.equal(LEAGUES.badminton.schedule, undefined);
   assert.equal(LEAGUES.euroleague.schedule, undefined);
 });
 

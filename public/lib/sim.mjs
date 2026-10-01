@@ -187,9 +187,9 @@ function withOutcomes(pool) {
 // most, handicaps and totals next, every side market a little. A game's
 // weight is shared among its lines of a kind, so a game with ten total lines
 // isn't picked ten times as often.
-export const KIND_WEIGHT = { ml: 1, f1: 1, runline: 0.45, total: 0.45, gamehcap: 0.3, gametotal: 0.3 };
+export const KIND_WEIGHT = { ml: 1, f1: 1, runline: 0.45, total: 0.45 };
 const SIDE_WEIGHT = 0.1;
-const MAIN_KINDS = new Set(['ml', 'f1', 'runline', 'total', 'gamehcap', 'gametotal']);
+const MAIN_KINDS = new Set(['ml', 'f1', 'runline', 'total']);
 
 // The lists each pick style draws from, from one sport's pool of options
 // ({ gameId, key?, outLo?, outHi?, fairChance, odds, kind?, minLegs?, lock? }).
@@ -739,8 +739,6 @@ const euroLeague = perWeek => w => (between(w, 33, 21) && !EURO_BREAKS.has(w) ? 
 const F1_RACE_WEEKS = new Set([10, 11, 13, 14, 15, 17, 20, 22, 24, 26, 27, 29, 30, 35, 36, 38, 39, 40, 42, 43, 44, 46, 48, 49]);
 // UEFA club competitions: league-phase matchdays (18 games), then knockouts.
 const UEFA_WEEKS = { 37: 18, 39: 18, 42: 18, 44: 18, 47: 18, 49: 18, 3: 18, 4: 18, 7: 8, 8: 8, 10: 8, 11: 8, 14: 4, 15: 4, 17: 2, 18: 2, 22: 1 };
-// The BWF tour holds events about three weeks in five.
-const eventWeeks = perWeek => w => (between(w, 1, 49) && w % 5 !== 2 && w % 5 !== 4 ? perWeek : 0);
 
 export const SIM_SPORTS = {
   // MLB: 2,430 games from Opening Day (25 March 2027, week 11) to 26 September
@@ -784,8 +782,6 @@ export const SIM_SPORTS = {
   worldcup: { family: 'soccer', kind: 'soccer', pop: 0.5, games: w => (between(w, 24, 29) ? 17 : 0) },
   // FA Cup: the first round in November (40 ties) to the final in May.
   facup: { family: 'soccer', kind: 'soccer', pop: 0.2, games: w => ({ 44: 40, 48: 20, 1: 32, 5: 16, 9: 8, 11: 4, 16: 2, 20: 1 })[w] ?? 0 },
-  // Badminton (BWF World Tour): event weeks.
-  badminton: { family: 'sets', kind: 'badminton', pop: 1.5, games: eventWeeks(40) },
   // F1: the 24 races of the 2027 calendar, Bahrain 14 March to Abu Dhabi 12 December.
   f1: { family: 'racing', kind: 'f1', pop: 1.2, headline: true, games: w => (F1_RACE_WEEKS.has(w) ? 1 : 0) }
 };
@@ -797,7 +793,7 @@ export const SPORTS = Object.keys(SIM_SPORTS);
 // their series while any is in season; in their off-season, on whatever else
 // is on that week in OFFSEASON_SWITCH of the weeks (never, if loyal; always,
 // if hoppers). F1 is one race at a time, so F1-only people bet single picks.
-const MIXES = [['mlb', 'nba'], ['cpbl', 'mlb'], ['cpbl', 'npb'], ['nba', 'epl'], ['epl', 'ucl'], ['mlb', 'epl'], ['nba', 'nfl'], ['cpbl', 'badminton'], ['nba', 'f1']];
+const MIXES = [['mlb', 'nba'], ['cpbl', 'mlb'], ['cpbl', 'npb'], ['nba', 'epl'], ['epl', 'ucl'], ['mlb', 'epl'], ['nba', 'nfl'], ['nba', 'f1']];
 const SHARE_OF = { one: 0.55, kind: 0.3, mix: 0.25, all: 0.12 };
 const pop = sports => sports.reduce((s, sp) => s + SIM_SPORTS[sp].pop, 0);
 const KINDS = [...new Set(SPORTS.map(sp => SIM_SPORTS[sp].kind))];
@@ -835,7 +831,7 @@ export function weekOfYear(date) {
 // (board.mjs), so they get the same markets, the same house cut for the
 // league and the same locks. A sport off the board is then no cheaper, or
 // dearer, to bet on than one on it. Seeded, so it's the same every time.
-const TEMPLATE_WIN = { baseball: [0.35, 0.65], basketball: [0.15, 0.85], football: [0.2, 0.8], hockey: [0.35, 0.65], sets: [0.12, 0.88] };
+const TEMPLATE_WIN = { baseball: [0.35, 0.65], basketball: [0.15, 0.85], football: [0.2, 0.8], hockey: [0.35, 0.65] };
 // Each sport's usual total line (none: its own model sets one).
 const TEMPLATE_TOTAL = { mlb: 8.5, npb: 7.5, kbo: 9.5, cpbl: 9.5, nfl: 44.5, nba: 224.5, wnba: 162.5, euroleague: 160.5, nhl: 5.5 };
 // An F1 field as the market usually prices it: the average shape of two real
@@ -843,8 +839,6 @@ const TEMPLATE_TOTAL = { mlb: 8.5, npb: 7.5, kbo: 9.5, cpbl: 9.5, nfl: 44.5, nba
 // favourite after), so a typical race returns what a real one does
 // (NT$62 per NT$100 for the crowd's usual pick, against 59 and 65).
 const F1_FIELD = [0.5165, 0.1703, 0.105, 0.077, 0.0431, 0.0323, 0.0261, 0.0095, 0.0041, 0.0018, 0.0014, 0.0012, 0.0012, 0.0012, 0.0012, 0.0009, 0.0009, 0.0009, 0.0009, 0.0009, 0.0009, 0.0009, 0.0009, 0.0007, 0.0002];
-// Matches in sets: the bookmaker's handicap and total in points, as it lists them.
-const TEMPLATE_UNITS = { badminton: [4.5, 80.5] };
 const templates = new Map();
 export function sportTemplate(sport, seed = 7) {
   const key = `${sport}|${seed}`;
@@ -874,13 +868,6 @@ function buildTemplate(sport, seed) {
       const homeWin = between(...TEMPLATE_WIN[family]);
       game.draftKings = { home: homeWin, away: 1 - homeWin };
       if (TEMPLATE_TOTAL[sport]) game.total = { line: TEMPLATE_TOTAL[sport], overFair: between(0.45, 0.55) };
-      const units = TEMPLATE_UNITS[sport];
-      if (units) {
-        // The favourite giving the line, near 50/50 to cover.
-        const awayLine = homeWin > 0.5 ? units[0] : -units[0];
-        game.spread = { awayLine, awayFair: between(0.45, 0.55) };
-        game.total = { line: units[1], overFair: between(0.45, 0.55) };
-      }
     }
     options.push(...gameOptions(game));
   }

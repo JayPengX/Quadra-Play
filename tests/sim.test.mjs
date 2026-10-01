@@ -255,11 +255,10 @@ test('every text the page builds from a key exists in both languages', async () 
     ...TRAIT_ROWS.flatMap(r => [`trait_${r.key}`, `traitDesc_${r.key}`]),
     ...[...Object.keys(LEAGUES), 'f1', 'all'].map(k => `sport_${k}`),
     ...[...FUTURES, ...EXTRA_FUTURES].flatMap(f => [`future_${f.key}`, `futureSettle_${f.key}`]),
-    ...['games', 'points', 'frames'].map(u => `unit_${u}`),
     ...['low', 'high'].map(l => `lock_${l}`),
     ...['locked', 'minLegs'].map(e => `slipError_${e}`),
-    ...['baseball', 'basketball', 'soccer', 'football', 'hockey', 'badminton', 'f1'].map(g => `group_${g}`),
-    ...['secHtft', 'secGoalBands', 'secQ1', 'secFirstSet', 'secSets', 'secTotalSets', 'secSetHcap', 'secGameHcap', 'secGameTotal', 'secHalfTotal', 'secDoubleChance'],
+    ...['baseball', 'basketball', 'soccer', 'football', 'hockey', 'f1'].map(g => `group_${g}`),
+    ...['secHtft', 'secGoalBands', 'secQ1', 'secHalfTotal', 'secDoubleChance'],
     ...['givePoints', 'f1Podium', 'f1PodiumShort', 'f1PodiumSub', 'f1PodiumNote']
   ];
   for (const locale of ['zh', 'en']) {

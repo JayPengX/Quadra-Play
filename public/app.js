@@ -21,10 +21,9 @@ import {
 import { pack, unpack } from './lib/codec.mjs';
 import { historyStats, funFacts, crowdPercentile } from './lib/history.mjs';
 import { detectLocale, makeT } from './lib/i18n.mjs';
-import { f1Driver, f1Constructor, findTeamLogo, countryFlag, countryCode, leagueLogo, teamLogo, teamZh, LEAGUES, familyOf, isSoccer, isNeutral, isPlayers, normalizeTeamName, playerNation, flagEmoji } from './lib/teams.mjs';
+import { f1Driver, f1Constructor, findTeamLogo, countryFlag, countryCode, leagueLogo, teamLogo, teamZh, LEAGUES, familyOf, isSoccer, normalizeTeamName } from './lib/teams.mjs';
 import { flagUrl } from './lib/logos.mjs';
 import { logoPicture, raceName } from './lib/logos.mjs';
-import { findPhoto, knownPhoto } from './lib/photos.mjs';
 import { houseRule, houseCut, minLegsProblem, leagueTier } from './lib/rules.mjs';
 import { gameOptions, crowdPool, f1Podium, f1Markets, f1PoleFromWinner } from './lib/board.mjs';
 import { auditPools } from './lib/audit.mjs';
@@ -175,8 +174,7 @@ function teamName(team) {
 // ---- Bets -------------------------------------------------------------------
 
 function matchupText(game) {
-  // Players at a neutral venue: in the order the draw lists them.
-  return isSoccer(game.sport) || isNeutral(game.sport)
+  return isSoccer(game.sport)
     ? `${teamName(game.home)} vs ${teamName(game.away)}`
     : `${teamName(game.away)} @ ${teamName(game.home)}`;
 }
@@ -203,7 +201,6 @@ function fmtLine(line) {
 function named(game, o, matchup) {
   const t = state.t;
   const team = side => teamName(game[side]);
-  const unit = () => t(`unit_${LEAGUES[game.sport]?.sets?.unit ?? 'points'}`);
   switch (o.kind) {
     case 'ml': {
       const name = o.side === 'draw' ? t('draw') : team(o.side);
@@ -223,12 +220,6 @@ function named(game, o, matchup) {
       const name = o.inning < 9 ? t('inningN', { n: o.inning + 1 }) : t('inningTie');
       return { ...o, matchup, chip: name, label: `${matchup} ${t('topInning')} ${name}`, shortLabel: name };
     }
-    case 'gamehcap': {
-      const text = `${team(o.side)} ${fmtLine(o.line)}`;
-      return { ...o, matchup, marketLabel: `${team(o.giver)} ${fmtLine(-Math.abs(o.awayLine))} ${unit()}`, chip: text, label: text, shortLabel: `${t('secGameHcap')} ${text}` };
-    }
-    case 'gametotal':
-      return { ...o, matchup, marketLabel: `${o.line} ${unit()}`, chip: t(o.side), label: `${matchup} ${t(o.side)} ${o.line}`, shortLabel: `${t(o.side)} ${o.line} ${unit()}` };
     default: {
       const name = pickName(game, o.m, o.pick);
       return { ...o, matchup, marketLabel: marketLabelOf(game, o.m), chip: name, label: `${matchup} ${name}`, shortLabel: name };
@@ -240,8 +231,6 @@ function named(game, o, matchup) {
 function marketLabelOf(game, m) {
   const t = state.t;
   if (m.kind === 'runline' || m.kind === 'total') return null;
-  if (m.kind === 'totalsets') return `${t('secTotalSets')} ${m.line}`;
-  if (m.kind === 'sethcap') return `${teamName(game[m.giver])} ${fmtLine(-Math.abs(m.awayLine))}`;
   if (m.kind === 'nextrun') return t('firstScore');
   return t(SECTIONS.find(sec => sec.kind === m.kind)?.title ?? m.kind);
 }
@@ -251,15 +240,10 @@ const RESULT_SHORT = { home: 'homeShort', draw: 'drawShort', away: 'awayShort' }
 // What a pick is called: a team, a line, a band, a score …
 function pickName(game, market, pick) {
   const t = state.t;
-  if (market.kind === 'runline' || market.kind === 'sethcap') return `${teamName(game[pick.side])} ${fmtLine(pick.line)}`;
+  if (market.kind === 'runline') return `${teamName(game[pick.side])} ${fmtLine(pick.line)}`;
   if (market.kind === 'dc') return pick.side.split('|').map(x => (x === 'draw' ? t('draw') : teamName(game[x]))).join(' / ');
   if (market.kind === 'htft') return `${t(RESULT_SHORT[pick.ht])}/${t(RESULT_SHORT[pick.ft])}`;
   if (market.kind === 'goalbands') return pick.hi == null ? `${pick.lo}+` : `${pick.lo}-${pick.hi}`;
-  if (market.kind === 'sets') {
-    // The winner and the score in sets (frames): "Sinner 2:1".
-    const [h, a] = pick.score.split('-').map(Number);
-    return `${teamName(game[h > a ? 'home' : 'away'])} ${Math.max(h, a)}:${Math.min(h, a)}`;
-  }
   if (market.kind === 'margin') return `${teamName(game[pick.team])} ${pick.hi == null ? `${pick.lo}+` : pick.lo === pick.hi ? pick.lo : `${pick.lo}-${pick.hi}`}`;
   if (market.kind === 'score') return pick.score === 'other' ? t('scoreOther') : pick.score.replace('-', ':');
   if (pick.side === 'away' || pick.side === 'home') return teamName(game[pick.side]);
@@ -426,7 +410,6 @@ const SPORT_GROUPS_ALL = {
   soccer: { icon: '⚽', leagues: Object.keys(LEAGUES).filter(key => LEAGUES[key].family === 'soccer' && !LEAGUES[key].off) },
   football: { icon: '🏈', leagues: ['nfl'] },
   hockey: { icon: '🏒', leagues: ['nhl'] },
-  badminton: { icon: '🏸', leagues: ['badminton'] },
   f1: { icon: '🏎️', leagues: ['f1'] }
 };
 // Only leagues on sale (Taiwan can watch them); a kind with none left goes.
@@ -566,20 +549,6 @@ function renderDayFilter() {
   renderLive();
 }
 
-// Where Kambi filed each player's match (its group and path words): their
-// country when the kit's table doesn't know them. Rebuilt when the games change.
-const whereIndex = { games: null, live: null, map: new Map() };
-function whereFor(sport, en) {
-  const games = state.data?.games;
-  const live = state.liveGames;
-  if (whereIndex.games !== games || whereIndex.live !== live) {
-    whereIndex.map = new Map();
-    for (const g of [...(games || []), ...(live || [])]) for (const side of ['home', 'away']) if (g.where?.length && g[side]?.en) whereIndex.map.set(`${g.sport}|${g[side].en}`, g.where);
-    Object.assign(whereIndex, { games, live });
-  }
-  return whereIndex.map.get(`${sport}|${en}`) || [];
-}
-
 // Two initials of a name ("Sarah De Nutte" → SD; a Chinese name's first character).
 const initialsOf = name => {
   const n = String(name || '?').trim();
@@ -587,25 +556,7 @@ const initialsOf = name => {
   return n.split(/\s+/).filter(w => w && !/^(jr|sr)\.?$/i.test(w)).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?';
 };
 // A team logo, or its initials in a circle when there's no logo (or it fails).
-// Players (badminton): their headshot, else their nation's flag.
 function logoImg(sport, enName, label, size = '') {
-  if (isPlayers(sport)) {
-    // Their headshot (the kit's photos.mjs: ESPN's or TheSportsDB's
-    // cutout, asked once); their nation's flag only until one comes, or
-    // when there's none.
-    const seen = teamLogo(sport, enName);
-    const nation = playerNation(enName, whereFor(sport, enName));
-    const initial = () => el('span', { class: `logo logo-fallback ${size}`, 'aria-hidden': 'true', text: initialsOf(label || enName) });
-    const emoji = () => (nation ? el('span', { class: `logo logo-flag ${size}`, 'aria-hidden': 'true', text: flagEmoji(nation) }) : initial());
-    const known = knownPhoto(enName, LEAGUES[sport]?.sport || sport);
-    if (known) return logoPicture(known, null, `logo photo ${size}`, emoji);
-    const flagged = seen && !/flag|countries/i.test(seen) ? logoPicture(seen, null, `logo photo ${size}`, emoji) : seen || nation ? logoPicture(seen || flagUrl(nation), null, `logo player-flag ${size}`, emoji) : initial();
-    if (known === undefined && enName && !/\//.test(enName))
-      findPhoto(enName, sport).then(url => {
-        if (url && flagged.isConnected) flagged.replaceWith(logoPicture(url, null, `logo photo ${size}`, emoji));
-      });
-    return flagged;
-  }
   // A national team's flag; else one character: a Chinese name's first
   // character, or an English initial.
   const flag = countryFlag(enName);
@@ -726,7 +677,7 @@ function renderGames() {
   const byGame = groupBy(state.bets, b => b.gameId);
   const listed = games.filter(g => byGame.get(g.id));
   // The big leagues first (by time), then the rest; with every sport shown,
-  // the thinly traded ones (badminton, Asian baseball…) fold away
+  // the thinly traded ones (Asian baseball, EuroLeague…) fold away
   // behind one row, so the board opens on the games people know.
   const TIER = { major: 0, minor: 1, thin: 2 };
   const ordered = searching ? listed : [...listed].sort((a, b) => TIER[shownTier(a.sport)] - TIER[shownTier(b.sport)] || a.startUtc.localeCompare(b.startUtc));
@@ -754,8 +705,7 @@ function gameCard(game, bets) {
   const rerender = game.live ? renderLive : renderGames;
   const open = state.open.has(game.id);
   const ml = bets.filter(b => b.kind === 'ml');
-  const neutral = isNeutral(game.sport);
-  const sides = isSoccer(game.sport) ? ['home', 'draw', 'away'] : neutral ? ['home', 'away'] : ['away', 'home'];
+  const sides = isSoccer(game.sport) ? ['home', 'draw', 'away'] : ['away', 'home'];
   const rows = sides.map(side => {
     const bet = ml.find(b => b.side === side);
     const who =
@@ -763,7 +713,7 @@ function gameCard(game, bets) {
         ? [badge('=', 'var(--text-muted)'), el('span', { class: 'team-name', text: t('draw') })]
         : [
             logoImg(game.sport, game[side].en, teamName(game[side])),
-            el('span', { class: 'team-name' }, [document.createTextNode(teamName(game[side])), neutral ? null : el('small', { text: t(side === 'home' ? 'homeTag' : 'awayTag') })])
+            el('span', { class: 'team-name' }, [document.createTextNode(teamName(game[side])), el('small', { text: t(side === 'home' ? 'homeTag' : 'awayTag') })])
           ];
     const score = game.live && side !== 'draw' ? el('span', { class: 'live-score', text: String(game.live[`${side}Score`]) }) : null;
     return el('div', { class: 'team-row' }, [...who, score, bet ? pickButton(bet, '') : null]);
@@ -891,8 +841,8 @@ function marketPanel(game, section, bets) {
 }
 
 // Kinds laid out as tables of lines: over/under, and one team giving a line.
-const TOTAL_KINDS = new Set(['total', 'gametotal', 'htotal', 'f5total', 'totalsets']);
-const HCAP_KINDS = new Set(['runline', 'gamehcap', 'sethcap']);
+const TOTAL_KINDS = new Set(['total', 'htotal', 'f5total']);
+const HCAP_KINDS = new Set(['runline']);
 
 // One section per kind of bet, each market of it with its own take. The
 // inning market's ten results take a whole row.
@@ -916,13 +866,7 @@ const SECTIONS = [
   { kind: 'oddeven', title: 'secOddEven' },
   { kind: 'htft', title: 'secHtft' },
   { kind: 'goalbands', title: 'secGoalBands' },
-  { kind: 'q1', title: 'secQ1' },
-  { kind: 'firstset', title: 'secFirstSet' },
-  { kind: 'sets', title: 'secSets' },
-  { kind: 'totalsets', title: 'secTotalSets' },
-  { kind: 'sethcap', title: 'secSetHcap' },
-  { kind: 'gamehcap', title: 'secGameHcap' },
-  { kind: 'gametotal', title: 'secGameTotal' }
+  { kind: 'q1', title: 'secQ1' }
 ];
 
 function fmtPctShort(p) {
@@ -980,12 +924,11 @@ function groupBy(items, key) {
 
 // ---- Live (場中) --------------------------------------------------------------------
 
-// "4局下 1出局", "中場", "67'", "第3節 5:32", "第 2 局" (a set), "延長".
+// "4局下 1出局", "中場", "67'", "第3節 5:32", "延長".
 function liveStateText(live) {
   const t = state.t;
   if (live.delayed) return `${live.detail} · ${t('livePaused')}`;
   if (live.book === 'kambi') {
-    if (live.setNo) return t('liveSetN', { n: live.setNo });
     if (live.inningNo) return t('liveInningN', { n: live.inningNo });
     if (live.quarter) return t('livePeriodN', { n: live.quarter, clock: '' }).trim();
     return t('liveInPlay');
@@ -1001,9 +944,8 @@ function liveStateText(live) {
   return live.half === 'top' || live.half === 'bottom' ? `${text} ${t('liveOuts', { n: live.outs })}` : text;
 }
 
-// Kambi's live prices for one match (its sports: Asian baseball, EuroLeague
-// and B.League, tennis, badminton, table tennis, volleyball, snooker), at the
-// house's live cut.
+// Kambi's live prices for one match (Asian baseball, EuroLeague, K League),
+// at the house's live cut.
 function kambiLiveBets(game, g, base) {
   const t = state.t;
   const bets = [];
@@ -1048,7 +990,6 @@ function buildLiveBets(data) {
       away: { en: g.away, zh: teamZh(g.sport, g.away) },
       home: { en: g.home, zh: teamZh(g.sport, g.home) },
       group: g.group || '',
-      where: g.where || [],
       live: { ...g, book: 'kambi' }
     };
     games.push(game);
@@ -2104,7 +2045,7 @@ function finalOf(outcome) {
   if (outcome?.status !== 'final') return null;
   if (outcome.winner) return { winner: outcome.winner, ...(outcome.podium ? { podium: outcome.podium } : {}) };
   if (!Number.isFinite(outcome.awayScore) || !Number.isFinite(outcome.homeScore)) return null;
-  return { away: outcome.awayScore, home: outcome.homeScore, ...(outcome.homeSets ? { homeSets: outcome.homeSets, awaySets: outcome.awaySets } : {}) };
+  return { away: outcome.awayScore, home: outcome.homeScore };
 }
 
 function renderAccount() {
@@ -2238,8 +2179,6 @@ function legStanding(leg) {
 // half-time translated, the rest ("Q3 5:21", "67'") as it is.
 function liveDetail(live, sport) {
   const t = state.t;
-  // Matches in sets: the set being played.
-  if (!live.detail && live.homeSets?.length) return t('liveSetN', { n: live.homeSets.length });
   if (!live.detail) return t('liveInPlay');
   if (familyOf(sport) === 'baseball') {
     const inning = parseInning(live.detail, live.period);
@@ -2271,12 +2210,11 @@ function slipNowLine(slip, states) {
 // for matches in sets), where the game is, and whether the pick is winning
 // right now.
 // A game's score in one line, the teams in the card's order: "太空人 4 : 6
-// 運動家", with each set's score for matches in sets.
+// 運動家".
 function scoreText(leg, score) {
   const name = side => teamName({ en: leg[side], zh: teamZh(leg.sport, leg[side]) });
-  const first = isSoccer(leg.sport) || isNeutral(leg.sport) ? ['home', 'away'] : ['away', 'home'];
-  const sets = score.homeSets ? ` (${score.homeSets.map((h, i) => (first[0] === 'home' ? `${h}-${score.awaySets[i]}` : `${score.awaySets[i]}-${h}`)).join(' ')})` : '';
-  return `${name(first[0])} ${score[first[0]]} : ${score[first[1]]} ${name(first[1])}${sets}`;
+  const first = isSoccer(leg.sport) ? ['home', 'away'] : ['away', 'home'];
+  return `${name(first[0])} ${score[first[0]]} : ${score[first[1]]} ${name(first[1])}`;
 }
 
 // A decided pick's final score (or race winner), kept with the slip.
@@ -2291,7 +2229,7 @@ function legLiveLine(leg) {
   const t = state.t;
   const live = state.legLive.get(leg.id);
   if (!live) return null;
-  const score = scoreText(leg, { away: live.awayScore, home: live.homeScore, homeSets: live.homeSets, awaySets: live.awaySets });
+  const score = scoreText(leg, { away: live.awayScore, home: live.homeScore,  });
   const standing = legStanding(leg);
   const tag = { won: ['winning', 'legNowWinning'], lost: ['losing', 'legNowLosing'], void: ['level', 'legNowLevel'], level: ['level', 'legNowLevel'] }[standing];
   return el('span', { class: 'leg-inplay' }, [
@@ -3408,7 +3346,7 @@ function homeCtx() {
   };
   return {
     openSlip: () => openSlip(),
-    slipCount: () => slipLegs().legs.length, state, q, el, fmtMoney, fmtOdds, fmtTime, pickTitle, pickButton, teamName, gameSeries, matchupText, logoImg, leagueImg, toggleLeg, takeParlay, showTab, openGame, openLive, liveStateText, betKeys, track, funds, slipRange, cashOutPrice, doCashOut, leagueTier: shownTier, isSoccer, isNeutral, parlayPays, boostPct: n => Math.round(boostRate(n, boostX()) * 100) };
+    slipCount: () => slipLegs().legs.length, state, q, el, fmtMoney, fmtOdds, fmtTime, pickTitle, pickButton, teamName, gameSeries, matchupText, logoImg, leagueImg, toggleLeg, takeParlay, showTab, openGame, openLive, liveStateText, betKeys, track, funds, slipRange, cashOutPrice, doCashOut, leagueTier: shownTier, isSoccer, parlayPays, boostPct: n => Math.round(boostRate(n, boostX()) * 100) };
 }
 statsUi = mountStats({ state, el, svgEl, fmtMoney, fmtInt, fmtPctShort, fmtOdds, fmtTime, showTab, sportName: key => (key === 'mixed' ? state.t('sportMixed') : state.t(`sport_${key}`) === `sport_${key}` ? String(key).toUpperCase() : state.t(`sport_${key}`)), youCard, crowdCard, funCard, picksCard, breakdownCard });
 lotteryUi = mountLottery({ state, q, el, fmtMoney, funds, commitAccount, track, getAccount: () => state.account, syncNow, showTickets });

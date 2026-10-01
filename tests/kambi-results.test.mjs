@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { kambiPeriods, parseKambiLiveData, decidedTeamGame, decidedFromLive } from '../public/lib/kambi.mjs';
+import { kambiPeriods, parseKambiLiveData, decidedTeamGame } from '../public/lib/kambi.mjs';
 import { legResult } from '../public/lib/account.mjs';
 
 const at = iso => new Date(iso);
@@ -42,12 +42,7 @@ test('basketball settles at the end of the fourth quarter (or overtime)', () => 
   assert.equal(decidedTeamGame(live, 'euroleague', '2026-09-26T11:00:00Z', at('2026-09-26T13:06:00Z')).homeScore, 83);
   // Mid-game, the clock running: never.
   const running = parseKambiLiveData({ liveData: { score: { home: '52', away: '43', info: 'Q1: 26-22 | Q2: 26-21 | Q3: 0-0', version: changed }, matchClock: { periodId: 'QUARTER3', minutesLeftInPeriod: 5, running: true } } });
-  assert.equal(decidedTeamGame(running, 'bleague', '2026-09-26T11:00:00Z', at('2026-09-26T18:00:00Z')), null);
-});
-
-test('set sports settle from the same live data', () => {
-  const live = parseKambiLiveData({ liveData: { score: { home: '2', away: '0', info: '' }, statistics: { sets: { home: [21, 21, -1], away: [15, 18, -1] } } } });
-  assert.equal(decidedFromLive(live, 'badminton').homeScore, 2);
+  assert.equal(decidedTeamGame(running, 'euroleague', '2026-09-26T11:00:00Z', at('2026-09-26T18:00:00Z')), null);
 });
 
 test('the Worker\'s kept copy of a dropped match settles at once', () => {
@@ -64,13 +59,13 @@ test('the Worker\'s kept copy of a dropped match settles at once', () => {
 
 test('every Kambi match settles: dropped with no deciding score, it is void', async () => {
   const { kambiUnresolvable } = await import('../public/lib/sources.mjs');
-  const leg = { sport: 'badminton', start: '2026-09-28T09:45:00Z' };
+  const leg = { sport: 'euroleague', start: '2026-09-28T09:45:00Z' };
   const at = h => new Date(Date.parse(leg.start) + h * 3_600_000);
   // The Worker saw it end mid-set: void.
   assert.equal(kambiUnresolvable(leg, { gone: true, live: { score: {} } }, at(1)), true);
   // Nothing kept at all: void once it's surely over, not three days later.
-  assert.equal(kambiUnresolvable(leg, null, at(4)), false);
-  assert.equal(kambiUnresolvable(leg, null, at(5.5)), true);
+  assert.equal(kambiUnresolvable(leg, null, at(5)), false);
+  assert.equal(kambiUnresolvable(leg, null, at(6.5)), true);
   // Still being watched with a score: wait.
-  assert.equal(kambiUnresolvable(leg, { gone: false, live: { score: {} } }, at(5)), false);
+  assert.equal(kambiUnresolvable(leg, { gone: false, live: { score: {} } }, at(6)), false);
 });

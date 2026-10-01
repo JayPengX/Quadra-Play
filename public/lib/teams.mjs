@@ -1,15 +1,15 @@
 // Logos, flags and the F1 grid: the shared kit's (lib/logos.mjs).
 import { CATALOG, familyOfSport } from './catalog.mjs';
 import { normalizeTeamName, MLB_ABBR, NBA_ABBR, EPL_ESPN_ID, TEAM_BADGES, rememberLogo, teamLogo } from './logos.mjs';
-export { normalizeTeamName, rememberLogo, teamLogo, leagueLogo, teamBadge, f1Driver, f1Constructor, countryFlag, countryCode, flagUrl, playerFlag, playerNation, flagEmoji } from './logos.mjs';
+export { normalizeTeamName, rememberLogo, teamLogo, leagueLogo, teamBadge, f1Driver, f1Constructor, countryFlag, countryCode, flagUrl } from './logos.mjs';
 
 // Teams in Chinese: the shared kit's (lib/names.mjs), the lottery's names
 // for the leagues it sells, the usual Taiwanese ones for the rest.
 export { teamZh, teamNameZh } from './names.mjs';
 
 // Every league Play sells, from the shared catalogue (catalog.mjs, the kit's
-// leagues.mjs): its kind of markets (family), where its odds come from (an
-// ESPN `path`, or a `kambi` list) and the market details for sports in sets.
+// leagues.mjs): its kind of markets (family) and where its odds come from (an
+// ESPN `path`, or a `kambi` list).
 export const LEAGUES = Object.fromEntries(
   Object.values(CATALOG)
     .filter(l => l.bet && l.odds)
@@ -22,7 +22,7 @@ export const LEAGUES = Object.fromEntries(
         // month lists (Asian baseball).
         if (l.data === 'asia') league.schedule = { asia: l.asia };
       }
-      for (const k of ['logo', 'icon', 'badge', 'neutral', 'sets', 'cap', 'players', 'top']) if (l[k] !== undefined) league[k] = l[k];
+      for (const k of ['logo', 'icon', 'badge', 'top']) if (l[k] !== undefined) league[k] = l[k];
       return [l.bet, league];
     })
 );
@@ -31,12 +31,6 @@ export const LEAGUES = Object.fromEntries(
 export const onSale = key => Boolean(LEAGUES[key]);
 // Leagues from Kambi.
 export const KAMBI_LEAGUES = Object.keys(LEAGUES).filter(key => LEAGUES[key].kambi);
-export const isSets = sport => LEAGUES[sport]?.family === 'sets';
-// Played at a neutral venue by players, not home and away clubs.
-export const isNeutral = sport => Boolean(LEAGUES[sport]?.neutral);
-// Sides are people (a nation's flag as their picture).
-export const isPlayers = sport => Boolean(LEAGUES[sport]?.players);
-
 export function familyOf(sport) {
   return sport === 'f1' ? 'racing' : LEAGUES[sport]?.family ?? null;
 }

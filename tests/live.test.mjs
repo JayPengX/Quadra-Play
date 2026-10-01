@@ -135,20 +135,6 @@ test('hockey, football and basketball in progress', async () => {
 test('Kambi\'s matches in play: its live prices, open ones only', async () => {
   const { parseKambiInPlay } = await import('../public/lib/kambi.mjs');
   const offer = (type, label, outcomes) => ({ betOfferType: { englishName: type }, criterion: { englishLabel: label }, outcomes });
-  const data = { events: [
-    { event: { id: 1, homeName: 'A Player', awayName: 'B Player', start: '2026-09-29T15:00:00Z', state: 'STARTED', group: 'China Open', path: ['badminton', 'china_open'] },
-      betOffers: [offer('Match', 'Match Odds', [{ type: 'OT_ONE', odds: 1400, status: 'OPEN' }, { type: 'OT_TWO', odds: 2900, status: 'OPEN' }])],
-      liveData: { score: { home: '4', away: '2' }, statistics: { sets: { home: [21, 15, -1], away: [18, 21, -1] } } } },
-    { event: { id: 2, homeName: 'C Player', awayName: 'D Player', start: '2026-09-29T15:10:00Z', state: 'STARTED', group: 'China Open', path: ['badminton', 'china_open'] },
-      betOffers: [offer('Match', 'Match Odds', [{ type: 'OT_ONE', odds: 16000, status: 'OPEN' }, { type: 'OT_TWO', odds: null, status: 'SUSPENDED' }])],
-      liveData: { score: { home: '1', away: '0' } } },
-    { event: { id: 3, homeName: 'E', awayName: 'F', start: '2026-09-29T19:00:00Z', state: 'NOT_STARTED' }, betOffers: [] }
-  ] };
-  const [a, b, ...rest] = parseKambiInPlay(data, 'badminton');
-  assert.equal(rest.length, 0);
-  assert.ok(a.ml.home > 0.6 && Math.abs(a.ml.home + a.ml.away - 1) < 1e-9);
-  assert.deepEqual([a.homeScore, a.awayScore, a.setNo], [1, 1, 3]);
-  assert.equal(b.ml, null);
   const baseball = parseKambiInPlay({ events: [
     { event: { id: 4, homeName: 'Rakuten Monkeys', awayName: 'Uni Lions', start: '2026-09-29T10:35:00Z', state: 'STARTED' },
       betOffers: [

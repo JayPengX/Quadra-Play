@@ -1,6 +1,6 @@
 // Kambi's public odds feed (the bookmaker behind Unibet and others): the
-// leagues ESPN doesn't carry: Asian baseball, EuroLeague, K League and
-// badminton. Read through the shared sports proxy, which
+// leagues ESPN doesn't carry: Asian baseball, EuroLeague and K League.
+// Read through the shared sports proxy, which
 // caches each list for every viewer (2 minutes) and trims it to the fields
 // read here, so the feed sees one request per league per few minutes. Odds come as thousandths (1950 = 1.95) and lines as
 // thousandths too (1500 = 1.5); a match lists its home player first.
@@ -62,7 +62,7 @@ export function parseKambiEvents(data, sport, now = new Date(), { unpriced = fal
       away: { en: e.awayName, zh: teamZh(sport, e.awayName) },
       home: { en: e.homeName, zh: teamZh(sport, e.homeName) },
       draftKings: three || (win ? { home: win[0], away: win[1] } : null),
-      house: win ? null : housePrices(sport, e.awayName, e.homeName, null, { neutral: Boolean(LEAGUES[sport]?.neutral) }),
+      house: win ? null : housePrices(sport, e.awayName, e.homeName, null),
       polymarket: null,
       polymarketLiquidity: null,
       total: null,
@@ -70,8 +70,6 @@ export function parseKambiEvents(data, sport, now = new Date(), { unpriced = fal
       book: 'kambi',
       kambiId: e.id,
       group: e.group || '',
-      // Where Kambi files it ("badminton/denmark/…"): a player's country when the kit's table doesn't know them.
-      where: kambiWhere(e),
       // Soccer from Kambi settles on the final score alone: no halves.
       ...(soccer ? { scoreOnly: true } : {})
     };
@@ -93,9 +91,6 @@ export function parseKambiEvents(data, sport, now = new Date(), { unpriced = fal
   return games.sort((a, b) => a.startUtc.localeCompare(b.startUtc));
 }
 
-// The event's group and path words, for playerNation (the proxy's trim keeps path as words).
-export const kambiWhere = e => [e.group, ...(e.path || []).map(p => (typeof p === 'string' ? p : p?.termKey))].filter(Boolean);
-
 export async function fetchKambiLeague(key, now = new Date(), getJson) {
   const league = LEAGUES[key];
   return parseKambiEvents(await getJson(kambiUrl(league.kambi), 'kambi-events'), key, now, { unpriced: !league.schedule });
@@ -110,8 +105,7 @@ const PART = /\b(\d(st|nd|rd|th)|set|frame|game \d|quarter|half|inning|period|by
 
 // A league's matches in play (listView …/in-play.json): each with Kambi's
 // live prices, the margin taken out (winner; for baseball and basketball the
-// main handicap and total), and the score: runs or points, or for matches in
-// sets the sets each has won and the set being played. Neither side priced
+// main handicap and total), and the score: runs or points. Neither side priced
 // (between points, a review): `ml` null, shown without bets.
 export function parseKambiInPlay(data, sport) {
   const league = LEAGUES[sport];
@@ -134,7 +128,6 @@ export function parseKambiInPlay(data, sport) {
       away: e.awayName,
       home: e.homeName,
       group: e.group || '',
-      where: kambiWhere(e),
       ml: win ? { home: win[0], away: win[1] } : null,
       spread: null,
       total: null
@@ -151,77 +144,38 @@ export function parseKambiInPlay(data, sport) {
     }
     const live = item.liveData || {};
     const score = { home: Number(live.score?.home) || 0, away: Number(live.score?.away) || 0 };
-    const sets = live.statistics?.sets ? { home: live.statistics.sets.home.filter(x => x >= 0), away: live.statistics.sets.away.filter(x => x >= 0) } : null;
-    if (league?.sets && sets) {
-      const won = setsWon(sets, league.sets);
-      Object.assign(game, { homeScore: won.home, awayScore: won.away, setNo: won.home + won.away + 1 });
-    } else Object.assign(game, { homeScore: score.home, awayScore: score.away });
+    Object.assign(game, { homeScore: score.home, awayScore: score.away });
     if (league?.family === 'baseball') game.inningNo = kambiPeriods(live.score?.info).home.length || null;
     if (league?.family === 'basketball') game.quarter = Number(/(\d)/.exec(live.matchClock?.periodId || '')?.[1]) || null;
     games.push(game);
   }
-  return games.sort((a, b) => a.startUtc.localeCompare(b.startUtc)).slice(0, league?.cap ?? Infinity);
+  return games.sort((a, b) => a.startUtc.localeCompare(b.startUtc));
 }
 
 // ---- Live scores ---------------------------------------------------------------
 
-// Every match Kambi has in play: kambiId -> { sport, home, away, score, sets }
-// where `sets` is each side's score in every set played so far (-1: not
-// played), and `score` the match score (sets won, or runs/points).
+// Every match Kambi has in play: kambiId -> { state, home, away, score }.
 export function parseKambiLive(data) {
   const out = new Map();
   for (const item of data?.liveEvents || []) {
     const e = item.event;
     const live = item.liveData || {};
     if (!e) continue;
-    const sets = live.statistics?.sets;
     out.set(e.id, {
       state: e.state,
       home: e.homeName,
       away: e.awayName,
-      score: { home: Number(live.score?.home) || 0, away: Number(live.score?.away) || 0 },
-      sets: sets ? { home: sets.home.filter(x => x >= 0), away: sets.away.filter(x => x >= 0) } : null
+      score: { home: Number(live.score?.home) || 0, away: Number(live.score?.away) || 0 }
     });
   }
   return out;
-}
-
-// Sets each side has won from the set scores. A set counts once someone has
-// won it: reached the set's target (the deciding set's, if it has its own)
-// two clear, or the cap (badminton's 30).
-export function setsWon(sets, spec) {
-  const won = { home: 0, away: 0 };
-  if (!sets || !spec) return won;
-  const n = Math.min(sets.home.length, sets.away.length);
-  for (let i = 0; i < n; i++) {
-    const h = sets.home[i];
-    const a = sets.away[i];
-    const hi = Math.max(h, a);
-    const target = spec.last && i === spec.bestOf - 1 ? spec.last : spec.target;
-    const done = (hi >= target && Math.abs(h - a) >= 2) || (spec.cap && hi >= spec.cap);
-    if (done) won[h > a ? 'home' : 'away']++;
-  }
-  return won;
-}
-
-// A match's result once the live score shows it decided: someone has won
-// the sets they need. { status: 'final', homeScore, awayScore (sets won),
-// homeSets, awaySets (each set's score) }, or null while it isn't decided.
-export function decidedFromLive(live, sport) {
-  const spec = LEAGUES[sport]?.sets;
-  if (!live?.sets || !spec?.bestOf) return null;
-  const need = Math.ceil(spec.bestOf / 2);
-  const won = setsWon(live.sets, spec);
-  if (won.home < need && won.away < need) return null;
-  return { status: 'final', homeScore: won.home, awayScore: won.away, homeSets: live.sets.home, awaySets: live.sets.away };
 }
 
 // ---- Results ---------------------------------------------------------------------
 //
 // A match's own live data (event/{id}/livedata.json) stays readable for a day
 // or more after it ends, still marked as started: Kambi never says "final"
-// in public. So the result is read from the score itself: set sports once
-// someone has won the sets they need; baseball and basketball once the
+// in public. So the result is read from the score itself: baseball and basketball once the
 // regulation innings or quarters are played, the score isn't level (or
 // baseball's extra innings have run out) and it hasn't changed for a while.
 
@@ -272,12 +226,10 @@ export function kambiPeriods(info) {
 export function parseKambiLiveData(data) {
   const live = Array.isArray(data?.liveData) ? data.liveData[0] : data?.liveData;
   if (!live?.score) return null;
-  const sets = live.statistics?.sets;
   const changed = Number(live.score.version);
   return {
     score: { home: Number(live.score.home) || 0, away: Number(live.score.away) || 0 },
     periods: kambiPeriods(live.score.info),
-    sets: sets ? { home: sets.home.filter(x => x >= 0), away: sets.away.filter(x => x >= 0) } : null,
     changedAt: Number.isFinite(changed) ? changed : null,
     clock: live.matchClock ? { period: live.matchClock.periodId || '', left: (Number(live.matchClock.minutesLeftInPeriod) || 0) * 60 + (Number(live.matchClock.secondsLeftInMinute) || 0), running: Boolean(live.matchClock.running) } : null
   };

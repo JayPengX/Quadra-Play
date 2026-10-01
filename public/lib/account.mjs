@@ -236,29 +236,6 @@ export function legResult(leg, outcome) {
     }
     case 'goalbands':
       return win(away + home >= leg.lo && (leg.hi == null || away + home <= leg.hi));
-    // Played in sets: the score is sets won; `homeSets`/`awaySets` each set's score.
-    case 'sets':
-      return win(`${home}-${away}` === leg.score);
-    case 'totalsets':
-      return push(leg.side === 'over' ? away + home - leg.line : leg.line - away - home);
-    case 'sethcap':
-      return push(leg.side === 'away' ? away + leg.line - home : home + leg.line - away);
-    case 'firstset': {
-      const h = outcome.homeSets?.[0];
-      const a = outcome.awaySets?.[0];
-      if (h == null || a == null) return null;
-      return win(leg.side === 'home' ? h > a : a > h);
-    }
-    case 'gamehcap':
-    case 'gametotal': {
-      // Points across every set.
-      if (!outcome.homeSets || !outcome.awaySets) return null;
-      const sum = list => list.reduce((s, x) => s + (Number(x) || 0), 0);
-      const hs = sum(outcome.homeSets);
-      const as = sum(outcome.awaySets);
-      if (leg.kind === 'gametotal') return push(leg.side === 'over' ? hs + as - leg.line : leg.line - hs - as);
-      return push(leg.side === 'away' ? as + leg.line - hs : hs + leg.line - as);
-    }
     case 'q1':
     case 'half':
     case 'f5':
