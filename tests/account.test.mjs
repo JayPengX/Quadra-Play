@@ -113,8 +113,10 @@ test('a free bet: no cost, the token spent once, only the winnings paid, no cash
   assert.equal(account.slips[0].free, token.id);
   assert.ok(account.ledger.some(e => e.id === `fb-${token.id}`));
   assert.equal(placeFreeSlip(account, slip('g', 0, [{ id: 'c', odds: 2 }]), token).error, 'token');
-  // A sportsbook's terms: every pick at 1.50 or longer.
-  assert.equal(placeFreeSlip(newAccount(at('2026-09-25T00:00:00Z')), slip('h', 0, [{ id: 'd', odds: 2 }, { id: 'e', odds: 1.4 }]), { id: 'x', value: 100 }).error, 'freeOdds');
+  // A sportsbook's terms: odds of 1.50 or longer, a parlay's all together.
+  assert.equal(placeFreeSlip(newAccount(at('2026-09-25T00:00:00Z')), slip('h', 0, [{ id: 'd', odds: 1.4 }]), { id: 'x', value: 100 }).error, 'freeOdds');
+  assert.equal(placeFreeSlip(newAccount(at('2026-09-25T00:00:00Z')), slip('h', 0, [{ id: 'd', odds: 1.2 }, { id: 'e', odds: 1.2 }]), { id: 'x', value: 100 }).error, 'freeOdds');
+  assert.equal(placeFreeSlip(newAccount(at('2026-09-25T00:00:00Z')), slip('h', 0, [{ id: 'd', odds: 2 }, { id: 'e', odds: 1.4 }]), { id: 'x', value: 100 }).error, undefined);
   assert.equal(cashOut(account, 'f', 150), account);
   const won = applyResults(account, 'f', ['won', 'won']);
   assert.equal(won.slips[0].payout, 200);
