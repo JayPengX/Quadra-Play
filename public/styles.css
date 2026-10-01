@@ -1199,3 +1199,5 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 /* Home: the balance card's ways in, and calmer live cards. */
 .feature.live { border-color: var(--border); }
 .home-live .home-head h2 { color: var(--q-text); }
+/* A free bet chosen that the slip can't take: said by the button. */
+.free-off { font-weight: 650; }
