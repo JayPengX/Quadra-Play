@@ -18,8 +18,8 @@ import { GAMES, nextDraw, latestResults, gameName } from './lib/lottery.mjs';
 const TXT = {
   zh: {
     balance: 'Quadra 餘額', atStake: '投注中', slipsN: '{n} 張', cashNow: '可兌現', most: '全中最多',
-    live: '場中焦點', liveSub: '正在進行，賠率隨比分即時更新', allLive: '全部場中 {n} 場',
-    featured: '焦點賽事', featuredSub: '依你常玩的聯盟排序', allGames: '全部賽事', markets: '{n} 種玩法',
+    live: '場中焦點', allLive: '全部場中 {n} 場',
+    featured: '焦點賽事', allGames: '全部賽事', markets: '{n} 種玩法',
     mine: '你的投注', seeAll: '全部', legs: '{n} 場', cashOut: '兌現', paused: '兌現暫停',
     lottery: '彩券', drawIn: '{when} 開獎', none: '賽事載入中，或目前沒有開賣的比賽。', draw: '和',
     overdrawn: '透支 · 月息 1%', cover: '賣出持股補足',
@@ -31,8 +31,8 @@ const TXT = {
   },
   en: {
     balance: 'Quadra balance', atStake: 'In play', slipsN: '{n} slips', cashNow: 'Cash out now', most: 'Most to win',
-    live: 'Live now', liveSub: 'On now: prices move with the score', allLive: 'All {n} live',
-    featured: 'Featured', featuredSub: 'By what you play', allGames: 'All games', markets: '{n} markets',
+    live: 'Live now', allLive: 'All {n} live',
+    featured: 'Featured', allGames: 'All games', markets: '{n} markets',
     mine: 'Your bets', seeAll: 'See all', legs: '{n} picks', cashOut: 'Cash out', paused: 'Suspended',
     lottery: 'Lottery', drawIn: 'Draw {when}', none: 'Games are loading, or none are on sale right now.', draw: 'Draw',
     overdrawn: 'Overdrawn · 1% a month', cover: 'Sell to cover',
@@ -275,12 +275,12 @@ export function renderHome(ctx) {
       header,
       liveTop.length
         ? el('section', { class: 'home-block home-live' }, [
-            head(`● ${T.live}`, { sub: T.liveSub, action: el('button', { class: 'home-link', type: 'button', text: `${f('allLive', { n: onNow.length })} ›`, onclick: () => ctx.openLive(null) }) }),
+            head(`● ${T.live}`, { action: el('button', { class: 'home-link', type: 'button', text: `${f('allLive', { n: onNow.length })} ›`, onclick: () => ctx.openLive(null) }) }),
             el('div', { class: 'features' }, liveTop.map(liveCard))
           ])
         : null,
       el('section', { class: 'home-block' }, [
-        head(T.featured, { sub: follow || Object.keys(habits).length ? T.featuredSub : '', action: el('button', { class: 'home-link', type: 'button', text: `${T.allGames} ›`, onclick: () => ctx.showTab('games') }) }),
+        head(T.featured, { action: el('button', { class: 'home-link', type: 'button', text: `${T.allGames} ›`, onclick: () => ctx.showTab('games') }) }),
         featured.length ? el('div', { class: 'features' }, featured.map(featureCard)) : el('p', { class: 'empty', text: T.none })
       ]),
       combos.length ? el('section', { class: 'home-block' }, [head(T.combos), el('div', { class: 'combos' }, combos)]) : null,
