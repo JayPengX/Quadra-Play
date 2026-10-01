@@ -1,4 +1,5 @@
-// A person's photo, wherever one is: ESPN's headshot by their id (drivers,
+// A person's photo, wherever one is: ESPN's headshot by their id or found by
+// their name (ESPN's athlete search), the official picture first (drivers,
 // tennis players, golfers, fighters, the US leagues' players), else their
 // Wikipedia page's picture (table tennis, badminton, snooker and anyone ESPN
 // has none of) when the page is about someone in that sport. Wikipedia is
@@ -158,7 +159,42 @@ function pump() {
       });
   }
 }
-// A person's Wikipedia photo (a promise of a URL, or '' for none).
+// ---- ESPN's own headshots, found by name ------------------------------------------------
+// ESPN's athlete search (open to browsers): the person's ESPN id in their
+// sport, and so their official headshot, for players the feed didn't give an
+// id for (Kambi's tennis, a draw's names). Checked to exist before it's used.
+const ESPN_SEARCH = 'https://site.web.api.espn.com/apis/common/v3/search?type=player&limit=6&query=';
+const SEARCH_SPORT = { tennis: 'tennis', golf: 'golf', mma: 'mma', racing: 'racing', soccer: 'soccer', basketball: 'basketball', baseball: 'baseball', football: 'football', hockey: 'hockey' };
+const HEADSHOT_FOLDER = { tennis: 'tennis', golf: 'golf', mma: 'mma', racing: 'rpm', soccer: 'soccer', basketball: 'nba', baseball: 'mlb', football: 'nfl', hockey: 'nhl' };
+const loads = url =>
+  new Promise(resolve => {
+    if (typeof Image === 'undefined') return resolve(false);
+    const img = new Image();
+    const done = ok => ((img.onload = img.onerror = null), resolve(ok));
+    img.onload = () => done(img.naturalWidth > 8);
+    img.onerror = () => done(false);
+    setTimeout(() => done(false), 5000);
+    img.src = url;
+  });
+async function espnSearchPhoto(name, sport) {
+  if (!SEARCH_SPORT[sport]) return '';
+  try {
+    const r = await fetch(ESPN_SEARCH + encodeURIComponent(name));
+    if (!r.ok) return '';
+    const items = (await r.json())?.items || [];
+    const want = plain(name);
+    const hit = items.find(i => i.type === 'player' && i.sport === SEARCH_SPORT[sport] && plain(i.displayName) === want);
+    if (!hit?.id) return '';
+    const folder = sport === 'basketball' && hit.league === 'wnba' ? 'wnba' : HEADSHOT_FOLDER[sport];
+    const url = `${CDN}/${folder}/players/full/${hit.id}.png`;
+    return (await loads(url)) ? url : '';
+  } catch {
+    return '';
+  }
+}
+
+// A person's photo by name (a promise of a URL, or '' for none): ESPN's
+// official headshot if it has one, else their Wikipedia page's picture.
 export function wikiPhoto(name, league) {
   const sport = sportOf(league);
   const n = String(name || '').trim();
@@ -170,17 +206,20 @@ export function wikiPhoto(name, league) {
     asked.set(
       key,
       new Promise(resolve => {
-        pending.set(key, {
-          key,
-          name: n,
-          sport,
-          // A failed request isn't remembered (asked again next time).
-          done: (url, failed) => {
-            if (!failed) remember(key, url);
-            resolve(url || '');
-          }
-        });
-        if (!flushTimer) flushTimer = setTimeout(flush, 60);
+        const ask = () => {
+          pending.set(key, {
+            key,
+            name: n,
+            sport,
+            // A failed request isn't remembered (asked again next time).
+            done: (url, failed) => {
+              if (!failed) remember(key, url);
+              resolve(url || '');
+            }
+          });
+          if (!flushTimer) flushTimer = setTimeout(flush, 60);
+        };
+        espnSearchPhoto(n, sport).then(url => (url ? (remember(key, url), resolve(url)) : ask()));
       })
     );
   }
