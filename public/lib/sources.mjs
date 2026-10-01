@@ -390,6 +390,36 @@ export function parseF1RaceWinner(events, now) {
 // opens some races only a few days out, some not at all): the next "Race:"
 // event of its F1 list, and the drivers' chances from its winner prices.
 const KAMBI_F1_LIST = `${KAMBI}/listView/formula_1/all/all/all/competitions.json?lang=en_GB&market=GB&useCombined=true`;
+// MotoGP (on 緯來 in Taiwan): Kambi's race winner for the next Grand Prix,
+// settled from the series' own results (through the proxy).
+const KAMBI_MOTO_LIST = `${KAMBI}/listView/motorsports/moto_gp/all/all/competitions.json?lang=en_GB&market=GB&useCombined=true`;
+const MOTOGP = 'https://api.motogp.pulselive.com/motogp/v1';
+const MOTOGP_CLASS = 'e8c110ad-64aa-4e8e-8a86-f2f152f6a942';
+export function nextKambiMotoRace(list, now) {
+  return (list?.events || [])
+    .map(x => x.event)
+    .filter(e => e && /^race:/i.test(e.name || '') && e.state === 'NOT_STARTED' && Date.parse(e.start) > now.getTime())
+    .sort((a, b) => Date.parse(a.start) - Date.parse(b.start))[0] ?? null;
+}
+export function parseKambiMotoRace(event, offers) {
+  const offer = (offers?.betOffers || []).find(o => /^(race )?winner$/i.test(o.criterion?.englishLabel || '') && !o.suspended);
+  const riders = (offer?.outcomes || []).filter(o => o.odds > 1000 && o.participant).map(o => ({ name: o.participant, raw: 1000 / o.odds }));
+  if (riders.length < 10) return null;
+  const fair = devigPower(riders.map(d => d.raw));
+  return {
+    title: event.name.replace(/^race:\s*/i, '').replace(/\s*\d{4}\s*$/, ''),
+    slug: `kambi-${event.id}`,
+    startUtc: new Date(event.start).toISOString(),
+    riders: riders.map((d, i) => ({ name: d.name, fair: fair[i] })).sort((a, b) => b.fair - a.fair)
+  };
+}
+// A MotoGP race's winner from the series' results: the Grand Prix whose days
+// hold the pick's start, its race's order. { status: 'final', winner, order }
+// or pending.
+export function parseMotoGpRace(classification) {
+  const order = (classification?.classification || []).filter(c => c.position).sort((a, b) => a.position - b.position).map(c => c.rider?.full_name || '');
+  return order.length ? { status: 'final', winner: order[0], order } : { status: 'pending' };
+}
 export function nextKambiF1Race(list, now) {
   return (list?.events || [])
     .map(x => x.event)
@@ -596,11 +626,14 @@ export async function loadOdds(now = new Date(), onProgress) {
       // The whole season (the plain scoreboard stays on the last race until the
       // week's first session): the next race's qualifying time.
       getJson(`${ESPN}/racing/f1/scoreboard?dates=${now.getUTCFullYear()}`),
-      getJson(KAMBI_F1_LIST)
+      getJson(KAMBI_F1_LIST),
+      getJson(KAMBI_MOTO_LIST)
     ].map(track)
   );
   if (results.every(r => r.status === 'rejected')) throw results[0].reason;
-  const [mlbDk, mlbPm, eplDk, eplPm, f1, nbaPm, f1Espn, f1Kambi] = results.map(r => (r.status === 'fulfilled' ? r.value : []));
+  const [mlbDk, mlbPm, eplDk, eplPm, f1, nbaPm, f1Espn, f1Kambi, motoKambi] = results.map(r => (r.status === 'fulfilled' ? r.value : []));
+  const motoRace = nextKambiMotoRace(motoKambi, now);
+  const moto = motoRace ? parseKambiMotoRace(motoRace, await getJson(`${KAMBI}/betoffer/event/${motoRace.id}.json?lang=en_GB&market=GB`).catch(() => null)) : null;
   let race = parseF1RaceWinner(f1, now);
   // Polymarket not open for the next race yet (or only for a later one): Kambi's.
   const kambiRace = nextKambiF1Race(f1Kambi, now);
@@ -619,6 +652,7 @@ export async function loadOdds(now = new Date(), onProgress) {
     loadedAt: now.toISOString(),
     games: lotteryGames(mergeGames([...mlbDk, ...eplDk], [...parsePolymarketMlb(mlbPm, now), ...parsePolymarketEpl(eplPm, now)]), now),
     f1: race,
+    moto,
     futures: [...parseFutures(mlbPm, 'mlb'), ...parseFutures(eplPm, 'epl'), ...(nbaInSeason(now) ? parseFutures(nbaPm, 'nba') : [])]
   };
 }
@@ -838,6 +872,19 @@ export async function fetchOutcomes(legs, now = new Date()) {
         if (race) out.set(leg.id, parseOpenF1Flags(await page(`${OPENF1}/race_control?session_key=${race.key}`)));
         // No race run within a week of its date (called off): the stake back.
         else if (Array.isArray(sessions) && now.getTime() - Date.parse(leg.start) > 7 * DAY_MS) out.set(leg.id, { status: 'void' });
+        return;
+      }
+      if (leg.kind === 'moto') {
+        // The Grand Prix whose days hold the race, its race's order.
+        const seasons = await page(`${MOTOGP}/results/seasons`);
+        const season = (Array.isArray(seasons) ? seasons : []).find(x => String(x.year) === leg.start.slice(0, 4));
+        const events = season ? await page(`${MOTOGP}/results/events?seasonUuid=${season.id}`) : null;
+        const day = leg.start.slice(0, 10);
+        const gp = (Array.isArray(events) ? events : []).find(x => !x.test && x.date_start <= day && day <= (x.date_end || x.date_start));
+        const sessions = gp ? await page(`${MOTOGP}/results/sessions?eventUuid=${gp.id}&categoryUuid=${MOTOGP_CLASS}`) : null;
+        const race = (Array.isArray(sessions) ? sessions : []).find(x => x.type === 'RAC');
+        if (race && /FINISHED/i.test(race.status || '')) out.set(leg.id, parseMotoGpRace(await page(`${MOTOGP}/results/session/${race.id}/classification?test=false`)));
+        else if (now.getTime() - Date.parse(leg.start) > 7 * DAY_MS) out.set(leg.id, { status: 'void' });
         return;
       }
       if (leg.kind === 'f1pole') {

@@ -602,6 +602,9 @@ export const STRINGS = {
     simWeekN: '第 {n} 週',
     playerNoWin: '一張都沒中',
     f1Title: 'F1 分站冠軍',
+    motoTitle: 'MotoGP 分站冠軍',
+    motoSub: '正賽冠軍（緯來轉播）',
+    group_motogp: 'MotoGP',
     f1Intro: "F1 抽成約 40%，越冷門抽越多。",
     mathSteps: [
       ['1. 賠率 → 隱含機率', '十進位賠率是「每下 1 元，贏了拿回多少（含本金）」。1.80 代表下 NT$100 贏了拿回 NT$180。它背後假設的機率是 1 ÷ 賠率 = 55.6%。'],
@@ -1220,6 +1223,9 @@ export const STRINGS = {
     simWeekN: 'Week {n}',
     playerNoWin: 'never won',
     f1Title: 'F1 race winner',
+    motoTitle: 'MotoGP race winner',
+    motoSub: 'Who wins the race (on Videoland in Taiwan)',
+    group_motogp: 'MotoGP',
     f1Intro: "The lottery takes about 40% on F1, more on long shots.",
     mathSteps: [
       ['1. Odds → implied chance', 'Decimal odds are what you get back per NT$1, stake included. 1.80 means NT$100 returns NT$180 on a win. The chance it assumes is 1 ÷ odds = 55.6%.'],

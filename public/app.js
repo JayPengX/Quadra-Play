@@ -272,6 +272,11 @@ function buildBets(data) {
     const matchup = matchupText(game);
     for (const o of gameOptions(game)) bets.push(named(game, o, matchup));
   }
+  if (data.moto) {
+    // MotoGP's race winner (Kambi's prices, the lottery's margin on top).
+    for (const d of data.moto.riders)
+      bets.push({ id: `moto|${d.name}`, gameId: 'motogp', kind: 'moto', sport: 'motogp', market: 'moto', matchup: `MotoGP ${data.moto.title}`, start: data.moto.startUtc, label: `MotoGP ${d.name}`, shortLabel: d.name, driverEn: d.name, fairChance: d.fair, fairMargin: null, errKey: 'extra', estOdds: estimateF1LotteryOdds(d.fair, 'post') });
+  }
   if (data.f1) {
     // Before qualifying the lottery prices the race on its own curve.
     const phase = f1Phase(new Date(), { qualifyingUtc: data.f1.qualifyingUtc, raceUtc: data.f1.startUtc });
@@ -434,12 +439,13 @@ const SPORT_GROUPS_ALL = {
   tabletennis: { icon: '🏓', leagues: ['tabletennis'] },
   volleyball: { icon: '🏐', leagues: ['volleyball'] },
   snooker: { icon: '🎱', leagues: ['snooker'] },
-  f1: { icon: '🏎️', leagues: ['f1'] }
+  f1: { icon: '🏎️', leagues: ['f1'] },
+  motogp: { icon: '🏍️', leagues: ['motogp'] }
 };
 // Only leagues on sale (Taiwan can watch them); a kind with none left goes.
 const SPORT_GROUPS = Object.fromEntries(
   Object.entries(SPORT_GROUPS_ALL)
-    .map(([g, x]) => [g, { ...x, leagues: x.leagues.filter(k => k === 'f1' || (LEAGUES[k] && !LEAGUES[k].off)) }])
+    .map(([g, x]) => [g, { ...x, leagues: x.leagues.filter(k => k === 'f1' || k === 'motogp' || (LEAGUES[k] && !LEAGUES[k].off)) }])
     .filter(([, x]) => x.leagues.length)
 );
 const groupOfSport = sport => Object.keys(SPORT_GROUPS).find(g => SPORT_GROUPS[g].leagues.includes(sport));
@@ -467,6 +473,7 @@ function rerenderFiltered() {
   renderLive();
   renderFutures();
   renderF1();
+  renderMoto();
 }
 
 function chip({ pressed, icon, text, count, onclick }) {
@@ -1306,6 +1313,7 @@ function toggleLeg(bet) {
   renderGames();
   renderLive();
   renderF1();
+  renderMoto();
   renderFutures();
   renderParlay();
   if (state.tab === 'home') renderHome(homeCtx());
@@ -1385,8 +1393,9 @@ function renderParlay() {
           renderGames();
           renderLive();
           renderF1();
+          renderMoto();
           renderFutures();
-                  renderParlay();
+          renderParlay();
         }
       })
     ]),
@@ -2071,6 +2080,7 @@ function placeButton(legs, sizes, cost, errors, free = null) {
         renderGames();
         renderLive();
         renderF1();
+        renderMoto();
         renderFutures();
               renderParlay();
         showTab('history');
@@ -2990,6 +3000,33 @@ function renderF1() {
   );
 }
 
+// MotoGP's next race: each rider's price to win it.
+function riderBadge(bet, cls = 'logo') {
+  const initials = bet.driverEn.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+  return el('span', { class: `${cls} driver-badge`, style: '--team:#c8102e', 'aria-hidden': 'true', text: initials });
+}
+function renderMoto() {
+  const t = state.t;
+  const moto = state.data?.moto;
+  const box = $('moto');
+  if (!box) return;
+  box.hidden = !inSport('motogp') || !moto;
+  if (!moto) return;
+  $('moto-title').textContent = t('motoTitle');
+  $('moto-body').replaceChildren(
+    board({
+      emblem: 'motogp',
+      title: `MotoGP ${moto.title}`,
+      sub: fmtTime(moto.startUtc),
+      lead: t('motoSub'),
+      bets: state.bets.filter(b => b.kind === 'moto'),
+      id: 'moto',
+      shown: 10,
+      rows: (b, i) => entryRow(b, i, riderBadge(b), '')
+    })
+  );
+}
+
 // ============================================================================
 // DO NOT REMOVE - iOS Safari "a tap needs two taps" fix (from Quadra Fixtures).
 // ============================================================================
@@ -3022,6 +3059,7 @@ function renderAll() {
   renderFutures();
   renderParlay();
   renderF1();
+  renderMoto();
   if (state.tab === 'home') renderHome(homeCtx());
   renderAccount();
   renderSaved();

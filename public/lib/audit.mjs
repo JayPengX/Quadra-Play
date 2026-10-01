@@ -11,7 +11,7 @@ import { crowdPools } from './sim.mjs';
 
 // How far (in NT$ per NT$100) a sport, or a series' followers, may be from the rest.
 export const AUDIT_TOLERANCE = { pool: 6, fan: 5 };
-const EXEMPT = new Set(['f1']);
+const EXEMPT = new Set(['f1', 'moto']);
 
 // What the crowd's usual pick returns per NT$100 on one sport's pool: every
 // option weighted as people pick it (its chance x its market's popularity).
