@@ -1008,7 +1008,7 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .slip-bar-main strong { font-size: 0.94rem; }
 .slip-bar-main small { font-size: 0.76rem; opacity: 0.75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .slip-bar-go { flex: none; padding: 8px 14px; border-radius: 10px; background: var(--accent); color: #fff; font-weight: 800; font-size: 0.9rem; }
-@media (min-width: 721px) { .slip-bar { bottom: 18px; } }
+@media (min-width: 721px) { .slip-bar { bottom: calc(var(--q-nav) + 18px); } }
 body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 
 /* ---- Slip: quick stakes ---- */

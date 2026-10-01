@@ -1009,6 +1009,7 @@ function pickButton(bet, name) {
   return el('button', {
     class: `pick ${locked ? 'locked' : ''} ${inSlip ? 'in-slip' : ''}`,
     type: 'button',
+    'data-bet': bet.id,
     title: pickTitle(bet),
     disabled: locked ? true : null,
     'aria-pressed': String(inSlip),
@@ -1245,7 +1246,7 @@ function entryRow(bet, i, picture, sub) {
   const t = state.t;
   const inSlip = state.parlay.includes(bet.id);
   const locked = Boolean(bet.lock);
-  return el('div', { class: `entry ${inSlip ? 'in-slip' : ''} ${locked ? 'locked' : ''}`, title: pickTitle(bet) }, [
+  return el('div', { class: `entry ${inSlip ? 'in-slip' : ''} ${locked ? 'locked' : ''}`, 'data-bet': bet.id, title: pickTitle(bet) }, [
     el('span', { class: 'entry-rank', text: String(i + 1) }),
     picture,
     // sub === null: the name alone (no chance, no second line).
@@ -1253,6 +1254,7 @@ function entryRow(bet, i, picture, sub) {
     el('button', {
       class: `entry-odds ${inSlip ? 'in-slip' : ''}`,
       type: 'button',
+      'data-bet': bet.id,
       'aria-pressed': String(inSlip),
       'aria-label': `${bet.label} ${fmtOdds(effectiveOdds(bet))} · ${locked ? t(`lock_${bet.lock}`) : inSlip ? t('removeLeg') : t('addLeg')}`,
       disabled: locked ? true : null,
@@ -1326,6 +1328,12 @@ function toggleLeg(bet) {
     // Two picks or more make a parlay unless another way was chosen.
     if (!state.modeChosen && state.parlay.length >= 2) state.slipMode = 'parlay';
   }
+  slipChanged();
+}
+// The slip changed (a pick added or taken off, the slip cleared or placed):
+// every board, and every pick button anywhere on the page (an open game's
+// sheet too) shows it at once, and so does the slip bar.
+function slipChanged() {
   renderGames();
   renderLive();
   renderF1();
@@ -1333,6 +1341,16 @@ function toggleLeg(bet) {
   renderFutures();
   renderParlay();
   if (state.tab === 'home') renderHome(homeCtx());
+  syncPicks();
+  renderSlipBar();
+}
+function syncPicks() {
+  const on = new Set(state.parlay);
+  for (const node of document.querySelectorAll('[data-bet]')) {
+    const inSlip = on.has(node.dataset.bet);
+    node.classList.toggle('in-slip', inSlip);
+    if (node.tagName === 'BUTTON') node.setAttribute('aria-pressed', String(inSlip));
+  }
 }
 
 // Everything that can go on the slip: games, F1 and championships.
@@ -1406,12 +1424,7 @@ function renderParlay() {
         text: t('clearParlay'),
         onclick: () => {
           state.parlay = [];
-          renderGames();
-          renderLive();
-          renderF1();
-          renderMoto();
-          renderFutures();
-          renderParlay();
+          slipChanged();
         }
       })
     ]),
@@ -2093,12 +2106,7 @@ function placeButton(legs, sizes, cost, errors, free = null) {
         track('bet', [...new Set(slip.legs.flatMap(leg => betKeys(leg)))], 3);
         // Rewards' mission: a parlay of three picks or more.
         if (state.slipMode !== 'single' && records.length >= 3) track('parlay');
-        renderGames();
-        renderLive();
-        renderF1();
-        renderMoto();
-        renderFutures();
-              renderParlay();
+        slipChanged();
         showTab('history');
       }
     }),
