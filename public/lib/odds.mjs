@@ -412,17 +412,21 @@ export function combineParlay(legs) {
 }
 
 // Fair chance of every outcome for one game ({away, home} or {away, draw, home})
-// from whichever sources exist (the house's own last), plus the K to use (one
-// for all of them).
-export function blendOutcomes(draftKings, polymarket, house = null) {
-  if (draftKings && polymarket) {
-    const blended = Object.fromEntries(Object.keys(draftKings).map(k => [k, (draftKings[k] + polymarket[k]) / 2]));
-    return { probs: blended, k: K_WIN, source: 'both' };
-  }
-  if (draftKings) return { probs: draftKings, k: K_WIN, source: 'draftkings' };
-  if (polymarket) return { probs: polymarket, k: K_WIN, source: 'polymarket' };
-  if (house) return { probs: house, k: K_WIN, source: 'house' };
-  return null;
+// from whichever books price it, averaged: Kambi's first, DraftKings',
+// Polymarket's; the house's own only when none does. Two bookmakers far apart
+// on a game (BOOKS_APART on any outcome: a late injury, a wrong line) mark it
+// `disputed`: the board locks it until they agree again.
+export const BOOKS_APART = 0.12;
+export function blendOutcomes(draftKings, polymarket, house = null, kambi = null) {
+  const books = [kambi, draftKings, polymarket].filter(b => b && Object.values(b).every(Number.isFinite));
+  if (!books.length) return house ? { probs: house, k: K_WIN, source: 'house' } : null;
+  const keys = Object.keys(books[0]);
+  // A book without a side the first has (no draw) can't be averaged in.
+  const same = books.filter(b => keys.every(k => k in b));
+  const probs = Object.fromEntries(keys.map(k => [k, same.reduce((sum, b) => sum + b[k], 0) / same.length]));
+  const disputed = Boolean(kambi && draftKings && keys.some(k => k in draftKings && Math.abs(kambi[k] - draftKings[k]) > BOOKS_APART));
+  const source = same.length > 1 ? 'both' : kambi ? 'kambi' : draftKings ? 'draftkings' : 'polymarket';
+  return { probs, k: K_WIN, source, ...(disputed ? { disputed } : {}) };
 }
 
 // Mulberry32: small seedable PRNG so a simulation can be replayed.
@@ -460,6 +464,8 @@ export const SLIP_RULES = {
   minTicket: 100,
   maxTicket: 100_000,
   maxPayout: 20_000_000,
+  // A ticket with a pick the house prices alone, or a player's, costs at most this.
+  capped: 1000,
   taxFree: 5000,
   taxRate: 0.2,
   stampRate: 0.004
@@ -574,6 +580,7 @@ export function slipErrors({ mode, legs, sizes, stake }) {
   const cost = combos * stake;
   if (combos > 0 && cost < SLIP_RULES.minTicket) errors.push('ticketMin');
   if (cost > SLIP_RULES.maxTicket) errors.push('ticketMax');
+  else if (cost > SLIP_RULES.capped && legs.some(l => l.cap)) errors.push('ticketCapped');
   return errors;
 }
 

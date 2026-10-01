@@ -93,7 +93,8 @@ export function parseKambiEvents(data, sport, now = new Date(), { unpriced = fal
 
 export async function fetchKambiLeague(key, now = new Date(), getJson) {
   const league = LEAGUES[key];
-  return parseKambiEvents(await getJson(kambiUrl(league.kambi), 'kambi-events'), key, now, { unpriced: !league.schedule });
+  // Tennis and UFC only when Kambi prices the match (no house price for a player).
+  return parseKambiEvents(await getJson(kambiUrl(league.kambi), 'kambi-events'), key, now, { unpriced: !league.schedule && !league.results });
 }
 
 // ---- In play -------------------------------------------------------------------

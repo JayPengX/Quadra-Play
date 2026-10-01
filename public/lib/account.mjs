@@ -11,6 +11,7 @@ import { settleSlip } from './odds.mjs';
 import { mergeTickets } from './lottery.mjs';
 import { taipeiDayKey } from './sources.mjs';
 import { isSoccer, f1Driver } from './teams.mjs';
+import { propResult } from './props.mjs';
 
 // What Play itself gave before Quadra paid into the pool (from the week of
 // 2026-10-05, GRANTS_UNTIL_WEEK, Quadra pays the week, whichever app is
@@ -172,6 +173,8 @@ export function legResult(leg, outcome) {
     return typeof happened === 'boolean' ? win(happened === (leg.pick === 'yes')) : null;
   }
   if (leg.kind === 'f1team') return win(norm(f1Driver(outcome.winner).team) === norm(leg.team));
+  // A player's number in the box score (props.mjs).
+  if (leg.kind === 'prop') return propResult(leg, outcome.prop ?? null);
   const away = Number(outcome.awayScore);
   const home = Number(outcome.homeScore);
   if (!Number.isFinite(away) || !Number.isFinite(home)) return null;
@@ -257,6 +260,34 @@ export function legResult(leg, outcome) {
       // The game's Nth run: whose it was, or no one's if the game ended first.
       if (!outcome.runOrder) return null;
       return win(leg.side === (outcome.runOrder[leg.line - 1] ?? 'none'));
+    }
+    case 'dnb':
+      // Draw no bet: a draw gives the stake back.
+      return away === home ? 'void' : win(leg.side === 'away' ? away > home : home > away);
+    case 'corners': {
+      // Soccer's corners, from ESPN's team stats.
+      if (!outcome.corners) return null;
+      const n = outcome.corners.home + outcome.corners.away;
+      return push(leg.side === 'over' ? n - leg.line : leg.line - n);
+    }
+    case 'set1': {
+      // Tennis: the first set's winner.
+      const a = Number(outcome.awayInnings?.[0]);
+      const h = Number(outcome.homeInnings?.[0]);
+      if (!Number.isFinite(a) || !Number.isFinite(h) || a === h) return null;
+      return win(leg.side === 'away' ? a > h : h > a);
+    }
+    case 'setscore':
+      // Tennis: the sets each won, home first ("2-1").
+      return win(`${home}-${away}` === leg.score);
+    case 'gamehcap':
+    case 'gametotal': {
+      // Tennis: every set's games (a retirement settles void before this).
+      const a = (outcome.awayInnings || []).reduce((sum, x) => sum + (Number(x) || 0), 0);
+      const h = (outcome.homeInnings || []).reduce((sum, x) => sum + (Number(x) || 0), 0);
+      if (!outcome.awayInnings?.length) return null;
+      if (leg.kind === 'gametotal') return push(leg.side === 'over' ? a + h - leg.line : leg.line - a - h);
+      return push(leg.side === 'away' ? a + leg.line - h : h + leg.line - a);
     }
     case 'inning':
       if (!outcome.awayInnings?.length) return null;

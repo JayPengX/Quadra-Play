@@ -29,7 +29,7 @@ export const HOUSE_RULES = {
 };
 
 // Markets whose outcomes are many and long by design.
-const EXOTIC = new Set(['score', 'margin', 'inning', 'nextrun', 'htft', 'goalbands', 'f1podium', 'f1top']);
+const EXOTIC = new Set(['score', 'margin', 'inning', 'nextrun', 'htft', 'goalbands', 'f1podium', 'f1top', 'setscore', 'prop']);
 // Priced one by one by the lottery: only a runaway favourite is locked.
 const OUTRIGHT = new Set(['f1', 'f1pole', 'future', 'f1team']);
 

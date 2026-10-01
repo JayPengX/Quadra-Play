@@ -31,7 +31,9 @@ test('a modelled total is a half line near the mean, priced like a bookmaker\'s'
 test('a game with only a winner price gets the full board', () => {
   const kinds = g => new Set(gameOptions(g).map(o => o.kind));
   const mlb = kinds(game('mlb', { polymarket: { home: 0.56, away: 0.44 } }));
-  for (const k of ['ml', 'total', 'runline', 'teamtotal', 'f5', 'margin', 'firstinning', 'oddeven']) assert.ok(mlb.has(k), `mlb ${k}`);
+  for (const k of ['ml', 'total', 'runline', 'teamtotal', 'f5', 'margin', 'firstinning']) assert.ok(mlb.has(k), `mlb ${k}`);
+  // Odd or even is no longer sold.
+  assert.ok(!mlb.has('oddeven'));
   const nba = kinds(game('nba', { polymarket: { home: 0.7, away: 0.3 } }));
   for (const k of ['ml', 'runline', 'total', 'teamtotal', 'htotal', 'half', 'q1', 'margin']) assert.ok(nba.has(k), `nba ${k}`);
   const soccer = kinds(game('scotland', { draftKings: { home: 0.48, draw: 0.28, away: 0.24 } }));

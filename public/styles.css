@@ -506,6 +506,27 @@ body.searching #live, body.searching #f1, body.searching #futures, body.searchin
 .line-row .pick { min-width: 0; }
 .market-panel.inning .market-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; }
 .line-title { font-size: 0.82rem; font-weight: 700; color: var(--text-secondary); }
+/* 更多: the long-shot markets one under another */
+.market-more { display: grid; gap: 16px; }
+.more-block { display: grid; gap: 8px; }
+.more-title { margin: 0; font-size: 0.84rem; font-weight: 700; color: var(--text-secondary); }
+.more-block + .more-block { padding-top: 14px; border-top: 1px solid var(--border); }
+.offers-wait { margin: 8px 0 0; font-size: 0.78rem; }
+/* 球員: a chip per market, then each player and their price */
+.prop-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -2px; padding: 2px; }
+.prop-chips::-webkit-scrollbar { display: none; }
+.prop-chip { padding: 5px 11px; font-size: 0.8rem; box-shadow: none; }
+.prop-head, .prop-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(76px, 92px); gap: 8px; align-items: center; }
+.prop-head, .prop-row.two { grid-template-columns: minmax(0, 1fr) minmax(70px, 84px) minmax(70px, 84px); }
+.prop-head span { font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-align: center; }
+.prop-head span:first-child { text-align: left; }
+.prop-list { display: grid; gap: 6px; }
+.prop-row .pick { min-width: 0; padding: 5px 6px; }
+.prop-row.two .pick-name { display: none; }
+.prop-player { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.prop-avatar { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--surface-sunken); color: var(--text-secondary); font-size: 0.66rem; font-weight: 800; letter-spacing: 0.02em; }
+.prop-name { min-width: 0; font-size: 0.88rem; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.prop-note { margin: 2px 0 0; font-size: 0.74rem; line-height: 1.45; }
 
 /* Slip: what each pick is, what it pays */
 .leg-pick { display: flex; align-items: center; gap: 6px; min-width: 0; }

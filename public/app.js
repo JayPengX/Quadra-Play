@@ -5,7 +5,8 @@ import {
   FANS, STYLES, SPORTS, SIM_SPORTS, sportTemplate, weekOfYear, crowdPools, crowdSize, hashString, simulateCrowd, MONTH_WEEKS, PERIOD_MONTHS, monthWeeks
 } from './lib/sim.mjs';
 import { ticketProfile, accountTickets } from './lib/profile.mjs';
-import { useSourcesSession, loadOdds, loadExtraLeagues, loadExtraFutures, taipeiDayKey, fetchOutcomes, loadLive, parseInning, loadFutureTeams, futureTeamLeagues } from './lib/sources.mjs';
+import { useSourcesSession, loadOdds, loadExtraLeagues, loadExtraFutures, taipeiDayKey, fetchOutcomes, loadLive, parseInning, loadFutureTeams, futureTeamLeagues, loadGameOffers } from './lib/sources.mjs';
+import { propName } from './lib/props.mjs';
 import { inningsLeft, liveBaseball, liveSoccer, liveGoals, livePoints, fitGoals, liveMarkets, liveOdds, pregameRuns, nextRunChances, nextRunOdds, LIVE_MIN_LIQUIDITY, LIVE_THREE_WAY, PERIODS } from './lib/live.mjs';
 import { fitHockey } from './lib/markets.mjs';
 import {
@@ -21,7 +22,7 @@ import {
 import { pack, unpack } from './lib/codec.mjs';
 import { historyStats, funFacts, crowdPercentile } from './lib/history.mjs';
 import { detectLocale, makeT } from './lib/i18n.mjs';
-import { f1Driver, f1Constructor, findTeamLogo, countryFlag, countryCode, leagueLogo, teamLogo, teamZh, LEAGUES, familyOf, isSoccer, normalizeTeamName } from './lib/teams.mjs';
+import { f1Driver, f1Constructor, findTeamLogo, countryFlag, countryCode, leagueLogo, teamLogo, teamZh, LEAGUES, familyOf, isSoccer, isDuel, normalizeTeamName } from './lib/teams.mjs';
 import { flagUrl } from './lib/logos.mjs';
 import { logoPicture, raceName } from './lib/logos.mjs';
 import { houseRule, houseCut, minLegsProblem, leagueTier } from './lib/rules.mjs';
@@ -79,6 +80,7 @@ const state = {
   open: new Set(),
   // Each open game's market tab (大小分, 讓分, 單隊大小, 得分最高單局).
   marketTab: new Map(),
+  propTab: new Map(),
   // The simulated account (play money) and its sync.
   account: null,
   accountReady: false,
@@ -174,7 +176,8 @@ function teamName(team) {
 // ---- Bets -------------------------------------------------------------------
 
 function matchupText(game) {
-  return isSoccer(game.sport)
+  // Soccer and one player against another (Kambi's first player first): "A vs B".
+  return isSoccer(game.sport) || isDuel(game.sport)
     ? `${teamName(game.home)} vs ${teamName(game.away)}`
     : `${teamName(game.away)} @ ${teamName(game.home)}`;
 }
@@ -216,6 +219,18 @@ function named(game, o, matchup) {
       const text = `${team(o.team)} ${t(o.side)} ${o.teamLine}`;
       return { ...o, matchup, marketLabel: `${team(o.team)} ${o.teamLine}`, chip: t(o.side), label: text, shortLabel: text };
     }
+    case 'prop': {
+      const what = propText(o.stat, o.propLine, o.side);
+      return { ...o, matchup, chip: o.side === 'yes' ? o.player : t(o.side), label: `${matchup} ${o.player} ${what}`, shortLabel: `${o.player} ${what}` };
+    }
+    case 'gametotal': {
+      const text = `${t(o.side)} ${o.totalLine} ${t('gamesUnit')}`;
+      return { ...o, matchup, marketLabel: String(o.totalLine), chip: t(o.side), label: `${matchup} ${text}`, shortLabel: text };
+    }
+    case 'gamehcap': {
+      const text = `${team(o.side)} ${fmtLine(o.runLine)}`;
+      return { ...o, matchup, marketLabel: `${team(o.giver)} ${fmtLine(-Math.abs(o.awayLine))}`, chip: text, label: `${text} ${t('gamesUnit')}`, shortLabel: `${t('secGameHcap')} ${text}` };
+    }
     case 'inning': {
       const name = o.inning < 9 ? t('inningN', { n: o.inning + 1 }) : t('inningTie');
       return { ...o, matchup, chip: name, label: `${matchup} ${t('topInning')} ${name}`, shortLabel: name };
@@ -225,6 +240,14 @@ function named(game, o, matchup) {
       return { ...o, matchup, marketLabel: marketLabelOf(game, o.m), chip: name, label: `${matchup} ${name}`, shortLabel: name };
     }
   }
+}
+
+// What a player pick is: "進球", "進球 2+", "射正 大 1.5".
+function propText(stat, line, side) {
+  const name = propName(stat, state.locale);
+  if (stat === 'first') return name;
+  if (side === 'yes') return line > 1 ? `${name} ${line}+` : name;
+  return `${name} ${state.t(side)} ${line}`;
 }
 
 // A market's heading inside its section, when it needs one.
@@ -245,7 +268,7 @@ function pickName(game, market, pick) {
   if (market.kind === 'htft') return `${t(RESULT_SHORT[pick.ht])}/${t(RESULT_SHORT[pick.ft])}`;
   if (market.kind === 'goalbands') return pick.hi == null ? `${pick.lo}+` : `${pick.lo}-${pick.hi}`;
   if (market.kind === 'margin') return `${teamName(game[pick.team])} ${pick.hi == null ? `${pick.lo}+` : pick.lo === pick.hi ? pick.lo : `${pick.lo}-${pick.hi}`}`;
-  if (market.kind === 'score') return pick.score === 'other' ? t('scoreOther') : pick.score.replace('-', ':');
+  if (market.kind === 'score' || market.kind === 'setscore') return pick.score === 'other' ? t('scoreOther') : pick.score.replace('-', ':');
   if (pick.side === 'away' || pick.side === 'home') return teamName(game[pick.side]);
   return t({ draw: 'draw', odd: 'odd', even: 'even', yes: 'yes', no: 'no', over: 'over', under: 'under' }[pick.side] ?? pick.side);
 }
@@ -255,6 +278,8 @@ function buildBets(data) {
   const bets = [];
   for (const game of data.games) {
     const matchup = matchupText(game);
+    // Kambi's own markets of the game once read (loadOffers), whatever read of the board this is.
+    if (gameOffers.has(game.id)) game.offers = gameOffers.get(game.id).offers;
     for (const o of gameOptions(game)) bets.push(named(game, o, matchup));
   }
   if (data.f1) {
@@ -408,8 +433,10 @@ const SPORT_GROUPS_ALL = {
   baseball: { icon: '⚾', leagues: ['mlb', 'npb', 'kbo', 'cpbl'] },
   basketball: { icon: '🏀', leagues: Object.keys(LEAGUES).filter(key => LEAGUES[key].family === 'basketball' && !LEAGUES[key].off) },
   soccer: { icon: '⚽', leagues: Object.keys(LEAGUES).filter(key => LEAGUES[key].family === 'soccer' && !LEAGUES[key].off) },
-  football: { icon: '🏈', leagues: ['nfl'] },
+  football: { icon: '🏈', leagues: ['nfl', 'ncaaf'] },
   hockey: { icon: '🏒', leagues: ['nhl'] },
+  tennis: { icon: '🎾', leagues: ['atp', 'wta'] },
+  mma: { icon: '🥊', leagues: ['ufc'] },
   f1: { icon: '🏎️', leagues: ['f1'] }
 };
 // Only leagues on sale (Taiwan can watch them); a kind with none left goes.
@@ -705,7 +732,8 @@ function gameCard(game, bets) {
   const rerender = game.live ? renderLive : renderGames;
   const open = state.open.has(game.id);
   const ml = bets.filter(b => b.kind === 'ml');
-  const sides = isSoccer(game.sport) ? ['home', 'draw', 'away'] : ['away', 'home'];
+  const duel = isDuel(game.sport);
+  const sides = isSoccer(game.sport) ? ['home', 'draw', 'away'] : duel ? ['home', 'away'] : ['away', 'home'];
   const rows = sides.map(side => {
     const bet = ml.find(b => b.side === side);
     const who =
@@ -713,7 +741,7 @@ function gameCard(game, bets) {
         ? [badge('=', 'var(--text-muted)'), el('span', { class: 'team-name', text: t('draw') })]
         : [
             logoImg(game.sport, game[side].en, teamName(game[side])),
-            el('span', { class: 'team-name' }, [document.createTextNode(teamName(game[side])), el('small', { text: t(side === 'home' ? 'homeTag' : 'awayTag') })])
+            el('span', { class: 'team-name' }, [document.createTextNode(teamName(game[side])), duel ? null : el('small', { text: t(side === 'home' ? 'homeTag' : 'awayTag') })])
           ];
     const score = game.live && side !== 'draw' ? el('span', { class: 'live-score', text: String(game.live[`${side}Score`]) }) : null;
     return el('div', { class: 'team-row' }, [...who, score, bet ? pickButton(bet, '') : null]);
@@ -740,10 +768,15 @@ function gameCard(game, bets) {
   ]);
 }
 
-// Every other market of a game, one small card each, then the game's details.
+// Every other market of a game, one tab each: the main ones first, the
+// players' (球員) next, the long-shot ones (bands, exact scores) together
+// under 更多.
 function gameMore(game, bets) {
   const t = state.t;
-  const kinds = SECTIONS.filter(sec => sec.kind !== 'ml' && bets.some(b => b.kind === sec.kind));
+  wantOffers(game);
+  const all = SECTIONS.filter(sec => sec.kind !== 'ml' && bets.some(b => b.kind === sec.kind));
+  const extra = all.filter(sec => sec.extra);
+  const kinds = [...all.filter(sec => !sec.extra), ...(extra.length ? [MORE_SECTION] : [])];
   const current = kinds.find(sec => sec.kind === state.marketTab.get(game.id)) ?? kinds[0];
   const tabs =
     kinds.length > 1
@@ -752,6 +785,7 @@ function gameMore(game, bets) {
             el('button', {
               type: 'button',
               role: 'tab',
+              class: sec.kind === 'prop' ? 'tab-props' : null,
               'aria-selected': String(sec === current),
               'aria-pressed': String(sec === current),
               text: t(sec.kind === 'runline' && isSoccer(game.sport) ? 'secHandicap' : sec.short ?? sec.title),
@@ -769,11 +803,112 @@ function gameMore(game, bets) {
       const on = tabs.querySelector('[aria-selected="true"]');
       if (on && tabs.scrollWidth > tabs.clientWidth) tabs.scrollLeft = Math.max(0, on.offsetLeft - (tabs.clientWidth - on.offsetWidth) / 2);
     });
-  return el('div', { class: 'game-more' }, [
-    tabs,
-    current ? marketPanel(game, current, bets.filter(b => b.kind === current.kind)) : null,
-    null
+  let panel = null;
+  if (current === MORE_SECTION)
+    panel = el('div', { class: 'market-more' }, extra.map(sec => el('section', { class: 'more-block' }, [el('h4', { class: 'more-title', text: t(sec.title) }), marketPanel(game, sec, bets.filter(b => b.kind === sec.kind), { titled: true })])));
+  else if (current?.kind === 'prop') panel = propsPanel(game, bets.filter(b => b.kind === 'prop'));
+  else if (current) panel = marketPanel(game, current, bets.filter(b => b.kind === current.kind));
+  // Kambi's full list on its way: say so under the model's markets.
+  const waiting = game.kambiId && !game.live && !gameOffers.has(game.id) && offersLoading.has(game.id);
+  return el('div', { class: 'game-more' }, [tabs, panel, waiting ? el('p', { class: 'muted offers-wait', text: t('offersLoading') }) : null]);
+}
+
+// Players' markets: one chip per market (進球, 射正 1.5 …), then each
+// player with their price, the likeliest first.
+function propsPanel(game, bets) {
+  const t = state.t;
+  const groups = [...groupBy(bets, b => b.group).entries()];
+  const ORDER = ['first', 'goals', 'ga', 'assists', 'sot', 'points', 'shots', 'hr', 'hits', 'rbi', 'runs', 'hrr', 'td', 'passYds', 'rushYds', 'recYds', 'rec', 'rushRecYds', 'passRushYds', 'passTD', 'passComp', 'passAtt', 'rushAtt', 'ints', 'pts', 'reb', 'ast', 'threes'];
+  const rank = ([key]) => {
+    const [stat, line] = key.split('|');
+    return (ORDER.indexOf(stat) + 1 || 99) * 1000 + Number(line || 0);
+  };
+  groups.sort((a, b) => rank(a) - rank(b));
+  const chosen = groups.find(([key]) => key === state.propTab.get(game.id)) ?? groups[0];
+  if (!chosen) return null;
+  const chipFor = ([key, list]) => {
+    const [stat, line] = key.split('|');
+    const side = list.some(b => b.side === 'yes') ? 'yes' : 'over';
+    const text = side === 'yes' ? propText(stat, Number(line) || 1, 'yes') : `${propName(stat, state.locale)} ${line}`;
+    return el('button', {
+      type: 'button',
+      class: 'chip prop-chip',
+      'aria-pressed': String(key === chosen[0]),
+      text,
+      onclick: () => {
+        state.propTab.set(game.id, key);
+        (game.live ? renderLive : renderGames)();
+      }
+    });
+  };
+  const chips = el('div', { class: 'chip-row prop-chips' }, groups.map(chipFor));
+  requestAnimationFrame(() => {
+    const on = chips.querySelector('[aria-pressed="true"]');
+    if (on && chips.scrollWidth > chips.clientWidth) chips.scrollLeft = Math.max(0, on.offsetLeft - (chips.clientWidth - on.offsetWidth) / 2);
+  });
+  const [, list] = chosen;
+  const players = [...groupBy(list, b => b.player).values()].sort((a, b) => Math.min(...a.map(x => x.estOdds)) - Math.min(...b.map(x => x.estOdds)));
+  const ou = list.some(b => b.side === 'over');
+  const rows = players.map(picks => {
+    const name = picks[0].player;
+    const cells = ou ? ['over', 'under'].map(side => picks.find(b => b.side === side)) : [picks[0]];
+    return el('div', { class: `prop-row ${ou ? 'two' : ''}` }, [
+      el('span', { class: 'prop-player' }, [el('span', { class: 'prop-avatar', 'aria-hidden': 'true', text: initialsOf(name) }), el('span', { class: 'prop-name', text: name })]),
+      ...cells.map(b => (b ? pickButton(b, ou ? t(b.side) : '') : el('span')))
+    ]);
+  });
+  return el('div', { class: 'market-panel props' }, [
+    chips,
+    ou ? el('div', { class: 'prop-head' }, [el('span', { text: t('colPlayer') }), el('span', { text: t('over') }), el('span', { text: t('under') })]) : null,
+    el('div', { class: 'prop-list' }, rows),
+    el('p', { class: 'muted prop-note', text: t('propsNote', { capped: fmtMoney(SLIP_RULES.capped, { sign: false }) }) })
   ]);
+}
+
+// ---- A game's own markets from Kambi (offers.mjs) ------------------------------------
+//
+// Read when a game is opened (and for the games of picks on the slip): its
+// every real line, half, corner and player market. Kept while fresh; a game
+// opened again later reads them anew.
+const gameOffers = new Map();
+const offersLoading = new Set();
+const OFFERS_FRESH_MS = 2 * 60_000;
+function wantOffers(game) {
+  if (!game?.kambiId || game.live || offersLoading.has(game.id)) return;
+  const had = gameOffers.get(game.id);
+  if (had && Date.now() - had.at < OFFERS_FRESH_MS) return;
+  offersLoading.add(game.id);
+  loadGameOffers(game)
+    .then(offers => {
+      if (offers) gameOffers.set(game.id, { at: Date.now(), offers });
+    })
+    .finally(() => {
+      offersLoading.delete(game.id);
+      rebuildBoard();
+    });
+}
+// Every board redrawn once, after the markets that came in this frame.
+let rebuildQueued = false;
+function rebuildBoard() {
+  if (rebuildQueued || !state.data) return;
+  rebuildQueued = true;
+  requestAnimationFrame(() => {
+    rebuildQueued = false;
+    state.bets = buildBets(state.data);
+    renderGames();
+    renderParlay();
+    renderSlipBar();
+    syncPicks();
+  });
+}
+// The game a pick on the slip is on (its id starts with the game's).
+const gameOfPick = id => state.data?.games.find(g => id.startsWith(`${g.id}|`)) ?? null;
+// The slip's picks whose game's own markets aren't read yet: read them.
+function offersForSlip() {
+  for (const id of state.parlay) {
+    const game = gameOfPick(id);
+    if (game?.kambiId) wantOffers(game);
+  }
 }
 
 // One line of a two-way market: the line (tagged when the lottery posts it)
@@ -799,7 +934,7 @@ function lineTable(heads, rows, title = null) {
 }
 
 // Each kind of market laid out as a table of its lines.
-function marketPanel(game, section, bets) {
+function marketPanel(game, section, bets, { titled = false } = {}) {
   const t = state.t;
   const by = (list, side) => list.find(b => b.side === side);
   let body;
@@ -817,7 +952,7 @@ function marketPanel(game, section, bets) {
         const markets = [...groupBy(bets.filter(b => b.giver === giver), b => b.market).values()].sort((a, b) => Math.abs(a[0].awayLine) - Math.abs(b[0].awayLine));
         if (!markets.length) return null;
         const rows = markets.map(pair => lineRow(fmtLine(-Math.abs(pair[0].awayLine)), [by(pair, giver), by(pair, taker)], { posted: pair[0].posted }));
-        const heading = section.kind === 'runline' ? t(isSoccer(game.sport) ? 'giveGoals' : familyOf(game.sport) === 'baseball' ? 'giveRuns' : 'givePoints', { team: teamName(game[giver]) }) : `${teamName(game[giver])} · ${t(section.title)}`;
+        const heading = section.kind === 'runline' ? t(isSoccer(game.sport) ? 'giveGoals' : familyOf(game.sport) === 'baseball' ? 'giveRuns' : 'givePoints', { team: teamName(game[giver]) }) : section.kind === 'gamehcap' ? t('giveGames', { team: teamName(game[giver]) }) : `${teamName(game[giver])} · ${t(section.title)}`;
         return lineTable([t('colLine'), teamName(game[giver]), teamName(game[taker])], rows, heading);
       })
       .filter(Boolean);
@@ -832,8 +967,10 @@ function marketPanel(game, section, bets) {
       .filter(Boolean);
   } else {
     // One block per market (最高單局 has one; 第N分 one per run).
-    body = [...groupBy(bets, b => b.market).values()].flatMap(list => [
-      el('div', { class: 'market-head' }, [el('span', { class: 'market-title', text: list[0].marketLabel ?? t(section.title) })]),
+    const markets = [...groupBy(bets, b => b.market).values()];
+    body = markets.flatMap(list => [
+      // Under 更多 the section's own title already names a lone market.
+      titled && markets.length === 1 ? null : el('div', { class: 'market-head' }, [el('span', { class: 'market-title', text: list[0].marketLabel ?? t(section.title) })]),
       el('div', { class: 'market-picks' }, list.map(b => pickButton(b, b.chip ?? b.shortLabel)))
     ]);
   }
@@ -841,8 +978,8 @@ function marketPanel(game, section, bets) {
 }
 
 // Kinds laid out as tables of lines: over/under, and one team giving a line.
-const TOTAL_KINDS = new Set(['total', 'htotal', 'f5total']);
-const HCAP_KINDS = new Set(['runline']);
+const TOTAL_KINDS = new Set(['total', 'htotal', 'f5total', 'gametotal', 'corners']);
+const HCAP_KINDS = new Set(['runline', 'gamehcap']);
 
 // One section per kind of bet, each market of it with its own take. The
 // inning market's ten results take a whole row.
@@ -850,24 +987,32 @@ const SECTIONS = [
   { kind: 'ml', title: 'secMoneyline' },
   { kind: 'total', title: 'secTotal' },
   { kind: 'runline', title: 'secRunLine' },
+  { kind: 'gamehcap', title: 'secGameHcap' },
+  { kind: 'gametotal', title: 'secGameTotal' },
+  { kind: 'set1', title: 'secSet1' },
+  { kind: 'prop', title: 'secProps' },
   { kind: 'teamtotal', title: 'secTeamTotal' },
-  { kind: 'inning', title: 'secTopInning', short: 'topInningShort' },
-  { kind: 'nextrun', title: 'secNextRun' },
-  { kind: 'margin', title: 'secMargin' },
+  { kind: 'dnb', title: 'secDnb' },
+  { kind: 'dc', title: 'secDoubleChance' },
+  { kind: 'btts', title: 'secBtts' },
   { kind: 'half', title: 'secHalf' },
   { kind: 'htotal', title: 'secHalfTotal' },
-  { kind: 'dc', title: 'secDoubleChance' },
+  { kind: 'corners', title: 'secCorners' },
   { kind: 'f5', title: 'secF5' },
   { kind: 'f5total', title: 'secF5Total' },
   { kind: 'regulation', title: 'secRegulation' },
   { kind: 'firstinning', title: 'secFirstInning' },
-  { kind: 'btts', title: 'secBtts' },
-  { kind: 'score', title: 'secScore' },
-  { kind: 'oddeven', title: 'secOddEven' },
-  { kind: 'htft', title: 'secHtft' },
-  { kind: 'goalbands', title: 'secGoalBands' },
-  { kind: 'q1', title: 'secQ1' }
+  { kind: 'q1', title: 'secQ1' },
+  { kind: 'nextrun', title: 'secNextRun' },
+  // Long shots, together under 更多.
+  { kind: 'score', title: 'secScore', extra: true },
+  { kind: 'setscore', title: 'secSetScore', extra: true },
+  { kind: 'htft', title: 'secHtft', extra: true },
+  { kind: 'margin', title: 'secMargin', extra: true },
+  { kind: 'goalbands', title: 'secGoalBands', extra: true },
+  { kind: 'inning', title: 'secTopInning', short: 'topInningShort', extra: true }
 ];
+const MORE_SECTION = { kind: 'more', title: 'secMore' };
 
 function fmtPctShort(p) {
   return p >= 0.1 ? `${Math.round(p * 100)}%` : `${(p * 100).toFixed(1)}%`;
@@ -1403,7 +1548,7 @@ function renderParlay() {
     ))
   );
   if (errors.length) {
-    ticket.push(el('ul', { class: 'slip-errors' }, errors.map(e => el('li', { text: t(`slipError_${e}`, { max: SLIP_RULES.maxLegs, min: fmtMoney(SLIP_RULES.minTicket, { sign: false }), maxTicket: fmtMoney(SLIP_RULES.maxTicket, { sign: false }), unit: SLIP_RULES.unit, need: minLegsProblem(slip, sizes) }) }))));
+    ticket.push(el('ul', { class: 'slip-errors' }, errors.map(e => el('li', { text: t(`slipError_${e}`, { max: SLIP_RULES.maxLegs, min: fmtMoney(SLIP_RULES.minTicket, { sign: false }), maxTicket: fmtMoney(SLIP_RULES.maxTicket, { sign: false }), capped: fmtMoney(SLIP_RULES.capped, { sign: false }), unit: SLIP_RULES.unit, need: minLegsProblem(slip, sizes) }) }))));
   }
   // What comes off the balance: a free bet's top-up only.
   const cost = freeOn ? stake - free.value : comboCount(slip, sizes) * stake;
@@ -2808,6 +2953,7 @@ function renderAll() {
   state.bets = buildBets(state.data);
   state.futures = buildFutures(state.data);
   state.recs = recommend(state.bets);
+  offersForSlip();
   // (A pick not on the board stays in the slip: its league may still be on
   // its way. The slip shows only the picks it finds; saveSlip lets go of the
   // rest once everything has been read.)
@@ -3324,7 +3470,12 @@ function saveSlip() {
   // (championships aside: their boards can come later still).
   if (!state.booting) {
     const found = new Set(slipCandidates().map(b => b.id));
-    state.parlay = state.parlay.filter(id => id.startsWith('fut|') || found.has(id));
+    // A pick on a game whose own markets (a player's, corners) aren't read yet stays.
+    const waiting = id => {
+      const game = gameOfPick(id);
+      return Boolean(game?.kambiId && !gameOffers.has(game.id));
+    };
+    state.parlay = state.parlay.filter(id => id.startsWith('fut|') || found.has(id) || waiting(id));
   }
   try {
     if (!state.parlay.length) return void localStorage.removeItem(key);

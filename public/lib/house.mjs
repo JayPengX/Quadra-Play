@@ -112,9 +112,10 @@ export async function loadStrengths(sport, path, getJson) {
 // Games (from parseEspnScoreboard) that no bookmaker prices get the house's
 // chances as `house`.
 export async function withHousePrices(games, sport, path, getJson) {
-  if (!path || !games.some(g => !g.outcomes)) return games;
+  const priced = g => g.outcomes || g.kambi?.outcomes;
+  if (!path || !games.some(g => !priced(g))) return games;
   const table = await loadStrengths(sport, path, getJson).catch(() => new Map());
-  return games.map(g => (g.outcomes ? g : { ...g, house: housePrices(sport, g.away, g.home, table, { neutral: g.neutral, preseason: g.preseason }) }));
+  return games.map(g => (priced(g) ? g : { ...g, house: housePrices(sport, g.away, g.home, table, { neutral: g.neutral, preseason: g.preseason }) }));
 }
 
 // The same side under two spellings (Kambi's, a league's own, ESPN's): equal,
