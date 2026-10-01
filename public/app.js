@@ -652,7 +652,8 @@ function renderStatic() {
   document.documentElement.lang = state.locale === 'zh' ? 'zh-Hant' : 'en';
   // The app's name in the page's language only: 四方運彩 or Quadra Sportsbook.
   document.title = t('title');
-  $('loading-title').textContent = t('title');
+  const bootTitle = document.querySelector('#loading .q-boot-title');
+  if (bootTitle) bootTitle.textContent = t('title');
   $('title').textContent = t('title');
   $('notice').textContent = t('notice');
   $('game-search').placeholder = t('searchPlaceholder');
@@ -2845,8 +2846,6 @@ function crowdKey(sportBets, weeks) {
 // along; it isn't shown.
 function showLoading() {
   $('loading').hidden = false;
-  $('loading-error').hidden = true;
-  $('loading-spinner').hidden = false;
 }
 
 function hideLoading() {
