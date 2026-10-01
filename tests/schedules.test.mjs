@@ -14,7 +14,7 @@ test('every Kambi league has a schedule of its own, or sells what Kambi lists', 
   assert.equal(LEAGUES.euroleague.schedule, undefined);
 });
 
-test('Asian baseball: the games to come, priced from this season\'s results, the winner only', () => {
+test('Asian baseball: the games to come, priced from this season\'s results, only markets a final score settles', () => {
   const games = [
     ...Array.from({ length: 10 }, (_, i) => asia(`p${i}`, `2026-09-${10 + i}T10:35:00Z`, 'Rakuten Monkeys', 'Wei Chuan Dragons', 'post', 5, 2)),
     asia('n1', '2026-10-02T10:35:00Z', 'Rakuten Monkeys', 'Wei Chuan Dragons'),
@@ -26,9 +26,12 @@ test('Asian baseball: the games to come, priced from this season\'s results, the
   assert.ok(g.house.home > 0.6, `${g.house.home}`);
   const [board] = mergeGames([g], []);
   assert.equal(board.scoreOnly, true);
-  // The house's own price: the winner only (Kambi's price opens the rest).
-  const kinds = new Set(gameOptions(board).map(o => o.kind));
-  assert.deepEqual([...kinds], ['ml']);
+  // The house's own price: every market a final score settles, on a capped ticket.
+  const options = gameOptions(board);
+  const kinds = new Set(options.map(o => o.kind));
+  assert.ok(kinds.has('ml') && kinds.has('total') && kinds.has('runline'));
+  for (const k of ['f5', 'f5total', 'inning', 'firstinning']) assert.ok(!kinds.has(k), k);
+  assert.ok(options.every(o => o.cap === 'house'));
   // Settled from the list.
   assert.deepEqual(asiaResult(asia('x', '', 'A', 'B', 'post', 3, 1)), { status: 'final', homeScore: 3, awayScore: 1, awayInnings: [], homeInnings: [] });
   assert.equal(asiaResult(asia('x', '', 'A', 'B', 'void')).status, 'void');

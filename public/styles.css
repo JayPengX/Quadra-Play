@@ -524,7 +524,8 @@ body.searching #live, body.searching #f1, body.searching #futures, body.searchin
 .prop-row .pick { min-width: 0; padding: 5px 6px; }
 .prop-row.two .pick-name { display: none; }
 .prop-player { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.prop-avatar { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--surface-sunken); color: var(--text-secondary); font-size: 0.66rem; font-weight: 800; letter-spacing: 0.02em; }
+.prop-avatar { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--surface-sunken); color: var(--text-secondary); font-size: 0.66rem; font-weight: 800; letter-spacing: 0.02em; }
+.prop-photo { object-fit: cover; object-position: top; background: var(--surface-sunken); }
 .prop-name { min-width: 0; font-size: 0.88rem; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
 .prop-note { margin: 2px 0 0; font-size: 0.74rem; line-height: 1.45; }
 

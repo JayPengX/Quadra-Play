@@ -5,8 +5,9 @@ import {
   FANS, STYLES, SPORTS, SIM_SPORTS, sportTemplate, weekOfYear, crowdPools, crowdSize, hashString, simulateCrowd, MONTH_WEEKS, PERIOD_MONTHS, monthWeeks
 } from './lib/sim.mjs';
 import { ticketProfile, accountTickets } from './lib/profile.mjs';
-import { useSourcesSession, loadOdds, loadExtraLeagues, loadExtraFutures, taipeiDayKey, fetchOutcomes, loadLive, parseInning, loadFutureTeams, futureTeamLeagues, loadGameOffers } from './lib/sources.mjs';
+import { useSourcesSession, loadOdds, loadExtraLeagues, loadExtraFutures, taipeiDayKey, fetchOutcomes, loadLive, parseInning, loadFutureTeams, futureTeamLeagues, loadGameOffers, loadPlayers } from './lib/sources.mjs';
 import { propName } from './lib/props.mjs';
+import { hasPlayers } from './lib/players.mjs';
 import { inningsLeft, liveBaseball, liveSoccer, liveGoals, livePoints, fitGoals, liveMarkets, liveOdds, pregameRuns, nextRunChances, nextRunOdds, LIVE_MIN_LIQUIDITY, LIVE_THREE_WAY, PERIODS } from './lib/live.mjs';
 import { fitHockey } from './lib/markets.mjs';
 import {
@@ -280,6 +281,8 @@ function buildBets(data) {
     const matchup = matchupText(game);
     // Kambi's own markets of the game once read (loadOffers), whatever read of the board this is.
     if (gameOffers.has(game.id)) game.offers = gameOffers.get(game.id).offers;
+    // And its players with their season numbers (players.mjs), once read.
+    if (gamePlayers.get(game.id)?.players) game.players = gamePlayers.get(game.id).players;
     for (const o of gameOptions(game)) bets.push(named(game, o, matchup));
   }
   if (data.f1) {
@@ -810,7 +813,7 @@ function gameMore(game, bets) {
   else if (current?.kind === 'prop') panel = propsPanel(game, bets.filter(b => b.kind === 'prop'));
   else if (current) panel = marketPanel(game, current, bets.filter(b => b.kind === current.kind));
   // Kambi's full list on its way: say so under the model's markets.
-  const waiting = game.kambiId && !gameOffers.has(game.id) && offersLoading.has(game.id);
+  const waiting = (game.kambiId && !gameOffers.has(game.id) && offersLoading.has(game.id)) || gamePlayers.get(game.id)?.loading;
   return el('div', { class: 'game-more' }, [tabs, panel, waiting ? el('p', { class: 'muted offers-wait', text: t('offersLoading') }) : !panel ? el('p', { class: 'muted offers-wait', text: t('offersNone') }) : null]);
 }
 
@@ -854,7 +857,7 @@ function propsPanel(game, bets) {
     const name = picks[0].player;
     const cells = ou ? ['over', 'under'].map(side => picks.find(b => b.side === side)) : [picks[0]];
     return el('div', { class: `prop-row ${ou ? 'two' : ''}` }, [
-      el('span', { class: 'prop-player' }, [el('span', { class: 'prop-avatar', 'aria-hidden': 'true', text: initialsOf(name) }), el('span', { class: 'prop-name', text: name })]),
+      el('span', { class: 'prop-player' }, [playerPhoto(picks[0].photo, name), el('span', { class: 'prop-name', text: name })]),
       ...cells.map(b => (b ? pickButton(b, ou ? t(b.side) : '') : el('span')))
     ]);
   });
@@ -866,6 +869,15 @@ function propsPanel(game, bets) {
   ]);
 }
 
+// A player's headshot (ESPN's), or their initials while it loads or when there's none.
+function playerPhoto(url, name) {
+  const fallback = () => el('span', { class: 'prop-avatar', 'aria-hidden': 'true', text: initialsOf(name) });
+  if (!url) return fallback();
+  const img = el('img', { class: 'prop-avatar prop-photo', src: url, alt: '', loading: 'lazy', decoding: 'async' });
+  img.onerror = () => img.replaceWith(fallback());
+  return img;
+}
+
 // ---- A game's own markets from Kambi (offers.mjs) ------------------------------------
 //
 // Read when a game is opened (and for the games of picks on the slip): its
@@ -875,7 +887,19 @@ const gameOffers = new Map();
 const offersLoading = new Set();
 const OFFERS_FRESH_MS = 2 * 60_000;
 const LIVE_OFFERS_FRESH_MS = 20_000;
+// A game's players (ESPN's rosters and seasons): read once a game is opened,
+// for the model's players' markets and everyone's picture.
+const gamePlayers = new Map();
+function wantPlayers(game) {
+  if (game?.live || !game?.espnTeams || !hasPlayers(game.sport) || gamePlayers.has(game.id)) return;
+  gamePlayers.set(game.id, { loading: true });
+  loadPlayers(game).then(players => {
+    gamePlayers.set(game.id, { players: players ?? [] });
+    rebuildBoard();
+  });
+}
 function wantOffers(game) {
+  wantPlayers(game);
   if (!game?.kambiId || offersLoading.has(game.id)) return;
   const had = gameOffers.get(game.id);
   if (had && Date.now() - had.at < (game.live ? LIVE_OFFERS_FRESH_MS : OFFERS_FRESH_MS)) return;
@@ -915,9 +939,11 @@ const gameOfPick = id => state.data?.games.find(g => id.startsWith(`${g.id}|`)) 
 function offersForSlip() {
   for (const id of state.parlay) {
     const game = gameOfPick(id);
-    if (game?.kambiId) wantOffers(game);
+    if (game) wantOffers(game);
   }
 }
+// A game whose markets or players are still on their way (a pick on it stays on the slip).
+const gameWaiting = game => Boolean(game && ((game.kambiId && !gameOffers.has(game.id)) || (game.espnTeams && hasPlayers(game.sport) && !gamePlayers.get(game.id)?.players)));
 
 // One line of a two-way market: the line (tagged when the lottery posts it)
 // and its two picks.
@@ -3510,10 +3536,7 @@ function saveSlip() {
   if (!state.booting) {
     const found = new Set(slipCandidates().map(b => b.id));
     // A pick on a game whose own markets (a player's, corners) aren't read yet stays.
-    const waiting = id => {
-      const game = gameOfPick(id);
-      return Boolean(game?.kambiId && !gameOffers.has(game.id));
-    };
+    const waiting = id => gameWaiting(gameOfPick(id));
     state.parlay = state.parlay.filter(id => id.startsWith('fut|') || found.has(id) || waiting(id));
   }
   try {

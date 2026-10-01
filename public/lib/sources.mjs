@@ -13,6 +13,7 @@ import { SOLD_DAYS, ASIA_URL, asiaMonth, asiaMonthOf } from './catalog.mjs';
 import { parseAsiaSchedule } from './schedules.mjs';
 import { propOutcome } from './props.mjs';
 import { offersUrl, parseOffers } from './offers.mjs';
+import { loadGamePlayers } from './players.mjs';
 
 export const PROXY_URL = 'https://sports-proxy.pengzjay.workers.dev';
 const ESPN = 'https://site.api.espn.com/apis/site/v2/sports';
@@ -136,6 +137,8 @@ function ttlFor(url) {
   if (url.includes('/listView/')) return 2 * 60_000;
   if (url.includes('/summary?event=')) return 60 * 60_000;
   if (url.includes('/standings') || url.includes('/rankings')) return 6 * 60 * 60_000;
+  // Rosters and players' seasons (players.mjs): a few hours.
+  if (url.includes('/roster') || url.includes('/statistics/byathlete')) return 3 * 60 * 60_000;
   if (url.startsWith(ASIA_URL)) return 10 * 60_000;
   if (/scoreboard\?dates=\d{6}$/.test(url)) return 10 * 60_000;
   if (/scoreboard\?dates=/.test(url)) return 60_000;
@@ -187,6 +190,8 @@ export function parseEspnScoreboard(data, sport) {
     }
     if (!comp || comp.status?.type?.state !== 'pre') continue;
     const teams = Object.fromEntries(comp.competitors.map(c => [c.homeAway, c.team.displayName]));
+    // ESPN's team ids: the rosters of the game's players (players.mjs).
+    const teamIds = Object.fromEntries(comp.competitors.map(c => [c.homeAway, c.team.id ? String(c.team.id) : null]));
     for (const c of comp.competitors) rememberLogo(sport, c.team.displayName, c.team.logo);
     const odds = comp.odds?.[0];
     const ml = odds?.moneyline;
@@ -219,7 +224,7 @@ export function parseEspnScoreboard(data, sport) {
       if (Number.isFinite(awayLine) && (whole || awayLine % 1 !== 0) && fair) spread = { awayLine, awayFair: fair[0] };
     }
     if (outcomes) espnPregame.set(`${sport}|${event.id}`, { homeWin: outcomes.home, awayWin: outcomes.away, draw: outcomes.draw ?? 0, totalLine: total?.line ?? null, overFair: total?.overFair ?? 0.5 });
-    games.push({ sport, startUtc: new Date(event.date).toISOString(), away: teams.away, home: teams.home, neutral: Boolean(comp.neutralSite), preseason: event.season?.type === 1, outcomes, total, spread });
+    games.push({ sport, startUtc: new Date(event.date).toISOString(), away: teams.away, home: teams.home, teamIds, neutral: Boolean(comp.neutralSite), preseason: event.season?.type === 1, outcomes, total, spread });
   }
   return games;
 }
@@ -626,7 +631,8 @@ export function mergeGames(dkGames, pmGames) {
       // The house's own chances, where no bookmaker prices the game (house.mjs).
       house: dk && !dk.outcomes && !dk.kambi?.outcomes && !pm ? (dk.house ?? null) : null,
       // Settled from a final score alone (schedules.mjs): no markets on parts of it.
-      scoreOnly: dk?.scoreOnly || undefined
+      scoreOnly: dk?.scoreOnly || undefined,
+      ...(dk?.teamIds?.home && dk?.teamIds?.away ? { espnTeams: dk.teamIds } : {})
     }))
     .filter(g => g.draftKings || g.polymarket || g.kambi || g.house)
     .sort((a, b) => a.startUtc.localeCompare(b.startUtc));
@@ -684,6 +690,9 @@ export async function loadGameOffers(game, { live = false } = {}) {
   const data = await getJson(offersUrl(KAMBI, game.kambiId, live), 'kambi-offers').catch(() => null);
   return data ? parseOffers(data, game) : null;
 }
+
+// One game's players with their season numbers (players.mjs), or null.
+export const loadPlayers = game => loadGamePlayers(game, getJson).catch(() => null);
 
 // ---- Results (for saved slips) ------------------------------------------------
 

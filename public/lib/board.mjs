@@ -33,6 +33,10 @@ import { fitGoals } from './live.mjs';
 import { houseCut, houseRule } from './rules.mjs';
 import { withModelLines } from './lines.mjs';
 import { LEAGUES, familyOf, isSoccer } from './teams.mjs';
+import { modelProps, teamScores, atLeast, MODEL_CUT } from './propmodel.mjs';
+import { tennisMarkets, bestOfFor } from './tennis.mjs';
+import { normPlayer } from './props.mjs';
+import { playerByName } from './players.mjs';
 
 // Lines besides the lottery's own: totals this many either side of the main
 // line, team totals this many, run lines up to 4.5 runs either way.
@@ -253,6 +257,55 @@ function tennisLines(game, base) {
   return out;
 }
 
+// ---- The model's fallbacks ----------------------------------------------------------
+//
+// Markets Kambi has and the model otherwise wouldn't: soccer's draw no bet
+// and corners, tennis's first set, set score and game lines. Kambi's own
+// (offers.mjs) take their place once read.
+export const CORNERS_MEAN = 10.2;
+const CORNERS_DISPERSION = 12;
+function fallbackOptions(game, base, probs, made) {
+  const family = familyOf(game.sport);
+  const markets = [];
+  const twoWay = houseCut({ base: 'twoWay' });
+  if (family === 'soccer' && probs.draw != null) {
+    const h = probs.home / (probs.home + probs.away);
+    markets.push({ kind: 'dnb', market: 'dnb', cut: twoWay, picks: [{ side: 'home', fair: h }, { side: 'away', fair: 1 - h }] });
+    // Corners settle from ESPN's team stats.
+    if (LEAGUES[game.sport]?.path && !game.scoreOnly) {
+      for (const line of [8.5, 9.5, 10.5, 11.5]) {
+        const over = atLeast(CORNERS_MEAN, Math.ceil(line), CORNERS_DISPERSION);
+        markets.push({ kind: 'corners', market: `corners|${line}`, line, main: line === 9.5, cut: twoWay, picks: [{ side: 'over', fair: over }, { side: 'under', fair: 1 - over }] });
+      }
+    }
+  }
+  if (family === 'tennis') {
+    const have = new Set(made.map(o => o.kind));
+    const model = tennisMarkets(probs.home / (probs.home + probs.away), { bestOf: bestOfFor(game.sport, game.group), cut: { twoWay, bands: houseCut({ base: 'bands' }) } });
+    markets.push(...model.filter(m => !have.has(m.kind)));
+  }
+  return marketOptions(game, base, markets);
+}
+
+// The game's players' picks: Kambi's first, then the model's (propmodel.mjs)
+// for every player, number and line Kambi doesn't price; each with the
+// player's picture when ESPN's roster has them.
+function gameProps(game, probs) {
+  const players = game.players ?? null;
+  const kambi = game.offers?.props ?? [];
+  const key = p => `${p.stat}|${p.line ?? ''}|${normPlayer(p.player)}|${p.side}`;
+  const seen = new Set(kambi.map(key));
+  let model = [];
+  if (players?.length) {
+    const family = familyOf(game.sport);
+    let scores = null;
+    if (family === 'soccer' && probs.draw != null) scores = fitGoals(probs.home, probs.away);
+    else scores = teamScores(family, { total: game.total?.line, spread: game.spread?.awayLine ?? null, homeWin: probs.home / (probs.home + probs.away) });
+    model = modelProps(game.sport, players, scores).filter(p => !seen.has(key(p)));
+  }
+  return [...kambi, ...model].map(p => ({ ...p, photo: playerByName(players, p.player)?.photo ?? null }));
+}
+
 // A game's own Kambi markets and players alone (a live game's: the page
 // prices its winner and main lines itself), with the house's rules on each.
 export function offerOptions(game, offers, extra = {}) {
@@ -266,8 +319,10 @@ export function offerOptions(game, offers, extra = {}) {
 // capped (SLIP_RULES.capped).
 function propOptions(game, base, props) {
   const k = houseCut({ base: 'twoWay' });
+  const modelCut = houseCut({ base: MODEL_CUT });
   return props.map(p => {
     const key = `${p.stat}|${p.line ?? ''}|${p.player}`;
+    const cut = p.model ? modelCut : k;
     return {
       ...base,
       id: `${game.id}|prop|${key}|${p.side}`,
@@ -278,13 +333,14 @@ function propOptions(game, base, props) {
       stat: p.stat,
       propLine: p.line,
       player: p.player,
-      posted: true,
-      real: true,
+      posted: !p.model,
+      real: !p.model,
+      photo: p.photo ?? null,
       fairChance: p.fair,
-      fairMargin: p.sided ? 0.04 : 0.02,
+      fairMargin: p.model ? 0.06 : p.sided ? 0.04 : 0.02,
       errKey: 'extra',
-      cut: k,
-      estOdds: estimateLineOdds(p.fair, k),
+      cut,
+      estOdds: estimateLineOdds(p.fair, cut),
       cap: 'prop',
       settle: { stat: p.stat, line: p.line, player: p.player }
     };
@@ -388,6 +444,7 @@ export function gameOptions(game) {
   if (family === 'baseball' || family === 'soccer') out.push(...lineOptions(game, base, blend.probs));
   if (family === 'tennis') out.push(...tennisLines(game, base));
   out.push(...sideOptions(game, base, blend.probs));
+  out.push(...fallbackOptions(game, base, blend.probs, out));
   // 得分最高單局: the lottery's own (nearly fixed) table, its cut removed;
   // every baseball league (the table barely moves from game to game).
   if (family === 'baseball') {
@@ -404,16 +461,17 @@ export function gameOptions(game) {
     for (let i = out.length - 1; i >= 0; i--) if (out[i].kind !== 'ml' && kinds.has(out[i].kind)) out.splice(i, 1);
     out.push(...real);
   }
-  // Players' markets (props.mjs), only where ESPN's box score settles them.
-  if (game.offers?.props?.length && LEAGUES[game.sport]?.path) out.push(...propOptions(game, base, game.offers.props));
+  // Players' markets (props.mjs), only where ESPN's box score settles them:
+  // Kambi's, and the model's for every player and number Kambi leaves out.
+  if (LEAGUES[game.sport]?.path) out.push(...propOptions(game, base, gameProps(game, blend.probs)));
   // Odd or even: a coin flip at a full cut, no longer sold.
   for (let i = out.length - 1; i >= 0; i--) if (out[i].kind === 'oddeven') out.splice(i, 1);
   for (const o of out) Object.assign(o, houseRule(o.kind, o.estOdds));
   // The books far apart on the game: locked until they agree (blendOutcomes).
   if (blend.disputed) for (const o of out) o.lock = 'check';
   // Priced by the house alone (no bookmaker yet: weeks out, preseason, a
-  // cup's minnow): the winner only, and a smaller ticket (SLIP_RULES.capped).
-  if (blend.source === 'house') return out.filter(o => o.kind === 'ml').map(o => ({ ...o, cap: 'house' }));
+  // cup's minnow): every market all the same, on a smaller ticket (SLIP_RULES.capped).
+  if (blend.source === 'house') for (const o of out) o.cap = 'house';
   // A game settled from its final score alone (schedules.mjs): nothing on a part of it.
   return game.scoreOnly ? out.filter(o => !PART_KINDS.has(o.kind)) : out;
 }

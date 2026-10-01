@@ -36,7 +36,7 @@ test('a game: the stronger side favoured, the home side a little more, soccer wi
   assert.ok(soccer.draw > 0.25 && soccer.home > soccer.away);
 });
 
-test('unpriced games get the house\'s chances, the winner only on a capped ticket; priced ones keep theirs', async () => {
+test('unpriced games get the house\'s chances, every market on a capped ticket; priced ones keep theirs', async () => {
   const getJson = async url => (url.includes('season=') ? standings(entry('Detroit Pistons', 60, 22), entry('Miami Heat', 30, 52)) : { seasons: [{ year: 2027 }], ...standings(entry('Detroit Pistons', 0, 0)) });
   const games = await withHousePrices(
     [
@@ -53,14 +53,13 @@ test('unpriced games get the house\'s chances, the winner only on a capped ticke
   assert.equal(merged.length, 2);
   const house = merged.find(g => g.house);
   assert.equal(house.draftKings, null);
-  // Sold on the winner alone, at the same cut as a bookmaker-priced game, on
-  // a smaller ticket; a bookmaker's price opens every market.
+  // Sold on every market, at the same cut as a bookmaker-priced game, on a
+  // smaller ticket.
   const options = gameOptions(house);
-  assert.deepEqual(options.map(o => o.kind), ['ml', 'ml']);
-  assert.ok(options.every(o => o.cap === 'house'));
+  assert.ok(options.length > 10 && options.every(o => o.cap === 'house'));
   const priced = gameOptions({ ...house, draftKings: house.house, house: null });
-  assert.ok(priced.length > 10 && priced.every(o => !o.cap));
-  assert.deepEqual(options.map(o => [o.id, o.estOdds]), priced.filter(o => o.kind === 'ml').map(o => [o.id, o.estOdds]));
+  assert.ok(priced.every(o => !o.cap));
+  assert.deepEqual(options.map(o => [o.id, o.estOdds]), priced.map(o => [o.id, o.estOdds]));
 });
 
 test('two weeks ahead: the months to ask for, only the games past the daily pages', () => {
