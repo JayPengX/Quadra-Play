@@ -1863,10 +1863,10 @@ async function mergeRemote(remote) {
   const entries = poolEntries(merged).filter(e => !have.has(e.id));
   const open = merged.slips.filter(x => x.status === 'open').reduce((sum, x) => sum + x.cost, 0);
   // Open slips, for Quadra Fixtures to show (openSlips).
-  const { kinds, slips, n } = openSlips(merged);
+  const { kinds, slips, done, n } = openSlips(merged);
   const had = wallet?.snap?.odds;
-  const same = had?.open === open && had?.n === n && JSON.stringify(had?.slips || []) === JSON.stringify(slips) && JSON.stringify(had?.kinds || {}) === JSON.stringify(kinds);
-  const snap = same ? undefined : { odds: { open, n, kinds, slips, t: Date.now() } };
+  const same = had?.open === open && had?.n === n && JSON.stringify(had?.slips || []) === JSON.stringify(slips) && JSON.stringify(had?.done || []) === JSON.stringify(done) && JSON.stringify(had?.kinds || {}) === JSON.stringify(kinds);
+  const snap = same ? undefined : { odds: { open, n, kinds, slips, done, t: Date.now() } };
   const changed = !theirs || JSON.stringify(merged) !== JSON.stringify(theirs);
   if (JSON.stringify(merged) !== JSON.stringify(state.account)) {
     state.account = merged;
@@ -2147,7 +2147,9 @@ function renderAccount() {
   );
 }
 
-// The open slips, compact, for Quadra Fixtures (the wallet's snap.odds.slips):
+// The open slips, compact, for Quadra Fixtures (the wallet's snap.odds.slips),
+// and (done) the slips settled in the last DONE_DAYS, for its picks to show
+// how they ended (each with st: won / lost / void / cashed):
 // each one's play (m: single, parlay or system, z: a system's sizes), its
 // cost (c) and the most it can still pay (x), and its picks: the game
 // (Sportsbook's id, before the first "|"), the pick, its market (k), odds,
@@ -2156,37 +2158,46 @@ function renderAccount() {
 // room for it.
 const slipTagZh = makeT('zh');
 const slipTagEn = makeT('en');
-function openSlips(account) {
+const DONE_DAYS = 8;
+function openSlips(account, now = Date.now()) {
   const kinds = {};
   const tagName = (t, kind) => {
     const key = { inning: 'topInningShort', f1: 'f1Short' }[kind] ?? kindKey(kind);
     return key ? t(key) : '';
   };
   const firstStart = slip => slip.legs.map(leg => leg.start || '').filter(Boolean).sort()[0] || '';
+  // A championship pick (futures) has no game: its team (in English) and
+  // market go with it, for Fixtures to find the games that decide it.
+  const compactLeg = leg => {
+    if (leg.kind && !kinds[leg.kind]) kinds[leg.kind] = [tagName(slipTagZh, leg.kind), tagName(slipTagEn, leg.kind)];
+    return { g: String(leg.id).split('|')[0], p: leg.shortLabel || leg.label || '', k: leg.kind || '', o: Math.round(leg.odds * 100) / 100, s: leg.start || null, sp: leg.sport || '', r: leg.result || undefined, live: leg.live || undefined, ...(leg.kind === 'future' ? { tm: leg.team || undefined, fk: String(leg.id).split('|')[1] || undefined } : {}) };
+  };
+  const compact = slip => {
+    const range = slipRange(slip);
+    return { id: slip.id, m: slip.mode, z: slip.mode === 'system' ? slip.sizes : undefined, c: slip.cost, x: Math.max(0, Math.round(slip.cost + range.most)), l: slip.legs.map(compactLeg) };
+  };
   const slips = account.slips
     .filter(slip => slip.status === 'open')
     .sort((a, b) => firstStart(a).localeCompare(firstStart(b)))
-    .map(slip => {
-      const range = slipRange(slip);
-      return {
-        id: slip.id,
-        m: slip.mode,
-        z: slip.mode === 'system' ? slip.sizes : undefined,
-        c: slip.cost,
-        x: Math.max(0, Math.round(slip.cost + range.most)),
-        l: slip.legs.map(leg => {
-          if (leg.kind && !kinds[leg.kind]) kinds[leg.kind] = [tagName(slipTagZh, leg.kind), tagName(slipTagEn, leg.kind)];
-          return { g: String(leg.id).split('|')[0], p: leg.shortLabel || leg.label || '', k: leg.kind || '', o: Math.round(leg.odds * 100) / 100, s: leg.start || null, sp: leg.sport || '', r: leg.result || undefined, live: leg.live || undefined };
-        })
-      };
-    });
+    .map(compact);
+  const outcome = slip => (slip.cashedOut ? 'cashed' : slip.refunded ? 'void' : slip.payout > slip.cost ? 'won' : slip.payout > 0 ? 'void' : 'lost');
+  const done = account.slips
+    .filter(slip => slip.status === 'settled' && slip.legs?.length && Date.parse(slip.settledAt) > now - DONE_DAYS * 86_400_000)
+    .sort((a, b) => Date.parse(b.settledAt) - Date.parse(a.settledAt))
+    .map(slip => ({ ...compact(slip), x: undefined, st: outcome(slip) }));
   const out = [];
   for (const slip of slips) {
     if (JSON.stringify({ kinds, slips: [...out, slip] }).length > 3500) break;
     out.push(slip);
   }
-  const used = new Set(out.flatMap(slip => slip.l.map(leg => leg.k)));
-  return { kinds: Object.fromEntries(Object.entries(kinds).filter(([k]) => used.has(k))), slips: out, n: slips.length };
+  // Settled ones in what room is left (open ones first).
+  const doneOut = [];
+  for (const slip of done) {
+    if (JSON.stringify({ kinds, slips: out, done: [...doneOut, slip] }).length > 3500) break;
+    doneOut.push(slip);
+  }
+  const used = new Set([...out, ...doneOut].flatMap(slip => slip.l.map(leg => leg.k)));
+  return { kinds: Object.fromEntries(Object.entries(kinds).filter(([k]) => used.has(k))), slips: out, done: doneOut, n: slips.length };
 }
 
 // Where each pick stands: won / lost / void, 'live' (its game is on), or
