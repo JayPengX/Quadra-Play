@@ -1677,14 +1677,19 @@ function renderSlipBar() {
   const slip = legs.map(b => ({ gameId: b.gameId, market: b.market ?? b.kind, odds: effectiveOdds(b), fairChance: b.fairChance }));
   const mode = n >= 2 && state.slipMode !== 'single' ? 'parlay' : 'single';
   const sizes = slipSizes(mode, n, [n]);
-  const pay = sizes.length ? slipPayoutTable({ legs: slip, sizes, stake: state.slipStake, boost: mode === 'single' ? 0 : boostX() }) : null;
-  const all = pay ? pay.net[(1 << n) - 1] : 0;
+  // The free bet chosen, as the slip takes it: its stake isn't paid back, and it isn't paid for.
+  const free = freeBetList().find(x => x.id === state.useFree) || null;
+  const freeOn = Boolean(free) && (mode === 'parlay' || n === 1) && freeOddsOk(slip);
+  const stake = freeOn ? Math.max(free.value, state.slipStake) : state.slipStake;
+  const pay = sizes.length ? slipPayoutTable({ legs: slip, sizes, stake, boost: mode === 'single' ? 0 : boostX() }) : null;
+  const all = pay ? Math.max(0, pay.net[(1 << n) - 1] - (freeOn ? free.value : 0)) : 0;
+  const paid = comboCount(slip, sizes) * stake - (freeOn ? free.value : 0);
   bar.hidden = false;
   bar.replaceChildren(
     el('span', { class: 'slip-bar-count num', text: String(n) }),
     el('span', { class: 'slip-bar-main' }, [
       el('strong', { text: mode === 'parlay' ? t('barParlay', { n }) : t('barSingles', { n }) }),
-      el('small', { class: 'num', text: t('barPays', { stake: fmtMoney(comboCount(slip, sizes) * state.slipStake, { sign: false }), v: fmtMoney(all, { sign: false }) }) })
+      el('small', { class: 'num', text: t('barPays', { stake: fmtMoney(paid, { sign: false }), v: fmtMoney(all, { sign: false }) }) })
     ]),
     el('span', { class: 'slip-bar-go', text: `${t('barGo')} ›` })
   );
@@ -1744,18 +1749,20 @@ function payoutBox(legs, sizes, stake, mode, free = 0) {
   }
   const boost = mode === 'single' ? 0 : boostRate(Math.max(...sizes, 0), boostX());
   if (boost > 0) rows.push(payLine(t('payBoost'), `+${Math.round(boost * 100)}%`, 'pay-boost'));
-  if (free) rows.push(payLine(t('payFree'), `−${fmtMoney(free, { sign: false })}`, 'pay-boost'));
-  rows.push(payLine(t('payCost', { c: fmtInt(combos) }), fmtMoney(cost, { sign: false }), 'pay-cost'));
+  // With a free bet: what's paid from the balance (the free part isn't).
+  rows.push(payLine(free ? t('payYouPay', { f: fmtMoney(free, { sign: false }) }) : t('payCost', { c: fmtInt(combos) }), fmtMoney(cost, { sign: false }), 'pay-cost'));
   // Tax is the payout table's own (the free part taken off isn't tax).
   const taxed = gross[all] - table.net[all] > 0.5;
   return el('div', { class: 'pay-box' }, [
     el('p', { class: 'pay-title', text: t('payTitle') }),
     ...rows,
     el('div', { class: 'pay-top' }, [
-      el('span', { text: t('payAll') }),
+      el('span', { text: free ? t('payAllFree') : t('payAll') }),
       el('strong', { text: fmtMoney(net[all], { sign: false }) }),
       el('small', { class: net[all] > cost ? 'back-high' : 'back-low', text: t('payProfit', { v: fmtMoney(net[all] - cost) }) })
     ]),
+    // A free bet: the payout, less the free stake that isn't paid back, is what arrives.
+    free ? el('p', { class: 'pay-note', text: t('payFreeSum', { gross: fmtMoney(table.net[all], { sign: false }), f: fmtMoney(free, { sign: false }), v: fmtMoney(net[all], { sign: false }) }) }) : null,
     taxed ? el('p', { class: 'pay-note', text: t('payTaxed', { gross: fmtMoney(gross[all], { sign: false }), tax: fmtMoney(gross[all] - table.net[all], { sign: false }) }) }) : null,
     mode !== 'parlay' && least < net[all] ? el('p', { class: 'pay-note', text: t('payLeast', { v: fmtMoney(least, { sign: false }) }) }) : null
   ]);
@@ -2484,7 +2491,7 @@ function savedSlipCard(slip) {
           slip.free ? freeCell(slip) : payCell(t('slipCost'), fmtMoney(slip.cost, { sign: false })),
           slip.mode === 'parlay' ? payCell(t('payOdds'), `×${fmtOdds(slip.legs.reduce((p, l) => p * l.odds, 1))}`) : null,
           decided && range.locked > 0 ? payCell(t('slipLocked'), fmtMoney(range.locked, { sign: false }), 'back-high') : null,
-          payCell(decided ? t('slipMost') : t('payAll'), fmtMoney(range.most, { sign: false }), dead ? 'back-low' : '')
+          payCell(decided ? t('slipMost') : slip.free ? t('payAllFree') : t('payAll'), fmtMoney(range.most, { sign: false }), dead ? 'back-low' : '')
         ]),
     slip.boost && boostRate(Math.max(...slip.sizes), slip.boost) > 0 ? el('p', { class: 'saved-boost', text: t('slipBoosted', { v: `+${Math.round(boostRate(Math.max(...slip.sizes), slip.boost) * 100)}%` }) }) : null,
     settled || dead || slip.free ? null : cashOutRow(slip),
