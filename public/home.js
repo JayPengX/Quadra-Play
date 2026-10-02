@@ -83,7 +83,7 @@ export function renderHome(ctx) {
   // ---- 焦點賽事: upcoming games with a win price on sale
   // Every app's affinity, Fixtures' too, and what the person follows there.
   const aff = affinity(state.wallet, now, ['odds', 'stock', 'match']);
-  const taste = tasteOf({ aff, fixtures: fixturesTaste(cachedPayload), slips: state.account?.slips || [], now });
+  const taste = tasteOf({ aff, fixtures: fixturesTaste(cachedPayload, state.wallet), slips: state.account?.slips || [], now });
   const teamKey = (g, side) => `team:${g.sport}:${norm(g[side]?.en ?? g[side])}`;
   const betsOf = new Map();
   for (const b of state.bets || []) {
@@ -94,7 +94,9 @@ export function renderHome(ctx) {
   // 為你推薦 first; 焦點賽事 then shows other games (and none already bet on).
   const mine = forYouPicks({ games: state.data?.games || [], bets: state.bets || [], recs: state.recs || new Map(), taste, now });
   const shownIds = new Set(mine.map(x => x.game.id));
-  const upcoming = (state.data?.games || []).filter(g => Date.parse(g.startUtc) > now && !taste.held.has(g.id) && !shownIds.has(g.id) && (betsOf.get(g.id) || []).some(b => b.kind === 'ml' && !b.lock));
+  // Nor the teams already there (their later games): other teams below.
+  const shownTeams = new Set(mine.flatMap(x => ['home', 'away'].map(side => teamKey(x.game, side))));
+  const upcoming = (state.data?.games || []).filter(g => Date.parse(g.startUtc) > now && !taste.held.has(g.id) && !shownIds.has(g.id) && !shownTeams.has(teamKey(g, 'home')) && !shownTeams.has(teamKey(g, 'away')) && (betsOf.get(g.id) || []).some(b => b.kind === 'ml' && !b.lock));
   const items = upcoming.map(g => {
     const hours = (Date.parse(g.startUtc) - now) / 3_600_000;
     const keys = [`league:${g.sport}`, `sport:${g.sport}`, teamKey(g, 'away'), teamKey(g, 'home')];
@@ -189,12 +191,12 @@ export function renderHome(ctx) {
     return list.filter(b => !seen.has(b.gameId) && seen.add(b.gameId));
   };
   // The person's leagues first, then the big ones; one pick a league.
-  const build = (lo, hi) =>
-    spreadLeagues(
-      onePerGame(winPicks.filter(b => b.estOdds >= lo && b.estOdds <= hi).sort((a, b) => leagueTaste(b.sport, taste) - leagueTaste(a.sport, taste) || (ctx.leagueTier(a.sport) === 'major' ? 0 : 1) - (ctx.leagueTier(b.sport) === 'major' ? 0 : 1) || soonest(a, b))),
-      taste,
-      { n: 3, liked: 1, sportOf: b => b.sport }
-    );
+  // Three sports when it can (two of one at most otherwise).
+  const build = (lo, hi) => {
+    const pool = onePerGame(winPicks.filter(b => b.estOdds >= lo && b.estOdds <= hi).sort((a, b) => leagueTaste(b.sport, taste) - leagueTaste(a.sport, taste) || (ctx.leagueTier(a.sport) === 'major' ? 0 : 1) - (ctx.leagueTier(b.sport) === 'major' ? 0 : 1) || soonest(a, b)));
+    const wide = spreadLeagues(pool, taste, { n: 3, liked: 1, perSport: 1, sportOf: b => b.sport });
+    return wide.length === 3 ? wide : spreadLeagues(pool, taste, { n: 3, liked: 1, perSport: 2, sportOf: b => b.sport });
+  };
   const safe = build(1.3, 1.8);
   const bold = build(1.9, 4).filter(b => !safe.some(x => x.gameId === b.gameId));
   const PARLAY_STAKE = 500;
@@ -217,7 +219,7 @@ export function renderHome(ctx) {
       ])
     ]);
   };
-  const mineLegs = mine.filter(x => !(x.bet.minLegs > 3)).slice(0, 3).map(x => x.bet);
+  const mineLegs = mine.filter(x => !x.bet.cap && !(x.bet.minLegs > 3)).slice(0, 3).map(x => x.bet);
   const combos = [mineLegs.length === 3 ? parlayCard(mineLegs, T.comboMine, 'mine') : null, safe.length === 3 ? parlayCard(safe, T.comboSafe, 'safe') : null, bold.length === 3 ? parlayCard(bold, T.comboBold, 'bold') : null].filter(Boolean);
 
   // ---- 你的投注: open slips and their cash-out prices

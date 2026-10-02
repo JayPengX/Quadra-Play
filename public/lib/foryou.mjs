@@ -16,7 +16,7 @@ import { normalizeTeamName } from './logos.mjs';
 import { CATALOG } from './catalog.mjs';
 import { familyOf } from './teams.mjs';
 
-export const FOR_YOU = { n: 6, horizonH: 72, follow: 1, backed: 0.6, league: 0.35, sport: 0.12 };
+export const FOR_YOU = { n: 8, horizonH: 72, followH: 10 * 24, backedH: 5 * 24, perSport: 2, follow: 1, backed: 0.6, league: 0.35, sport: 0.12 };
 
 const teamKey = (sport, name) => `team:${sport}:${normalizeTeamName(name)}`;
 // Fixtures' league key to Play's.
@@ -87,33 +87,38 @@ export function gameInterest(game, taste) {
 export function forYouPicks({ games = [], bets = [], recs = new Map(), taste, now = Date.now(), n = FOR_YOU.n, exclude = new Set() } = {}) {
   const byGame = new Map();
   for (const b of bets) {
-    if (!b.gameId || b.lock || b.cap || !(b.estOdds > 1) || exclude.has(b.id)) continue;
+    // Capped picks (a house-priced game's) only for the person's own teams below.
+    if (!b.gameId || b.lock || b.cap === 'prop' || !(b.estOdds > 1) || exclude.has(b.id)) continue;
     if (!byGame.has(b.gameId)) byGame.set(b.gameId, []);
     byGame.get(b.gameId).push(b);
   }
   const out = [];
   for (const g of games) {
     const start = Date.parse(g.startUtc);
-    if (!(start > now) || start - now > FOR_YOU.horizonH * 3_600_000 || taste.held.has(g.id)) continue;
+    if (!(start > now) || taste.held.has(g.id)) continue;
     const picks = byGame.get(g.id);
     if (!picks?.length) continue;
     const interest = gameInterest(g, taste);
-    const soon = start - now < 12 * 3_600_000 ? 0.12 : start - now < 30 * 3_600_000 ? 0.06 : 0;
+    // A followed team's next game however far this week (an NFL or a
+    // league side plays once a week); a backed team's within five days.
+    const horizon = interest.why === 'follow' ? FOR_YOU.followH : interest.why === 'backed' ? FOR_YOU.backedH : FOR_YOU.horizonH;
+    if (start - now > horizon * 3_600_000) continue;
+    const soon = start - now < 12 * 3_600_000 ? 0.12 : start - now < 30 * 3_600_000 ? 0.06 : start - now > 72 * 3_600_000 ? -0.1 : 0;
     // The pick: on their team when they have one (its win, else its handicap),
     // else the game's best-tagged pick, else its favourite's win.
     const tagValue = b => ({ value: 0.3, shot: 0.2, steady: 0.18 }[recs.get(b.id)?.tag] || 0);
     const onSide = b => (b.kind === 'ml' || b.kind === 'spread' || b.kind === 'runline' || b.kind === 'dnb') && b.side === interest.side;
     let choice;
     if (interest.side) {
-      const mine = picks.filter(b => onSide(b) && b.fairChance >= 0.2);
+      const mine = picks.filter(b => onSide(b) && b.fairChance >= 0.12 && (!b.cap || interest.why === 'follow' || interest.why === 'backed'));
       choice = mine.sort((a, b) => (a.kind === 'ml' ? 0 : 1) - (b.kind === 'ml' ? 0 : 1) || tagValue(b) - tagValue(a))[0];
     }
     if (!choice) {
       // A price worth a look: no 1.10 sure things, no lottery tickets.
-      const tagged = picks.filter(b => recs.has(b.id) && b.estOdds >= 1.4 && b.estOdds <= 5 && (!interest.side || !['away', 'home'].includes(b.side) || b.side === interest.side || b.kind === 'total'));
+      const tagged = picks.filter(b => !b.cap && recs.has(b.id) && b.estOdds >= 1.4 && b.estOdds <= 5 && (!interest.side || !['away', 'home'].includes(b.side) || b.side === interest.side || b.kind === 'total'));
       choice = tagged.sort((a, b) => tagValue(b) - tagValue(a) || b.fairChance - a.fairChance)[0];
     }
-    if (!choice) choice = picks.filter(b => b.kind === 'ml' && b.side !== 'draw' && b.estOdds >= 1.25).sort((a, b) => b.fairChance - a.fairChance)[0];
+    if (!choice) choice = picks.filter(b => !b.cap && b.kind === 'ml' && b.side !== 'draw' && b.estOdds >= 1.25).sort((a, b) => b.fairChance - a.fairChance)[0];
     if (!choice) continue;
     const why = interest.why && interest.score >= 0.1 ? interest.why : recs.has(choice.id) ? recs.get(choice.id).tag : null;
     if (!why) continue;
@@ -125,19 +130,46 @@ export function forYouPicks({ games = [], bets = [], recs = new Map(), taste, no
   // most (two such cards in all), a league they like two, followed teams
   // all theirs: a night of many games in one league doesn't fill the row.
   out.sort((a, b) => b.score - a.score);
+  // One followed team's game first per team (its next one), then the caps.
   const perLeague = new Map();
+  const perFamily = new Map();
+  const teamsShown = new Set();
   let strangers = 0;
-  return out.filter(x => {
+  const kept = out.filter(x => {
     const k = perLeague.get(x.game.sport) || 0;
+    const fam = familyOf(x.game.sport) || x.game.sport;
+    const f = perFamily.get(fam) || 0;
     const known = leagueTaste(x.game.sport, taste) >= 0.2;
-    if (x.why !== 'follow' && x.why !== 'backed' && k >= (known ? 2 : 1)) return false;
-    if (!known && !x.side) {
-      if (strangers >= 2) return false;
-      strangers++;
+    const mine = x.why === 'follow' || x.why === 'backed';
+    if (mine) {
+      const team = `${x.game.sport}:${x.game[x.side]?.en ?? x.game[x.side]}`;
+      if (teamsShown.has(team)) return false;
+      teamsShown.add(team);
+    } else {
+      if (k >= (known ? 2 : 1) || f >= FOR_YOU.perSport) return false;
+      if (!known && !x.side) {
+        if (strangers >= 2) return false;
+        strangers++;
+      }
     }
     perLeague.set(x.game.sport, k + 1);
+    perFamily.set(fam, f + 1);
     return true;
-  }).slice(0, n);
+  });
+  return interleave(kept, x => familyOf(x.game.sport) || x.game.sport).slice(0, n);
+}
+
+// Best first, but never two of a sport in a row while another sport waits
+// (each next one: the best whose sport differs from the one before).
+export function interleave(list, kindOf) {
+  const left = [...list];
+  const out = [];
+  while (left.length) {
+    const prev = out.length ? kindOf(out.at(-1)) : null;
+    const i = left.findIndex(x => kindOf(x) !== prev);
+    out.push(...left.splice(i < 0 ? 0 : i, 1));
+  }
+  return out;
 }
 
 // How much the person likes a league (0-1): the league itself, or a team in it.
@@ -149,26 +181,33 @@ export function leagueTaste(sport, taste) {
 
 // The best of `items` (sorted best first) with at most `per` a league, or
 // `liked` for a league the person likes; `sportOf` reads an item's league.
-export function spreadLeagues(items, taste, { n, per = 1, liked = 2, sportOf = x => x.game.sport } = {}) {
+export function spreadLeagues(items, taste, { n, per = 1, liked = 2, perSport = 2, sportOf = x => x.game.sport } = {}) {
   const count = new Map();
+  const fams = new Map();
   const out = [];
   for (const x of items) {
     const sport = sportOf(x);
+    const fam = familyOf(sport) || sport;
     const k = count.get(sport) || 0;
-    if (k >= (leagueTaste(sport, taste) >= 0.2 ? liked : per)) continue;
+    if (k >= (leagueTaste(sport, taste) >= 0.2 ? liked : per) || (fams.get(fam) || 0) >= perSport) continue;
     count.set(sport, k + 1);
+    fams.set(fam, (fams.get(fam) || 0) + 1);
     out.push(x);
     if (out.length >= n) break;
   }
-  return out;
+  return interleave(out, x => familyOf(sportOf(x)) || sportOf(x));
 }
 
-// The person's Fixtures data on this device (its pass payload), or null.
-export function fixturesTaste(cachedPayload) {
+// The person's Fixtures follows: the pass's copy (`follows:match`, written
+// by Fixtures, so every device and home-screen app has it) and this
+// device's Fixtures data, together.
+export function fixturesTaste(cachedPayload, wallet = null) {
+  let local = null;
   try {
-    const p = JSON.parse(cachedPayload('match') || 'null');
-    return p ? { leagues: Array.isArray(p.leagues) ? p.leagues : [], follows: Array.isArray(p.follows) ? p.follows : [] } : null;
-  } catch {
-    return null;
-  }
+    local = JSON.parse(cachedPayload('match') || 'null');
+  } catch {}
+  const synced = wallet?.settings?.['follows:match']?.value;
+  const leagues = [...new Set([...(Array.isArray(local?.leagues) ? local.leagues : []), ...(Array.isArray(synced?.leagues) ? synced.leagues : [])])];
+  const follows = [...(Array.isArray(local?.follows) ? local.follows : []), ...(Array.isArray(synced?.teams) ? synced.teams.filter(t => Array.isArray(t) && t[1]).map(([league, name]) => ({ league, name })) : [])];
+  return leagues.length || follows.length ? { leagues, follows } : null;
 }
