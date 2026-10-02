@@ -4,6 +4,10 @@
 //   for right now.
 // - 場中焦點: games on now with live prices (the same ranking), a tap on a
 //   price puts it on the slip, the card opens the game's live markets.
+// - 為你推薦 (foryou.mjs): one pick a game on the teams and leagues the
+//   person follows in Fixtures and bets on here, the next games of the teams
+//   they've backed, and the best prices; a tap puts it on the slip. Its top
+//   three as a ready-made parlay too.
 // - 焦點賽事: the games worth betting on, as the board shows them (the win
 //   prices, a tap puts one on the slip). Ranked by the shared recommender
 //   (quadra.mjs's rank): the teams, leagues and sports the person bets on
@@ -12,7 +16,8 @@
 // - 你的投注: the open slips, each with its cash-out price.
 // - The lottery's jackpots.
 // - Quadra Plus, once, for someone who isn't a member.
-import { rank, affinity, plusMember, plusCard, vipStatus, vipName, VIP, tell, welcomeDue, WELCOME } from './lib/quadra.mjs';
+import { rank, affinity, plusMember, plusCard, vipStatus, vipName, VIP, tell, welcomeDue, WELCOME, cachedPayload } from './lib/quadra.mjs';
+import { tasteOf, gameInterest, forYouPicks, fixturesTaste } from './lib/foryou.mjs';
 import { GAMES, nextDraw, latestResults, gameName } from './lib/lottery.mjs';
 
 const TXT = {
@@ -26,6 +31,7 @@ const TXT = {
     vipNone: 'VIP 回饋', vipNoneSub: '本月投注滿 {v} 起，最高回饋 {top}', vipBack: '本月回饋 {p} · 約 {v}', vipNext: '再投注 {v} 升{name}', vipTop: '最高等級', vipPaid: '上月回饋 {v} 已入帳',
     vipTitle: 'VIP 投注回饋', vipBody: '每月投注決定等級，下個月初自動回饋。免費，不用報名。', vipTier: '月投注 {min} 起 · 回饋 {back}',
     welcome: '🎁 第一次下注，就送 {v} 免費投注',
+    forYou: '為你推薦', why_follow: '★ 追蹤 · {team}', why_backed: '↺ 押過 · {team}', why_like: '♥ 常看 · {team}', why_league: '你常玩的{league}', why_sport: '你常玩的{league}', why_value: '🔥 划算', why_steady: '✓ 穩', why_shot: '⚡ 值博', payLine: '押 {s} 可贏 {w}', comboMine: '為你串 3 場',
     combos: '精選串關', comboSafe: '穩膽 3 串', comboBold: '高賠 3 串', comboTag: '{n} 串 1', comboTagBoost: '{n} 串 1 · 加成 +{b}%', comboStake: '投注 {v} · 賠率 ×{x}', comboGo: '加入投注單'
   },
   en: {
@@ -38,6 +44,7 @@ const TXT = {
     vipNone: 'VIP cashback', vipNoneSub: 'From {v} staked this month, up to {top} back', vipBack: '{p} back this month · about {v}', vipNext: '{v} more for {name}', vipTop: 'Top tier', vipPaid: 'Last month’s {v} paid in',
     vipTitle: 'VIP cashback', vipBody: 'A month’s stakes set your tier; the cashback arrives early next month. Free, nothing to sign up for.', vipTier: '{min}+ a month · {back} back',
     welcome: '🎁 Place your first bet and get a {v} free bet',
+    forYou: 'For you', why_follow: '★ Following · {team}', why_backed: '↺ Backed · {team}', why_like: '♥ Watching · {team}', why_league: 'Your {league}', why_sport: 'Your {league}', why_value: '🔥 Value', why_steady: '✓ Steady', why_shot: '⚡ Long shot', payLine: '{s} wins {w}', comboMine: 'Your treble',
     combos: 'Parlays of the day', comboSafe: 'Favourites treble', comboBold: 'Big-price treble', comboTag: '{n}-pick parlay', comboTagBoost: '{n}-pick · +{b}% boost', comboStake: 'Stake {v} · odds ×{x}', comboGo: 'Add to slip'
   }
 };
@@ -74,8 +81,9 @@ export function renderHome(ctx) {
   const money = v => fmtMoney(v, { sign: false });
 
   // ---- 焦點賽事: upcoming games with a win price on sale
-  // Quadra's own apps (Fixtures, an add-on, isn't one of them).
-  const aff = affinity(state.wallet, now, ['odds', 'stock']);
+  // Every app's affinity, Fixtures' too, and what the person follows there.
+  const aff = affinity(state.wallet, now, ['odds', 'stock', 'match']);
+  const taste = tasteOf({ aff, fixtures: fixturesTaste(cachedPayload), slips: state.account?.slips || [], now });
   const teamKey = (g, side) => `team:${g.sport}:${norm(g[side]?.en ?? g[side])}`;
   const betsOf = new Map();
   for (const b of state.bets || []) {
@@ -83,11 +91,14 @@ export function renderHome(ctx) {
     if (!betsOf.has(b.gameId)) betsOf.set(b.gameId, []);
     betsOf.get(b.gameId).push(b);
   }
-  const upcoming = (state.data?.games || []).filter(g => Date.parse(g.startUtc) > now && (betsOf.get(g.id) || []).some(b => b.kind === 'ml' && !b.lock));
+  // 為你推薦 first; 焦點賽事 then shows other games (and none already bet on).
+  const mine = forYouPicks({ games: state.data?.games || [], bets: state.bets || [], recs: state.recs || new Map(), taste, now });
+  const shownIds = new Set(mine.map(x => x.game.id));
+  const upcoming = (state.data?.games || []).filter(g => Date.parse(g.startUtc) > now && !taste.held.has(g.id) && !shownIds.has(g.id) && (betsOf.get(g.id) || []).some(b => b.kind === 'ml' && !b.lock));
   const items = upcoming.map(g => {
     const hours = (Date.parse(g.startUtc) - now) / 3_600_000;
     const keys = [`league:${g.sport}`, `sport:${g.sport}`, teamKey(g, 'away'), teamKey(g, 'home')];
-    const quality = TIER_WEIGHT[ctx.leagueTier(g.sport)] + (hours < 18 ? 0.3 : hours < 42 ? 0.15 : 0);
+    const quality = TIER_WEIGHT[ctx.leagueTier(g.sport)] + (hours < 18 ? 0.3 : hours < 42 ? 0.15 : 0) + gameInterest(g, taste).score * 0.5;
     return { id: `game:${g.id}`, game: g, keys, quality, group: g.sport };
   });
   const featured = rank(items, { wallet: state.wallet, n: 4, aff, now, diversity: 0.2, explore: 0 });
@@ -99,7 +110,7 @@ export function renderHome(ctx) {
     liveBetsOf.get(b.gameId).push(b);
   }
   const onNow = (state.liveGames || []).filter(g => (liveBetsOf.get(g.id) || []).some(b => b.kind === 'ml' && !b.lock));
-  const liveItems = onNow.map(g => ({ id: `live:${g.id}`, game: g, keys: [`league:${g.sport}`, `sport:${g.sport}`, teamKey(g, 'away'), teamKey(g, 'home')], quality: TIER_WEIGHT[ctx.leagueTier(g.sport)] + 0.3, group: g.sport }));
+  const liveItems = onNow.map(g => ({ id: `live:${g.id}`, game: g, keys: [`league:${g.sport}`, `sport:${g.sport}`, teamKey(g, 'away'), teamKey(g, 'home')], quality: TIER_WEIGHT[ctx.leagueTier(g.sport)] + 0.3 + gameInterest(g, taste).score * 0.6 + (taste.held.has(g.id) ? 0.4 : 0), group: g.sport }));
   const liveTop = rank(liveItems, { wallet: state.wallet, n: 3, aff, now, diversity: 0.2, explore: 0 });
   const liveCard = ({ game: g }) => {
     const bets = liveBetsOf.get(g.id) || [];
@@ -147,6 +158,26 @@ export function renderHome(ctx) {
     ]);
   };
 
+  // A 為你推薦 pick: why it's here, the team, the pick and what it pays.
+  const STAKE = 500;
+  const forYouCard = ({ bet, game: g, why, side, tag }) => {
+    const team = side ? ctx.teamName(g[side]) : '';
+    const league = state.t(`sport_${g.sport}`);
+    const tone = why === 'follow' ? 'follow' : why === 'backed' ? 'backed' : tag || 'like';
+    const face = side ?? (['home', 'away'].includes(bet.side) ? bet.side : null);
+    return el('article', { class: `fy ${tone}` }, [
+      el('button', { class: 'fy-top', type: 'button', onclick: () => ctx.openGame(g.id) }, [
+        el('span', { class: 'fy-why', text: f(`why_${why}`, { team, league }) }),
+        el('span', { class: 'fy-time', text: fmtTime(g.startUtc) })
+      ]),
+      el('button', { class: 'fy-game', type: 'button', onclick: () => ctx.openGame(g.id) }, [
+        face ? ctx.logoImg(g.sport, g[face].en, ctx.teamName(g[face]), 'logo-lg') : ctx.leagueImg(g.sport, 'logo-lg'),
+        el('span', { class: 'fy-text' }, [el('strong', { text: bet.shortLabel || bet.label }), el('small', { text: `${state.t(`sport_${g.sport}`)} · ${ctx.matchupText(g)}` })])
+      ]),
+      el('div', { class: 'fy-foot' }, [el('small', { class: 'num', text: f('payLine', { s: money(STAKE), w: money(Math.round(STAKE * bet.estOdds)) }) }), ctx.pickButton(bet, '')])
+    ]);
+  };
+
   // ---- 精選串關: two ready-made parlays from the big leagues' win prices,
   // one of favourites, one of longer prices; one pick a game, games in the
   // next two days, none that must be bought with more picks.
@@ -168,7 +199,7 @@ export function renderHome(ctx) {
       el('ul', { class: 'combo-legs' }, legs.map(b => {
         const g = (state.data?.games || []).find(x => x.id === b.gameId);
         return el('li', {}, [
-          g ? ctx.logoImg(g.sport, g[b.side].en, ctx.teamName(g[b.side]), 'logo-sm') : null,
+          g && g[b.side] ? ctx.logoImg(g.sport, g[b.side].en, ctx.teamName(g[b.side]), 'logo-sm') : g ? ctx.leagueImg(g.sport, 'logo-sm') : null,
           el('span', { class: 'combo-pick' }, [el('strong', { text: b.shortLabel || b.label }), el('small', { text: [g ? ctx.gameSeries(g) : '', fmtTime(b.start)].filter(Boolean).join(' · ') })]),
           el('b', { class: 'num', text: ctx.fmtOdds(b.estOdds) })
         ]);
@@ -179,7 +210,8 @@ export function renderHome(ctx) {
       ])
     ]);
   };
-  const combos = [safe.length === 3 ? parlayCard(safe, T.comboSafe, 'safe') : null, bold.length === 3 ? parlayCard(bold, T.comboBold, 'bold') : null].filter(Boolean);
+  const mineLegs = mine.filter(x => !(x.bet.minLegs > 3)).slice(0, 3).map(x => x.bet);
+  const combos = [mineLegs.length === 3 ? parlayCard(mineLegs, T.comboMine, 'mine') : null, safe.length === 3 ? parlayCard(safe, T.comboSafe, 'safe') : null, bold.length === 3 ? parlayCard(bold, T.comboBold, 'bold') : null].filter(Boolean);
 
   // ---- 你的投注: open slips and their cash-out prices
   const open = (state.account?.slips || []).filter(s => s.status === 'open' && !s.recovered && s.legs?.length);
@@ -274,6 +306,7 @@ export function renderHome(ctx) {
             el('div', { class: 'features' }, liveTop.map(liveCard))
           ])
         : null,
+      mine.length ? el('section', { class: 'home-block home-foryou' }, [head(T.forYou), el('div', { class: 'fys' }, mine.map(forYouCard))]) : null,
       el('section', { class: 'home-block' }, [
         head(T.featured, { action: el('button', { class: 'home-link', type: 'button', text: `${T.allGames} ›`, onclick: () => ctx.showTab('games') }) }),
         featured.length ? el('div', { class: 'features' }, featured.map(featureCard)) : el('p', { class: 'empty', text: T.none })

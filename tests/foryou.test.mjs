@@ -1,0 +1,32 @@
+// 為你推薦: Fixtures' follows and the person's own slips lead; held games don't repeat.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { tasteOf, forYouPicks, gameInterest, fixturesTaste } from '../public/lib/foryou.mjs';
+
+const now = Date.parse('2026-10-02T00:00:00Z');
+const game = (id, sport, home, away, h = 6) => ({ id, sport, home: { en: home }, away: { en: away }, startUtc: new Date(now + h * 3_600_000).toISOString() });
+const ml = (g, side, fair) => ({ id: `${g.id}|ml|${side}`, gameId: g.id, kind: 'ml', side, sport: g.sport, fairChance: fair, estOdds: 0.9 / fair });
+
+test('a team followed in Fixtures beats everything; picks are on that team', () => {
+  const games = [game('a', 'mlb', 'Los Angeles Dodgers', 'San Diego Padres'), game('b', 'epl', 'Arsenal', 'Chelsea'), game('c', 'nba', 'Boston Celtics', 'Miami Heat')];
+  const bets = games.flatMap(g => [ml(g, 'home', 0.55), ml(g, 'away', 0.45)]);
+  const fixtures = fixturesTaste(() => JSON.stringify({ leagues: ['epl'], follows: [{ league: 'mlb', id: '19', name: 'San Diego Padres' }] }));
+  const taste = tasteOf({ fixtures, now });
+  const picks = forYouPicks({ games, bets, taste, now });
+  assert.equal(picks[0].game.id, 'a');
+  assert.equal(picks[0].why, 'follow');
+  assert.equal(picks[0].bet.side, 'away');
+  assert.equal(picks[1].why, 'league');
+  assert.ok(!picks.some(p => p.game.id === 'c'), 'nothing known about the NBA, and no tagged price');
+});
+
+test('backed teams point at their next game; a game already bet on is left out', () => {
+  const games = [game('x', 'nba', 'Los Angeles Lakers', 'Denver Nuggets'), game('y', 'nba', 'Golden State Warriors', 'Los Angeles Lakers', 30)];
+  const bets = games.flatMap(g => [ml(g, 'home', 0.5), ml(g, 'away', 0.5)]);
+  const slips = [{ t: now - 86_400_000, status: 'open', legs: [{ gameId: 'x', sport: 'nba', kind: 'ml', side: 'home', home: 'Los Angeles Lakers', away: 'Denver Nuggets' }] }];
+  const taste = tasteOf({ slips, now });
+  assert.ok(taste.held.has('x'));
+  const picks = forYouPicks({ games, bets, taste, now });
+  assert.deepEqual(picks.map(p => [p.game.id, p.why, p.bet.side]), [['y', 'backed', 'away']]);
+  assert.ok(gameInterest(games[1], taste).score > 0.4);
+});
