@@ -1,7 +1,7 @@
 // 為你推薦: Fixtures' follows and the person's own slips lead; held games don't repeat.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { tasteOf, forYouPicks, gameInterest, fixturesTaste } from '../public/lib/foryou.mjs';
+import { tasteOf, forYouPicks, gameInterest, fixturesTaste, spreadLeagues } from '../public/lib/foryou.mjs';
 
 const now = Date.parse('2026-10-02T00:00:00Z');
 const game = (id, sport, home, away, h = 6) => ({ id, sport, home: { en: home }, away: { en: away }, startUtc: new Date(now + h * 3_600_000).toISOString() });
@@ -29,4 +29,16 @@ test('backed teams point at their next game; a game already bet on is left out',
   const picks = forYouPicks({ games, bets, taste, now });
   assert.deepEqual(picks.map(p => [p.game.id, p.why, p.bet.side]), [['y', 'backed', 'away']]);
   assert.ok(gameInterest(games[1], taste).score > 0.4);
+});
+
+test('a night of many games in a league nobody follows fills one card, not the row', () => {
+  const nhl = Array.from({ length: 8 }, (_, i) => game(`h${i}`, 'nhl', `Home ${i}`, `Away ${i}`, 2 + i / 10));
+  const mlb = game('m', 'mlb', 'Los Angeles Dodgers', 'San Diego Padres', 20);
+  const bets = [...nhl, mlb].flatMap(g => [ml(g, 'home', 0.55), ml(g, 'away', 0.45)]);
+  const recs = new Map(bets.map(b => [b.id, { tag: 'value' }]));
+  const taste = tasteOf({ fixtures: { leagues: ['mlb'], follows: [] }, now });
+  const picks = forYouPicks({ games: [...nhl, mlb], bets, recs, taste, now });
+  assert.equal(picks[0].game.id, 'm');
+  assert.equal(picks.filter(p => p.game.sport === 'nhl').length, 1);
+  assert.equal(spreadLeagues(nhl.map(g => ({ game: g })), taste, { n: 4 }).length, 1);
 });

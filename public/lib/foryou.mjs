@@ -117,17 +117,50 @@ export function forYouPicks({ games = [], bets = [], recs = new Map(), taste, no
     if (!choice) continue;
     const why = interest.why && interest.score >= 0.1 ? interest.why : recs.has(choice.id) ? recs.get(choice.id).tag : null;
     if (!why) continue;
-    out.push({ bet: choice, game: g, why, side: interest.side, tag: recs.get(choice.id)?.tag ?? null, score: interest.score + tagValue(choice) + soon });
+    // A price alone counts for less than the person's own teams and leagues.
+    const own = interest.why && interest.score >= 0.1;
+    out.push({ bet: choice, game: g, why, side: interest.side, tag: recs.get(choice.id)?.tag ?? null, score: interest.score + (own ? 1 : 0.4) * (tagValue(choice) + soon) });
   }
-  // Best first, no league more than twice (so one league doesn't fill it).
+  // Best first. A league the person shows no interest in gets one card at
+  // most (two such cards in all), a league they like two, followed teams
+  // all theirs: a night of many games in one league doesn't fill the row.
   out.sort((a, b) => b.score - a.score);
   const perLeague = new Map();
+  let strangers = 0;
   return out.filter(x => {
     const k = perLeague.get(x.game.sport) || 0;
-    if (k >= 2 && x.why !== 'follow') return false;
+    const known = leagueTaste(x.game.sport, taste) >= 0.2;
+    if (x.why !== 'follow' && x.why !== 'backed' && k >= (known ? 2 : 1)) return false;
+    if (!known && !x.side) {
+      if (strangers >= 2) return false;
+      strangers++;
+    }
     perLeague.set(x.game.sport, k + 1);
     return true;
   }).slice(0, n);
+}
+
+// How much the person likes a league (0-1): the league itself, or a team in it.
+export function leagueTaste(sport, taste) {
+  let w = taste.leagues.get(sport) || 0;
+  for (const [k, t] of taste.teams) if (t.why !== 'like' && k.startsWith(`team:${sport}:`)) w = Math.max(w, t.w);
+  return w;
+}
+
+// The best of `items` (sorted best first) with at most `per` a league, or
+// `liked` for a league the person likes; `sportOf` reads an item's league.
+export function spreadLeagues(items, taste, { n, per = 1, liked = 2, sportOf = x => x.game.sport } = {}) {
+  const count = new Map();
+  const out = [];
+  for (const x of items) {
+    const sport = sportOf(x);
+    const k = count.get(sport) || 0;
+    if (k >= (leagueTaste(sport, taste) >= 0.2 ? liked : per)) continue;
+    count.set(sport, k + 1);
+    out.push(x);
+    if (out.length >= n) break;
+  }
+  return out;
 }
 
 // The person's Fixtures data on this device (its pass payload), or null.

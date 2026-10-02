@@ -17,7 +17,7 @@
 // - The lottery's jackpots.
 // - Quadra Plus, once, for someone who isn't a member.
 import { rank, affinity, plusMember, plusCard, vipStatus, vipName, VIP, tell, welcomeDue, WELCOME, cachedPayload } from './lib/quadra.mjs';
-import { tasteOf, gameInterest, forYouPicks, fixturesTaste } from './lib/foryou.mjs';
+import { tasteOf, gameInterest, forYouPicks, fixturesTaste, leagueTaste, spreadLeagues } from './lib/foryou.mjs';
 import { GAMES, nextDraw, latestResults, gameName } from './lib/lottery.mjs';
 
 const TXT = {
@@ -101,7 +101,8 @@ export function renderHome(ctx) {
     const quality = TIER_WEIGHT[ctx.leagueTier(g.sport)] + (hours < 18 ? 0.3 : hours < 42 ? 0.15 : 0) + gameInterest(g, taste).score * 0.5;
     return { id: `game:${g.id}`, game: g, keys, quality, group: g.sport };
   });
-  const featured = rank(items, { wallet: state.wallet, n: 4, aff, now, diversity: 0.2, explore: 0 });
+  // One game a league (two of a league the person likes).
+  const featured = spreadLeagues(rank(items, { wallet: state.wallet, n: 40, aff, now, diversity: 0.2, explore: 0 }), taste, { n: 4 });
 
   // ---- 場中焦點: games on now with a live win price, ranked the same way
   const liveBetsOf = new Map();
@@ -111,7 +112,7 @@ export function renderHome(ctx) {
   }
   const onNow = (state.liveGames || []).filter(g => (liveBetsOf.get(g.id) || []).some(b => b.kind === 'ml' && !b.lock));
   const liveItems = onNow.map(g => ({ id: `live:${g.id}`, game: g, keys: [`league:${g.sport}`, `sport:${g.sport}`, teamKey(g, 'away'), teamKey(g, 'home')], quality: TIER_WEIGHT[ctx.leagueTier(g.sport)] + 0.3 + gameInterest(g, taste).score * 0.6 + (taste.held.has(g.id) ? 0.4 : 0), group: g.sport }));
-  const liveTop = rank(liveItems, { wallet: state.wallet, n: 3, aff, now, diversity: 0.2, explore: 0 });
+  const liveTop = spreadLeagues(rank(liveItems, { wallet: state.wallet, n: 40, aff, now, diversity: 0.2, explore: 0 }), taste, { n: 3 });
   const liveCard = ({ game: g }) => {
     const bets = liveBetsOf.get(g.id) || [];
     const ml = bets.filter(b => b.kind === 'ml');
@@ -187,7 +188,13 @@ export function renderHome(ctx) {
     const seen = new Set();
     return list.filter(b => !seen.has(b.gameId) && seen.add(b.gameId));
   };
-  const build = (lo, hi) => onePerGame(winPicks.filter(b => b.estOdds >= lo && b.estOdds <= hi).sort((a, b) => (ctx.leagueTier(a.sport) === 'major' ? 0 : 1) - (ctx.leagueTier(b.sport) === 'major' ? 0 : 1) || soonest(a, b))).slice(0, 3);
+  // The person's leagues first, then the big ones; one pick a league.
+  const build = (lo, hi) =>
+    spreadLeagues(
+      onePerGame(winPicks.filter(b => b.estOdds >= lo && b.estOdds <= hi).sort((a, b) => leagueTaste(b.sport, taste) - leagueTaste(a.sport, taste) || (ctx.leagueTier(a.sport) === 'major' ? 0 : 1) - (ctx.leagueTier(b.sport) === 'major' ? 0 : 1) || soonest(a, b))),
+      taste,
+      { n: 3, liked: 1, sportOf: b => b.sport }
+    );
   const safe = build(1.3, 1.8);
   const bold = build(1.9, 4).filter(b => !safe.some(x => x.gameId === b.gameId));
   const PARLAY_STAKE = 500;
