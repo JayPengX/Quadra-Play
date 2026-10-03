@@ -37,7 +37,7 @@ export function parseRoster(data, sport) {
     for (const c of a.statistics?.splits?.categories || []) for (const s of c.stats || []) stats[s.name] = Number(s.value) || 0;
     const photo = a.headshot?.href || espnHeadshot(sport, a.id);
     const injury = String(a.injuries?.[0]?.status || '');
-    return { id: String(a.id), name: a.displayName, pos: a.position?.abbreviation || '', photo: photo ? smallPhoto(photo) : null, out: /^out|injured reserve|suspen/i.test(injury), stats };
+    return { id: String(a.id), name: a.displayName, pos: a.position?.abbreviation || '', photo: photo ? smallPhoto(photo) : null, guessed: !a.headshot?.href, out: /^out|injured reserve|suspen/i.test(injury), stats };
   });
 }
 
@@ -163,7 +163,7 @@ export async function loadGamePlayers(game, getJson) {
         totals = blendTotals(now && totalsOf(family, now.raw), before && totalsOf(family, before.raw));
         if (!totals) continue;
       }
-      players.push({ id: p.id, name: p.name, side, pos: p.pos || league?.now.get(p.id)?.pos || '', photo: p.photo, out: p.out, gp: totals.gp || 0, totals });
+      players.push({ id: p.id, name: p.name, side, pos: p.pos || league?.now.get(p.id)?.pos || '', photo: p.photo, guessed: p.guessed, out: p.out, gp: totals.gp || 0, totals });
     }
   }
   return players;

@@ -290,6 +290,11 @@ function fallbackOptions(game, base, probs, made) {
 // The game's players' picks: Kambi's first, then the model's (propmodel.mjs)
 // for every player, number and line Kambi doesn't price; each with the
 // player's picture when ESPN's roster has them.
+// A player's picture from the roster, and whether it's only ESPN's guess by id.
+const photoOf = (players, name) => {
+  const p = playerByName(players, name);
+  return { photo: p?.photo ?? null, photoGuessed: Boolean(p?.guessed) };
+};
 function gameProps(game, probs) {
   const players = game.players ?? null;
   const kambi = game.offers?.props ?? [];
@@ -303,7 +308,7 @@ function gameProps(game, probs) {
     else scores = teamScores(family, { total: game.total?.line, spread: game.spread?.awayLine ?? null, homeWin: probs.home / (probs.home + probs.away) });
     model = modelProps(game.sport, players, scores).filter(p => !seen.has(key(p)));
   }
-  return [...kambi, ...model].map(p => ({ ...p, photo: playerByName(players, p.player)?.photo ?? null }));
+  return [...kambi, ...model].map(p => ({ ...p, ...photoOf(players, p.player) }));
 }
 
 // A game's own Kambi markets and players alone (a live game's: the page
@@ -336,6 +341,7 @@ function propOptions(game, base, props) {
       posted: !p.model,
       real: !p.model,
       photo: p.photo ?? null,
+      photoGuessed: Boolean(p.photoGuessed),
       fairChance: p.fair,
       fairMargin: p.model ? 0.06 : p.sided ? 0.04 : 0.02,
       errKey: 'extra',

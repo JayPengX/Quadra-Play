@@ -8,6 +8,7 @@ import { ticketProfile, accountTickets } from './lib/profile.mjs';
 import { useSourcesSession, loadOdds, loadExtraLeagues, loadExtraFutures, taipeiDayKey, fetchOutcomes, loadLive, parseInning, loadFutureTeams, futureTeamLeagues, loadGameOffers, loadPlayers } from './lib/sources.mjs';
 import { propName } from './lib/props.mjs';
 import { hasPlayers } from './lib/players.mjs';
+import { personPhoto } from './lib/photos.mjs';
 import { inningsLeft, liveBaseball, liveSoccer, liveGoals, livePoints, fitGoals, liveMarkets, liveOdds, pregameRuns, nextRunChances, nextRunOdds, LIVE_MIN_LIQUIDITY, LIVE_THREE_WAY, PERIODS } from './lib/live.mjs';
 import { fitHockey } from './lib/markets.mjs';
 import {
@@ -857,7 +858,7 @@ function propsPanel(game, bets) {
     const name = picks[0].player;
     const cells = ou ? ['over', 'under'].map(side => picks.find(b => b.side === side)) : [picks[0]];
     return el('div', { class: `prop-row ${ou ? 'two' : ''}` }, [
-      el('span', { class: 'prop-player' }, [playerPhoto(picks[0].photo, name), el('span', { class: 'prop-name', text: name })]),
+      el('span', { class: 'prop-player' }, [playerPhoto(picks[0].photo, name, game.sport, picks[0].photoGuessed), el('span', { class: 'prop-name', text: name })]),
       ...cells.map(b => (b ? pickButton(b, ou ? t(b.side) : '') : el('span')))
     ]);
   });
@@ -884,13 +885,12 @@ function scoreMoved(key, value) {
   return now - shownScores.get(key).at < SCORE_FLASH_MS;
 }
 
-// A player's headshot (ESPN's), or their initials while it loads or when there's none.
-function playerPhoto(url, name) {
-  const fallback = () => el('span', { class: 'prop-avatar', 'aria-hidden': 'true', text: initialsOf(name) });
-  if (!url) return fallback();
-  const img = el('img', { class: 'prop-avatar prop-photo', src: url, alt: '', loading: 'lazy', decoding: 'async' });
-  img.onerror = () => img.replaceWith(fallback());
-  return img;
+// A player's picture, found the way every Quadra app finds one (the kit's
+// personPhoto): the roster's (ESPN's by id is only a guess), one found
+// before on this device, then a search by name; the initials meanwhile.
+function playerPhoto(url, name, league, guessed = false) {
+  const initials = () => el('span', { class: 'prop-avatar', 'aria-hidden': 'true', text: initialsOf(name) });
+  return personPhoto(name, league, { urls: guessed ? [] : [url], guess: guessed ? url : null, cls: 'prop-avatar prop-photo', fallback: initials });
 }
 
 // ---- A game's own markets from Kambi (offers.mjs) ------------------------------------
