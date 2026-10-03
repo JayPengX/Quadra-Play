@@ -12,8 +12,8 @@
 // in 你的投注): what they've backed points at the next games instead, the
 // same teams' and the same leagues'. One pick a game; picks on the team they
 // care about, never against it.
-import { normalizeTeamName } from './logos.mjs';
-import { CATALOG } from './catalog.mjs';
+import { normalizeTeamName } from '#kit/logos.mjs';
+import { CATALOG } from '#kit/catalog.mjs';
 import { familyOf } from './teams.mjs';
 
 export const FOR_YOU = { n: 8, horizonH: 72, followH: 10 * 24, backedH: 5 * 24, perSport: 2, follow: 1, backed: 0.6, league: 0.35, sport: 0.12 };

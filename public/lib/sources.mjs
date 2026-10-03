@@ -2,14 +2,14 @@
 // Polymarket), the next F1 race-winner market and championship (futures)
 // markets through the shared sports proxy, which adds the CORS headers
 // Polymarket doesn't send.
-import { proxyJson } from './quadra.mjs';
+import { proxyJson } from '#kit/quadra.mjs';
 import { americanToProbability, devigProportional, devigPower } from './odds.mjs';
 import { normalizeTeamName, teamZh, LEAGUES, familyOf, isSoccer, rememberLogo, rememberTeams, hasTeams } from './teams.mjs';
 import { runOrder, shareLeft } from './live.mjs';
 import { KAMBI, kambiUrl, parseKambiEvents, parseKambiInPlay, useKambiToken, fetchKambiLeague, decidedTeamGame, parseKambiLiveData, kambiLiveDataUrl, watchKambiMatches, fetchKeptKambi } from './kambi.mjs';
 import { KAMBI_LEAGUES } from './teams.mjs';
 import { withHousePrices, sameSide } from './house.mjs';
-import { SOLD_DAYS, ASIA_URL, asiaMonth, asiaMonthOf } from './catalog.mjs';
+import { SOLD_DAYS, ASIA_URL, asiaMonth, asiaMonthOf } from '#kit/catalog.mjs';
 import { parseAsiaSchedule } from './schedules.mjs';
 import { propOutcome } from './props.mjs';
 import { offersUrl, parseOffers } from './offers.mjs';

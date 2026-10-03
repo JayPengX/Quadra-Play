@@ -10,7 +10,7 @@
 // (props.mjs), `gp` the games they're over.
 import { LEAGUES, familyOf } from './teams.mjs';
 import { normPlayer } from './props.mjs';
-import { espnHeadshot, smallPhoto } from './photos.mjs';
+import { espnHeadshot, smallPhoto } from '#kit/photos.mjs';
 
 export const ESPN_SITE = 'https://site.api.espn.com/apis/site/v2/sports';
 export const ESPN_COMMON = 'https://site.api.espn.com/apis/common/v3/sports';

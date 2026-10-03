@@ -6,7 +6,7 @@ import { GAMES, GAME_ORDER, gameName, nextDraw, quickPick, betCount, checkSelect
 import { CARDS, CARD_ORDER, face, facePays, buyScratch, revealScratch, topPrize } from './lib/scratch.mjs';
 import { balance, newSlipId } from './lib/account.mjs';
 import { compactMoney } from './home.js';
-import { ask, tell } from './lib/quadra.mjs';
+import { ask, tell } from '#kit/quadra.mjs';
 
 const T = {
   zh: {

@@ -16,7 +16,7 @@
 // - 你的投注: the open slips, each with its cash-out price.
 // - The lottery's jackpots.
 // - Quadra Plus, once, for someone who isn't a member.
-import { rank, affinity, plusMember, plusCard, vipStatus, vipName, VIP, tell, welcomeDue, WELCOME, cachedPayload } from './lib/quadra.mjs';
+import { rank, affinity, plusMember, plusCard, vipStatus, vipName, VIP, tell, welcomeDue, WELCOME, cachedPayload } from '#kit/quadra.mjs';
 import { tasteOf, gameInterest, forYouPicks, fixturesTaste, leagueTaste, spreadLeagues } from './lib/foryou.mjs';
 import { GAMES, nextDraw, latestResults, gameName } from './lib/lottery.mjs';
 

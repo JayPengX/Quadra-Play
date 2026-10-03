@@ -1,11 +1,11 @@
 // Logos, flags and the F1 grid: the shared kit's (lib/logos.mjs).
-import { CATALOG, familyOfSport } from './catalog.mjs';
-import { normalizeTeamName, MLB_ABBR, NBA_ID, EPL_ESPN_ID, TEAM_BADGES, rememberLogo, teamLogo } from './logos.mjs';
-export { normalizeTeamName, rememberLogo, teamLogo, leagueLogo, teamBadge, f1Driver, f1Constructor, countryFlag, countryCode, flagUrl } from './logos.mjs';
+import { CATALOG, familyOfSport } from '#kit/catalog.mjs';
+import { normalizeTeamName, MLB_ABBR, NBA_ID, EPL_ESPN_ID, TEAM_BADGES, rememberLogo, teamLogo } from '#kit/logos.mjs';
+export { normalizeTeamName, rememberLogo, teamLogo, leagueLogo, teamBadge, f1Driver, f1Constructor, countryFlag, countryCode, flagUrl } from '#kit/logos.mjs';
 
 // Teams in Chinese: the shared kit's (lib/names.mjs), the lottery's names
 // for the leagues it sells, the usual Taiwanese ones for the rest.
-export { teamZh, teamNameZh } from './names.mjs';
+export { teamZh, teamNameZh } from '#kit/names.mjs';
 
 // Every league Play sells, from the shared catalogue (catalog.mjs, the kit's
 // leagues.mjs): its kind of markets (family) and where its games and odds
