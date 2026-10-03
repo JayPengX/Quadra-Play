@@ -1,7 +1,7 @@
 // 為你推薦: picks for this person, not just the board's best prices.
 //
 // What they care about, from everything Quadra knows on this device:
-// - the teams and leagues they follow in Fixtures (its pass data, cached on
+// - the teams and leagues they follow in Orbit Sports (its pass data, cached on
 //   this device, and its affinity map), the strongest signal;
 // - the teams they've bet on here (their slips: the more often, the more);
 // - every app's affinity map (what they open, bet on and trade).
@@ -19,7 +19,7 @@ import { familyOf } from './teams.mjs';
 export const FOR_YOU = { n: 8, horizonH: 72, followH: 10 * 24, backedH: 5 * 24, perSport: 2, follow: 1, backed: 0.6, league: 0.35, sport: 0.12 };
 
 const teamKey = (sport, name) => `team:${sport}:${normalizeTeamName(name)}`;
-// Fixtures' league key to Play's.
+// Orbit Sports' league key to Play's.
 const playKey = league => CATALOG[league]?.bet ?? league;
 
 // { teams: Map key -> { w, why }, leagues: Map sport -> w, sports: Map family -> w, held: Set gameId }
@@ -39,7 +39,7 @@ export function tasteOf({ aff = {}, fixtures = null, slips = [], now = Date.now(
     else if (k.startsWith('league:')) lift(leagues, k.slice(7), w);
     else if (k.startsWith('sport:')) lift(sports, k.slice(6), w);
   }
-  // Fixtures: followed teams (a player's team too), followed leagues in order.
+  // Orbit Sports: followed teams (a player's team too), followed leagues in order.
   for (const f of fixtures?.follows || []) {
     const sport = playKey(f.league);
     const name = f.athlete ? f.team?.name : f.name;
@@ -198,9 +198,9 @@ export function spreadLeagues(items, taste, { n, per = 1, liked = 2, perSport = 
   return interleave(out, x => familyOf(sportOf(x)) || sportOf(x));
 }
 
-// The person's Fixtures follows: the pass's copy (`follows:match`, written
-// by Fixtures, so every device and home-screen app has it) and this
-// device's Fixtures data, together.
+// The person's Orbit Sports follows: the pass's copy (`follows:match`, written
+// by Orbit Sports, so every device and home-screen app has it) and this
+// device's Orbit Sports data, together.
 export function fixturesTaste(cachedPayload, wallet = null) {
   let local = null;
   try {

@@ -5,7 +5,7 @@
 // - 場中焦點: games on now with live prices (the same ranking), a tap on a
 //   price puts it on the slip, the card opens the game's live markets.
 // - 為你推薦 (foryou.mjs): one pick a game on the teams and leagues the
-//   person follows in Fixtures and bets on here, the next games of the teams
+//   person follows in Orbit Sports and bets on here, the next games of the teams
 //   they've backed, and the best prices; a tap puts it on the slip. Its top
 //   three as a ready-made parlay too.
 // - 焦點賽事: the games worth betting on, as the board shows them (the win
@@ -81,7 +81,7 @@ export function renderHome(ctx) {
   const money = v => fmtMoney(v, { sign: false });
 
   // ---- 焦點賽事: upcoming games with a win price on sale
-  // Every app's affinity, Fixtures' too, and what the person follows there.
+  // Every app's affinity, Orbit Sports' too, and what the person follows there.
   const aff = affinity(state.wallet, now, ['odds', 'stock', 'match']);
   const taste = tasteOf({ aff, fixtures: fixturesTaste(cachedPayload, state.wallet), slips: state.account?.slips || [], now });
   const teamKey = (g, side) => `team:${g.sport}:${norm(g[side]?.en ?? g[side])}`;

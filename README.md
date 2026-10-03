@@ -10,17 +10,16 @@ cards, all with the one Quadra balance.
 | --- | --- |
 | **Quadra Securities** | Where money lives and grows |
 | **Quadra Play** | A place to play: sports bets and the lottery |
-| **Quadra Fixtures** | The sports data centre, and the way into Play |
-| **Quadra Hub** | Related add-on: words practice, the Quadra Pass and Plus, the truth about the money, every app's guide |
-| Orbit Class | A related add-on: the class schedule |
+| **Quadra Pass** | The account behind every app's top-right: Plus, the truth about the money, every app and its guide |
+| Orbit Class, Weather, Transit, Sports, Words | Orbit: the everyday tools, no money, the same pass |
 
 - **Quadra Pass required**, one app at a time, one money pool: see the
-  shared kit (`public/lib/quadra.mjs`, from Shared-Proxy's `kit/`). The
+  shared kit (`#kit/quadra.mjs`, loaded from Shared-Proxy's Pages). The
   account is kept with the pass; the odds proxy answers signed-in apps only.
   Syncs of the account run one after another, so a slower save never lands
   after a newer one.
 - **Tabs:** 首頁 Home, 賽事 Games, 彩券 Lottery, 投注單 Slip, 紀錄 History.
-  The guide is in Quadra Hub's help centre; the simulator's crowd now only serves analysis (紀錄's "you against the
+  The guide is in the Quadra Pass sheet's 說明; the simulator's crowd now only serves analysis (紀錄's "you against the
   crowd").
 
 ### 首頁 Home
@@ -33,7 +32,7 @@ Calm on purpose: no banners, no one-tap "hot" parlays, no nags.
   what they'd cash out for right now (or the most they can pay).
 - **焦點賽事 Featured:** up to four games, drawn like the board (logos, the
   win prices; a tap puts a price on the slip). Ranked by Quadra's shared
-  recommender (`rank` in `quadra.mjs`): what's followed in Quadra Fixtures
+  recommender (`rank` in `quadra.mjs`): what's followed in Orbit Sports
   weighs most (the wallet's `follow:match`), then the teams, leagues and
   sports bet on and opened; each game's own weight is its league tier
   (`leagueTier` in `rules.mjs`: MLB, NBA, NFL, NHL, the top soccer leagues
@@ -109,7 +108,7 @@ banner on screen or a system notice when allowed.
 
 ### 賽事 Games: every match, more sports
 
-- **A game opens in a sheet** (like Quadra Fixtures' match sheet): a tap on
+- **A game opens in a sheet** (like Orbit Sports' match sheet): a tap on
   a game (on 賽事, or home's 焦點賽事 and 場中) opens it over the tab with
   every market, its own tabs and the slip bar at the foot; the board under
   it never moves. The card keeps its win prices for a one-tap pick.
@@ -215,7 +214,7 @@ The page stays simple: odds, colours and the amounts that matter. What the numbe
   - locked (🔒): odds of 1.05 or less, or 8+ on ordinary markets (80+ on correct scores, margins, set scores and the like). F1 and championships are priced one by one up to 500 and never locked;
   - parlay only: under 1.30 only in parlays of 2+ games (限2關), under 1.15 of 3+ (限3關). The slip refuses a ticket with any combination too small for one of its picks. These thresholds are the house's usual shape, not measured on the lottery's board.
 - **One house cut:** every market takes what the lottery was measured taking on that kind of market (1.158 two-way, 1.20 three-way, 1.35 bands, 1.50 correct scores, 1.92 the top inning, 1.16 live), whatever the league and whoever priced the game, so Play stays close to 運彩's prices (1.72-1.73 each side of a coin flip).
-- **Every game, two weeks ahead** (`SOLD_DAYS` in the kit's `leagues.mjs`, shared with Fixtures' 投注): every league's games up to 14 days out. A game no bookmaker prices yet (preseason, a game past DraftKings' posting, a small league) is priced by the house (`public/lib/house.mjs`): each team's share of wins in ESPN's standings (last season, pulled a third of the way to even, weighted like 30% of a season, this season's games on top), log5 between the two, plus the home side's edge; soccer takes a draw out (27% between even sides); preseason pulled halfway to even. A bookmaker's line replaces it as soon as one is posted.
+- **Every game, two weeks ahead** (`SOLD_DAYS` in the kit's `catalog.mjs`, shared with Orbit Sports' 投注): every league's games up to 14 days out. A game no bookmaker prices yet (preseason, a game past DraftKings' posting, a small league) is priced by the house (`public/lib/house.mjs`): each team's share of wins in ESPN's standings (last season, pulled a third of the way to even, weighted like 30% of a season, this season's games on top), log5 between the two, plus the home side's edge; soccer takes a draw out (27% between even sides); preseason pulled halfway to even. A bookmaker's line replaces it as soon as one is posted.
 - **Recommendations** (`public/lib/recommend.mjs`), shown on each pick instead of a separate list: every pick is judged by its average back per NT$100 against the others. The day's top 10% get 划算; picks of 65%+ that return at least the median get 穩; picks of 30% or less in the top quarter get 值博. Locked picks, picks over 85% or under 5%, and lots of under 10 picks get none. The simulator's value hunters bet exactly these picks.
 
 ### 投注單 Bet slip
@@ -355,7 +354,7 @@ The page depends on that Worker:
 - **Allowed hosts only:** `site.api.espn.com`, `gamma-api.polymarket.com` and `eu-offering-api.kambicdn.com` are the ones used here.
 - **Fetching politely:** every response is cached at the Worker for every viewer (Kambi's lists 2 minutes, Polymarket's championship search 10 minutes, live scores 20 seconds), Kambi's responses are trimmed to the fields used (`&trim=kambi-events`, about 5× smaller), the page sends at most 6 requests at once, and live scores are polled only while the page is visible.
 
-The account lives on the Quadra Pass: Shared-Proxy's `orbit-workers-proxy`, route `/eco` (the shared kit, `public/lib/quadra.mjs`). A Quadra Pass is required.
+The account lives on the Quadra Pass: Shared-Proxy's `orbit-workers-proxy`, route `/eco` (the shared kit, `#kit/quadra.mjs`). A Quadra Pass is required.
 
 | File | Purpose |
 | --- | --- |
@@ -377,7 +376,7 @@ The account lives on the Quadra Pass: Shared-Proxy's `orbit-workers-proxy`, rout
 | `public/lib/teams.mjs` | Leagues, Chinese team and driver names, ESPN logo ids, TheSportsDB badges, the F1 grid's team colours |
 | `public/lib/i18n.mjs` | Traditional Chinese and English text (follows the browser's language) |
 | `public/lib/account.mjs` | The practice account: ledger, weekly grant, placing and settling slips, merging two copies |
-| `public/lib/quadra.mjs` | The shared Quadra kit (sign-in, session, pool, recommender) |
+| `#kit/quadra.mjs` | The shared kit, from Shared-Proxy's Pages (sign-in, session, pool, recommender, the Quadra Pass sheet) |
 | `public/lib/live.mjs` | Live odds: the in-game score model, the lines closest to 50/50, prices at the live cut |
 | `public/lib/history.mjs` | Stats over saved slips: money, luck against the cut, picks against their chances, breakdowns, streaks, records |
 | `public/lib/codec.mjs` | gzip + base64 for every save |

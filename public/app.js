@@ -3400,7 +3400,7 @@ $('slip-close')?.addEventListener('click', closeSlip);
 //
 // Opening a game used to unfold its card in the board, which pushed the page
 // about (more so while its markets and pictures were still arriving). Now a
-// game opens in a sheet like Quadra Fixtures' match sheet: the board under it
+// game opens in a sheet like Orbit Sports' match sheet: the board under it
 // never moves, and redraws (markets arriving, live prices) keep the sheet's place.
 const gameSheet = $('game-sheet');
 const gameSheetOpen = () => Boolean(gameSheet?.open);

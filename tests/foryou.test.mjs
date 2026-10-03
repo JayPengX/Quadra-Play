@@ -1,4 +1,4 @@
-// 為你推薦: Fixtures' follows and the person's own slips lead; held games don't repeat.
+// 為你推薦: Orbit Sports' follows and the person's own slips lead; held games don't repeat.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { tasteOf, forYouPicks, gameInterest, fixturesTaste, spreadLeagues } from '../public/lib/foryou.mjs';
@@ -7,7 +7,7 @@ const now = Date.parse('2026-10-02T00:00:00Z');
 const game = (id, sport, home, away, h = 6) => ({ id, sport, home: { en: home }, away: { en: away }, startUtc: new Date(now + h * 3_600_000).toISOString() });
 const ml = (g, side, fair) => ({ id: `${g.id}|ml|${side}`, gameId: g.id, kind: 'ml', side, sport: g.sport, fairChance: fair, estOdds: 0.9 / fair });
 
-test('a team followed in Fixtures beats everything; picks are on that team', () => {
+test('a team followed in Orbit Sports beats everything; picks are on that team', () => {
   const games = [game('a', 'mlb', 'Los Angeles Dodgers', 'San Diego Padres'), game('b', 'epl', 'Arsenal', 'Chelsea'), game('c', 'nba', 'Boston Celtics', 'Miami Heat')];
   const bets = games.flatMap(g => [ml(g, 'home', 0.55), ml(g, 'away', 0.45)]);
   const fixtures = fixturesTaste(() => JSON.stringify({ leagues: ['epl'], follows: [{ league: 'mlb', id: '19', name: 'San Diego Padres' }] }));
