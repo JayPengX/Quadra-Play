@@ -151,15 +151,11 @@ function ttlFor(url) {
 }
 // What's on now is read again after this long (the proxy keeps it 10 s).
 const LIVE_TTL = 10_000;
-export async function getJson(url, trim, retries = 1) {
+// The kit already asks a failing list again (a batch's failure on its own,
+// then once more): no third and fourth try here.
+export function getJson(url, trim) {
   const ttl = ttlFor(url);
-  try {
-    return await proxyJson(url, { ttl, trim: trim || '', persist: ttl >= 60_000, timeout: 30_000 });
-  } catch (error) {
-    if (retries <= 0) throw error;
-    await new Promise(resolve => setTimeout(resolve, 800));
-    return getJson(url, trim, retries - 1);
-  }
+  return proxyJson(url, { ttl, trim: trim || '', persist: ttl >= 60_000, timeout: 30_000 });
 }
 
 function yyyymmdd(date) {

@@ -3687,8 +3687,11 @@ async function boot() {
   let accountDone;
   state.accountIn = new Promise(resolve => (accountDone = resolve));
   restoreSlip();
+  // Signing in (a round trip) goes out first; the saved board is drawn
+  // while it's on its way, not before it.
+  const starting = q.start();
   drawSnapshot();
-  const first = await q.start();
+  const first = await starting;
   state.wallet = first.wallet || q.wallet;
   const loading = load();
   state.account = await loadAccount();
@@ -3706,7 +3709,9 @@ async function boot() {
   lotteryUi.render();
   if (state.tab === 'home' && state.data) drawHome();
   accountDone();
-  syncNow();
+  // The sign-in's reply was the pass's copy and inbox, just merged: asked
+  // for again only when it couldn't come (offline).
+  if (!first || first.offline) syncNow();
   await loading;
   checkResults();
   if (state.tab === 'home') drawHome();
