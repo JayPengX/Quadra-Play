@@ -154,7 +154,6 @@ footer { padding: 10px 0 0; text-align: center; }
 /* ---- Game cards --------------------------------------------------------------------- */
 .games-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); align-items: start; }
 .game { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
-.game.open { grid-column: 1 / -1; }
 .game-top { display: flex; align-items: center; gap: 8px; padding: 10px 14px 4px; font-size: 0.74rem; color: var(--text-muted); }
 .game-series { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
 .game-time { flex: none; font-weight: 600; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
@@ -185,8 +184,8 @@ button.pick:active { transform: scale(0.98); }
   width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-top: 1px solid var(--border);
   background: var(--surface-raised); color: var(--accent); font-size: 0.82rem; font-weight: 600; padding: 8px;
 }
-.more-toggle::after { content: ''; width: 6px; height: 6px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); margin-top: -3px; transition: transform 0.2s; }
-.game.open .more-toggle::after { transform: rotate(-135deg); margin-top: 3px; }
+.more-toggle::after { content: ''; width: 6px; height: 6px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); }
+.game.tappable { cursor: pointer; }
 .game-more { border-top: 1px solid var(--border); padding: 12px 14px 14px; background: var(--surface-raised); display: grid; gap: 12px; }
 .markets { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); }
 .market { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px 10px; display: grid; gap: 6px; }
@@ -1273,3 +1272,21 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 .fy-foot small { flex: 1; min-width: 0; font-size: 0.76rem; font-weight: 650; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fy-foot .pick { flex: none; min-width: 76px; }
 .combo.mine .combo-tag { color: var(--accent); background: var(--accent-wash); }
+
+/* A game's sheet (a tap on a game): the game and every market of it, over
+   any tab; the slip bar at its foot. */
+.game-sheet { width: min(640px, 100vw); padding-bottom: 0; }
+@media (max-width: 719px) { .game-sheet { max-height: 94vh; } }
+.game-sheet-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.game-sheet-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#game-sheet-body { min-height: 40vh; padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
+.game.in-sheet { border: 0; border-radius: 0; box-shadow: none; background: none; overflow: visible; }
+.game.in-sheet .game-top { padding: 0 0 6px; }
+/* The league and series are the sheet's title: only the time (or the live state) here. */
+.game.in-sheet .game-top .league-badge, .game.in-sheet .game-series { display: none; }
+.game.in-sheet .team-rows { padding-left: 0; padding-right: 0; }
+.game.in-sheet .game-more { margin: 10px -18px 0; padding: 14px 18px 4px; border-top: 1px solid var(--border); background: none; }
+.game.in-sheet .market-tabs { position: sticky; top: 60px; z-index: 1; background: var(--q-page); padding: 4px 0; }
+.slip-bar.in-sheet { position: sticky; left: auto; right: auto; bottom: calc(12px + env(safe-area-inset-bottom)); width: 100%; margin: 0 0 calc(12px + env(safe-area-inset-bottom)); }
+.slip-bar.in-sheet[hidden] { display: none; }
+#game-sheet-body:has(+ .slip-bar.in-sheet:not([hidden])) { padding-bottom: 12px; }

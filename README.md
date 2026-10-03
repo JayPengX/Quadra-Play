@@ -109,6 +109,10 @@ banner on screen or a system notice when allowed.
 
 ### 賽事 Games: every match, more sports
 
+- **A game opens in a sheet** (like Quadra Fixtures' match sheet): a tap on
+  a game (on 賽事, or home's 焦點賽事 and 場中) opens it over the tab with
+  every market, its own tabs and the slip bar at the foot; the board under
+  it never moves. The card keeps its win prices for a one-tap pick.
 - **No time window:** every game the sources list that hasn't started is
   shown (daily sports about a week ahead, soccer every matchday in three
   weeks, football the current week), not only tomorrow's or the next

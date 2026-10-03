@@ -77,8 +77,8 @@ const state = {
   booting: true,
   sport: 'all',
   tab: 'home',
-  // Game cards showing all their markets.
-  open: new Set(),
+  // The game whose sheet is open (every market), by id.
+  sheetGame: null,
   // Each open game's market tab (大小分, 讓分, 單隊大小, 得分最高單局).
   marketTab: new Map(),
   propTab: new Map(),
@@ -729,11 +729,11 @@ function hhmm(iso) {
   return formatter('hhmm', locale => new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Taipei' })).format(new Date(iso));
 }
 
-// A game: its teams with logos and win picks; every other market folds away.
-function gameCard(game, bets) {
+// A game: its teams with logos and win picks. A tap on it (anywhere but a
+// price) opens its sheet with every market (`openGameSheet`); in the sheet
+// (`inSheet`) the markets sit under the teams.
+function gameCard(game, bets, { inSheet = false } = {}) {
   const t = state.t;
-  const rerender = game.live ? renderLive : renderGames;
-  const open = state.open.has(game.id);
   const ml = bets.filter(b => b.kind === 'ml');
   const duel = isDuel(game.sport);
   const sides = isSoccer(game.sport) ? ['home', 'draw', 'away'] : duel ? ['home', 'away'] : ['away', 'home'];
@@ -750,12 +750,14 @@ function gameCard(game, bets) {
     return el('div', { class: 'team-row' }, [...who, score, bet ? pickButton(bet, '') : null]);
   });
   const others = bets.filter(b => b.kind !== 'ml');
-  const toggle = () => {
-    if (state.open.has(game.id)) state.open.delete(game.id);
-    else state.open.add(game.id);
-    rerender();
-  };
-  return el('article', { class: `game ${open ? 'open' : ''} ${game.live ? 'live' : ''}`, 'data-game': game.id }, [
+  // A live game Kambi lists has more once it's opened (its own markets).
+  const more = others.length > 0 || Boolean(game.live && game.kambiId);
+  const open = () => openGameSheet(game.id);
+  return el('article', {
+    class: `game ${inSheet ? 'in-sheet' : 'tappable'} ${game.live ? 'live' : ''}`,
+    'data-game': inSheet ? null : game.id,
+    onclick: inSheet ? null : e => !e.target.closest('button') && open()
+  }, [
     el('div', { class: 'game-top' }, [
       leagueImg(game.sport, 'logo-xs'),
       el('span', { class: 'game-series', text: gameSeries(game) }),
@@ -764,10 +766,8 @@ function gameCard(game, bets) {
         : el('span', { class: 'game-time', text: state.query ? `${dayKey(game.startUtc).slice(5).replace('-', '/')} ${hhmm(game.startUtc)}` : hhmm(game.startUtc) })
     ]),
     el('div', { class: 'team-rows' }, rows),
-    open && (others.length || (game.live && game.kambiId)) ? gameMore(game, others) : null,
-    // A live game Kambi lists has more once it's opened (its own markets).
-    others.length === 0 && !(game.live && game.kambiId) ? null : el('button', { class: 'more-toggle', type: 'button', 'aria-expanded': String(open), onclick: toggle }, [
-      document.createTextNode(open ? t('lessMarkets') : t('moreMarkets'))
+    inSheet ? (more ? gameMore(game, others) : el('p', { class: 'muted offers-wait sheet-none', text: t('offersNone') })) : el('button', { class: 'more-toggle', type: 'button', 'aria-haspopup': 'dialog', onclick: open }, [
+      document.createTextNode(more ? t('moreMarkets') : t('gameDetails'))
     ])
   ]);
 }
@@ -795,7 +795,7 @@ function gameMore(game, bets) {
               text: t(sec.kind === 'runline' && isSoccer(game.sport) ? 'secHandicap' : sec.short ?? sec.title),
               onclick: () => {
                 state.marketTab.set(game.id, sec.kind);
-                (game.live ? renderLive : renderGames)();
+                renderGameSheet();
               }
             })
           )
@@ -841,7 +841,7 @@ function propsPanel(game, bets) {
       text,
       onclick: () => {
         state.propTab.set(game.id, key);
-        (game.live ? renderLive : renderGames)();
+        renderGameSheet();
       }
     });
   };
@@ -943,6 +943,7 @@ function rebuildBoard() {
       renderLive();
     }
     renderGames();
+    renderGameSheet();
     renderParlay();
     renderSlipBar();
     syncPicks();
@@ -1324,6 +1325,7 @@ async function refreshLive() {
     // The day strip (today stays on it while games are on), and 場中 with it.
     if (state.data && !state.query) renderDayFilter();
     renderLive();
+    renderGameSheet();
     renderParlay();
     renderTabs();
     if (state.tab === 'home') renderHome(homeCtx());
@@ -1458,6 +1460,7 @@ function slipChanged() {
   saveSlip();
   renderGames();
   renderLive();
+  renderGameSheet();
   renderF1();
   renderFutures();
   renderParlay();
@@ -1670,8 +1673,11 @@ function renderSlipBar() {
     bar = el('button', { id: 'slip-bar', class: 'slip-bar', type: 'button', hidden: '', onclick: () => openSlip() });
     document.body.append(bar);
   }
+  // The same bar at the foot of a game's sheet (the page's is under it).
+  const sheetBar = $('game-sheet-bar');
   const { legs } = slipLegs();
   const n = legs.length;
+  if (sheetBar) sheetBar.hidden = true;
   if (!n || slipOpen() || !state.accountReady) return void (bar.hidden = true);
   const t = state.t;
   const slip = legs.map(b => ({ gameId: b.gameId, market: b.market ?? b.kind, odds: effectiveOdds(b), fairChance: b.fairChance }));
@@ -1693,6 +1699,10 @@ function renderSlipBar() {
     ]),
     el('span', { class: 'slip-bar-go', text: `${t('barGo')} ›` })
   );
+  if (sheetBar && gameSheetOpen()) {
+    sheetBar.replaceChildren(...[...bar.childNodes].map(node => node.cloneNode(true)));
+    sheetBar.hidden = false;
+  }
 }
 
 // ---- Slip: what each pick is, what the ticket pays ------------------------------
@@ -3337,6 +3347,53 @@ slipSheet?.addEventListener('close', () => renderSlipBar());
 // A tap on the dimmed page behind closes it.
 slipSheet?.addEventListener('click', e => e.target === slipSheet && closeSlip());
 $('slip-close')?.addEventListener('click', closeSlip);
+
+// ---- A game's sheet: every market of one game, over any tab ---------------------
+//
+// Opening a game used to unfold its card in the board, which pushed the page
+// about (more so while its markets and pictures were still arriving). Now a
+// game opens in a sheet like Quadra Fixtures' match sheet: the board under it
+// never moves, and redraws (markets arriving, live prices) keep the sheet's place.
+const gameSheet = $('game-sheet');
+const gameSheetOpen = () => Boolean(gameSheet?.open);
+// A game by id, live or not, with its picks (null: gone from the board).
+function sheetGameOf(id) {
+  const live = state.liveGames?.find(g => g.id === id);
+  if (live) return { game: live, bets: (state.liveBets || []).filter(b => b.gameId === id) };
+  const game = state.data?.games.find(g => g.id === id);
+  return game ? { game, bets: (state.bets || []).filter(b => b.gameId === id) } : null;
+}
+function renderGameSheet() {
+  if (!gameSheetOpen() || !state.sheetGame) return;
+  const t = state.t;
+  const found = sheetGameOf(state.sheetGame);
+  const keep = gameSheet.scrollTop;
+  $('game-sheet-title').replaceChildren(...(found ? [leagueImg(found.game.sport, 'logo-xs'), el('span', { text: gameSeries(found.game) })] : []));
+  $('game-sheet-body').replaceChildren(found ? gameCard(found.game, found.bets, { inSheet: true }) : el('p', { class: 'muted offers-wait', text: t('gameGone') }));
+  renderSlipBar();
+  gameSheet.scrollTop = keep;
+}
+function openGameSheet(id) {
+  const found = sheetGameOf(id);
+  if (!gameSheet || !found) return;
+  closeSlip();
+  state.sheetGame = id;
+  if (!gameSheet.open) gameSheet.showModal();
+  renderGameSheet();
+  gameSheet.scrollTop = 0;
+  if (found.game.live) refreshLive();
+}
+function closeGameSheet() {
+  if (gameSheet?.open) gameSheet.close();
+}
+gameSheet?.addEventListener('close', () => {
+  state.sheetGame = null;
+  $('game-sheet-body').replaceChildren();
+  renderSlipBar();
+});
+gameSheet?.addEventListener('click', e => e.target === gameSheet && closeGameSheet());
+$('game-sheet-close')?.addEventListener('click', closeGameSheet);
+$('game-sheet-bar')?.addEventListener('click', () => (closeGameSheet(), openSlip()));
 const tabNav = tabBar({ tabs: TABS.map(id => ({ id, label: state.t(`tab_${id}`), icon: TAB_ICONS[id] })), onSelect: (tab, { again }) => !again && showTab(tab) });
 function renderTabs() {
   if (!tabAvailable(state.tab)) state.tab = 'home';
@@ -3360,8 +3417,7 @@ function periodName(weeks) {
 // Everything opened on a tab folds back when you leave it (a game's 更多玩法,
 // every folding card), so coming back starts tidy, not where you left off.
 function collapseAll() {
-  const had = state.open.size > 0 || state.dayPicked;
-  state.open.clear();
+  const had = state.dayPicked;
   // Back to the earliest day as well.
   state.dayPicked = false;
   for (const d of document.querySelectorAll('.tab-panel details[open]')) d.open = false;
@@ -3374,6 +3430,7 @@ function collapseAll() {
 function showTab(tab) {
   // Going anywhere (a bet placed, a tab tapped) puts the slip away.
   closeSlip();
+  closeGameSheet();
   if (tab !== state.tab) collapseAll();
   state.tab = tab;
   renderTabs();
@@ -3402,19 +3459,11 @@ window.addEventListener('hashchange', () => {
   if (hash === 'slip') return openSlip();
   if (TABS.includes(hash)) return showTab(hash);
 });
-// Opens a game on the board (home's featured cards): its day, its card open
-// with every market, scrolled into view.
+// Opens a game (home's featured cards): its sheet with every market, over
+// whichever tab is showing; no tab switch, no scrolling the board.
 function openGame(id) {
-  const game = state.data?.games.find(g => g.id === id);
-  if (!game) return showTab('games');
-  state.tab = 'games';
-  state.day = dayKey(game.startUtc);
-  state.dayPicked = true;
-  state.sport = 'all';
-  state.open.add(game.id);
-  renderAll();
-  showTab('games');
-  requestAnimationFrame(() => document.querySelector(`[data-game="${CSS.escape(game.id)}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+  if (!sheetGameOf(id)) return showTab('games');
+  openGameSheet(id);
 }
 
 // Redraw only when the width changes: phones fire resize when the address bar
@@ -3509,12 +3558,12 @@ function homeCtx() {
   };
   // A live game's card on the games tab, open with its markets (null: the live list's top).
   const openLive = id => {
+    if (id && sheetGameOf(id)) return openGameSheet(id);
     state.tab = 'games';
     state.sport = 'all';
     state.query = '';
     state.day = dayKey(new Date().toISOString());
     state.dayPicked = true;
-    if (id) state.open.add(id);
     renderAll();
     showTab('games');
     requestAnimationFrame(() => (id ? document.querySelector(`[data-game="${CSS.escape(id)}"]`) : $('live'))?.scrollIntoView({ block: id ? 'center' : 'start', behavior: 'smooth' }));
