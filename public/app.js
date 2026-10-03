@@ -586,8 +586,44 @@ const initialsOf = name => {
   if (/[\u3400-\u9fff]/.test(n)) return n.slice(0, 1);
   return n.split(/\s+/).filter(w => w && !/^(jr|sr)\.?$/i.test(w)).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?';
 };
+// ---- Pictures kept across redraws ----------------------------------------------------
+//
+// The boards and a game's sheet are drawn anew whenever anything changes (a
+// pick, the markets arriving, the live prices every 15 seconds). A new <img>
+// for every logo each time made the phone load and paint every picture again:
+// they blinked, and now and then one stayed blank. Now a redraw takes the
+// pictures already on screen in that place and moves them into the new
+// layout (`recycled`), so a logo is loaded once and stays put.
+let recycled = null;
+function redraw(root, draw) {
+  if (!root) return draw();
+  const outer = recycled;
+  recycled = new Map();
+  for (const node of root.querySelectorAll('[data-pic]')) {
+    const list = recycled.get(node.dataset.pic) ?? [];
+    list.push(node);
+    recycled.set(node.dataset.pic, list);
+  }
+  try {
+    return draw();
+  } finally {
+    recycled = outer;
+  }
+}
+// The picture `key` from the redraw's old screen, else a new one (`make`).
+function keptPic(key, make) {
+  const old = recycled?.get(key)?.shift();
+  if (old) return old;
+  const node = make();
+  node.dataset.pic = key;
+  return node;
+}
+
 // A team logo, or its initials in a circle when there's no logo (or it fails).
 function logoImg(sport, enName, label, size = '') {
+  return keptPic(`team|${sport}|${enName}|${label}|${size}`, () => drawLogo(sport, enName, label, size));
+}
+function drawLogo(sport, enName, label, size) {
   // A national team's flag; else one character: a Chinese name's first
   // character, or an English initial.
   const flag = countryFlag(enName);
@@ -605,6 +641,9 @@ function logoImg(sport, enName, label, size = '') {
 // light and dark mode, so no logo ever vanishes
 // into a dark background and none stands out.
 function leagueImg(sport, size = '') {
+  return keptPic(`league|${sport}|${size}`, () => drawLeague(sport, size));
+}
+function drawLeague(sport, size) {
   const icon = LEAGUES[sport]?.icon;
   const fallback = () => (icon ? el('span', { class: 'league-img league-icon', 'aria-hidden': 'true', text: icon }) : el('span', { class: 'league-img league-missing', 'aria-hidden': 'true' }));
   return el('span', { class: `league-badge ${size}` }, logoPicture(leagueLogo(sport), null, 'league-img', fallback));
@@ -692,6 +731,9 @@ function searchGames() {
 }
 
 function renderGames() {
+  redraw($('games'), drawGames);
+}
+function drawGames() {
   const t = state.t;
   const container = $('games-list');
   const searching = Boolean(state.query);
@@ -889,6 +931,9 @@ function scoreMoved(key, value) {
 // personPhoto): the roster's (ESPN's by id is only a guess), one found
 // before on this device, then a search by name; the initials meanwhile.
 function playerPhoto(url, name, league, guessed = false) {
+  return keptPic(`player|${league}|${name}`, () => drawPlayer(url, name, league, guessed));
+}
+function drawPlayer(url, name, league, guessed) {
   const initials = () => el('span', { class: 'prop-avatar', 'aria-hidden': 'true', text: initialsOf(name) });
   return personPhoto(name, league, { urls: guessed ? [] : [url], guess: guessed ? url : null, cls: 'prop-avatar prop-photo', fallback: initials });
 }
@@ -1287,6 +1332,9 @@ function buildLiveBets(data) {
 }
 
 function renderLive() {
+  redraw($('live'), drawLive);
+}
+function drawLive() {
   const t = state.t;
   // The big leagues first, then by start.
   const TIER = { major: 0, minor: 1, thin: 2 };
@@ -1328,7 +1376,7 @@ async function refreshLive() {
     renderGameSheet();
     renderParlay();
     renderTabs();
-    if (state.tab === 'home') renderHome(homeCtx());
+    if (state.tab === 'home') drawHome();
   } catch (error) {
     console.error(error);
   } finally {
@@ -1464,7 +1512,7 @@ function slipChanged() {
   renderF1();
   renderFutures();
   renderParlay();
-  if (state.tab === 'home') renderHome(homeCtx());
+  if (state.tab === 'home') drawHome();
   syncPicks();
   renderSlipBar();
 }
@@ -2217,7 +2265,7 @@ async function checkResults(force = false) {
     state.checking = false;
     renderSaved();
     // Home's 你的投注 shows the same scores and cash-out values.
-    if (state.tab === 'home') renderHome(homeCtx());
+    if (state.tab === 'home') drawHome();
   }
 }
 
@@ -2331,7 +2379,7 @@ async function doCashOut(slip, value) {
   syncNow();
   track([...new Set(slip.legs.flatMap(leg => betKeys(leg)))], 1);
   renderSaved();
-  if (state.tab === 'home') renderHome(homeCtx());
+  if (state.tab === 'home') drawHome();
 }
 function cashOutRow(slip) {
   const t = state.t;
@@ -3075,7 +3123,7 @@ function renderAll() {
   renderFutures();
   renderParlay();
   renderF1();
-  if (state.tab === 'home') renderHome(homeCtx());
+  if (state.tab === 'home') drawHome();
   renderAccount();
   renderSaved();
   warmImages();
@@ -3207,7 +3255,7 @@ async function load() {
     // than SNAPSHOT_WAIT_MS), while today's board loads behind it.
     within(firstScreen(), SNAPSHOT_WAIT_MS).then(() => {
       clearTimeout(limit);
-      if (state.tab === 'home') renderHome(homeCtx());
+      if (state.tab === 'home') drawHome();
       open();
     });
   }
@@ -3368,8 +3416,10 @@ function renderGameSheet() {
   const t = state.t;
   const found = sheetGameOf(state.sheetGame);
   const keep = gameSheet.scrollTop;
-  $('game-sheet-title').replaceChildren(...(found ? [leagueImg(found.game.sport, 'logo-xs'), el('span', { text: gameSeries(found.game) })] : []));
-  $('game-sheet-body').replaceChildren(found ? gameCard(found.game, found.bets, { inSheet: true }) : el('p', { class: 'muted offers-wait', text: t('gameGone') }));
+  redraw(gameSheet, () => {
+    $('game-sheet-title').replaceChildren(...(found ? [leagueImg(found.game.sport, 'logo-xs'), el('span', { text: gameSeries(found.game) })] : []));
+    $('game-sheet-body').replaceChildren(found ? gameCard(found.game, found.bets, { inSheet: true }) : el('p', { class: 'muted offers-wait', text: t('gameGone') }));
+  });
   renderSlipBar();
   gameSheet.scrollTop = keep;
 }
@@ -3435,7 +3485,7 @@ function showTab(tab) {
   state.tab = tab;
   renderTabs();
   renderSlipBar();
-  if (tab === 'home') renderHome(homeCtx());
+  if (tab === 'home') drawHome();
   if (tab === 'lottery') lotteryUi?.render();
   if (tab === 'history') renderStats();
   // The tab's live games and open bets, now rather than at the next beat.
@@ -3545,6 +3595,10 @@ function parlayPays(bets, stake) {
 }
 
 // What the home tab and the lottery need from here.
+// Home drawn again, its pictures kept.
+function drawHome() {
+  redraw($('home-body'), () => renderHome(homeCtx()));
+}
 function homeCtx() {
   // A ready-made parlay onto the slip in one tap (replacing what's there).
   const takeParlay = ids => {
@@ -3650,12 +3704,12 @@ async function boot() {
   renderSlipBar();
   renderSaved();
   lotteryUi.render();
-  if (state.tab === 'home' && state.data) renderHome(homeCtx());
+  if (state.tab === 'home' && state.data) drawHome();
   accountDone();
   syncNow();
   await loading;
   checkResults();
-  if (state.tab === 'home') renderHome(homeCtx());
+  if (state.tab === 'home') drawHome();
 }
 if (!gated) boot();
 
