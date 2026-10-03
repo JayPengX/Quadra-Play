@@ -1276,7 +1276,7 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 /* A game's sheet (a tap on a game): the game and every market of it, over
    any tab; the slip bar at its foot. */
 .game-sheet { width: min(640px, 100vw); padding-bottom: 0; }
-@media (max-width: 719px) { .game-sheet { max-height: 94vh; } }
+@media (max-width: 719px) { .game-sheet { max-height: 94vh; max-height: 94dvh; } }
 .game-sheet-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .game-sheet-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #game-sheet-body { min-height: 40vh; padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
