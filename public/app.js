@@ -3228,7 +3228,8 @@ async function load() {
   renderStatus('loading');
   const booting = state.booting;
   const onProgress = booting ? () => showLoading() : undefined;
-  if (booting) onProgress(0);
+  // A saved board is already up (boot): the loading screen isn't brought back over it.
+  if (booting && !state.fromSnapshot) onProgress(0);
   const open = () => {
     if (!state.booting) return;
     state.booting = false;
@@ -3691,6 +3692,9 @@ async function boot() {
   // while it's on its way, not before it.
   const starting = q.start();
   drawSnapshot();
+  // The saved board is the first screen at once: today's games, the balance
+  // and the games on now replace it as they come, behind no loading screen.
+  if (state.fromSnapshot) hideLoading();
   const first = await starting;
   state.wallet = first.wallet || q.wallet;
   const loading = load();
