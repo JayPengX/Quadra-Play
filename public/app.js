@@ -19,7 +19,7 @@ import { renderHome } from './home.js';
 import { mountLottery } from './lottery-ui.js';
 import { mountStats } from './stats-ui.js';
 import {
-  othersBalance, installGate, watchUpdates, quadraSession, tabBar, topActions, recordAffinity, affinityPatch, notify, schedulePush, storedAccount, PLUS, plusMember, openPlus, ask, tell, freeBets, haptic
+  othersBalance, installGate, watchUpdates, quadraSession, tabBar, topActions, recordAffinity, affinityPatch, notify, schedulePush, storedAccount, PLUS, plusMember, openPlus, ask, tell, freeBets
 } from '#kit/quadra.mjs';
 import { pack, unpack } from './lib/codec.mjs';
 import { historyStats, funFacts, crowdPercentile } from './lib/history.mjs';
@@ -1506,8 +1506,8 @@ function legOdds(b) {
 }
 function toggleLeg(bet) {
   if (bet.lock && !state.parlay.includes(bet.id)) return;
-  // Felt, as iOS's own controls are.
-  haptic();
+  // Felt, as iOS's own controls are (the kit's haptic; nothing on an older kit).
+  globalThis.quadraHaptic?.();
   if (state.parlay.includes(bet.id)) {
     state.parlay = state.parlay.filter(id => id !== bet.id);
   } else {
