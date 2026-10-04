@@ -275,6 +275,25 @@ function pickName(game, market, pick) {
   return t({ draw: 'draw', odd: 'odd', even: 'even', yes: 'yes', no: 'no', over: 'over', under: 'under' }[pick.side] ?? pick.side);
 }
 
+// A game's options (board.mjs gameOptions: every market, ~60 a game) are
+// worked out once for what the game says, not on every redraw: hundreds of
+// games made each redraw take half a second on a phone (a tap waited for
+// it). Kept by the game's id and its contents (a fresh read with the same
+// prices, the saved board's game today, reuses them); its Kambi markets or
+// players arriving work them out again.
+const optionsMemo = new Map();
+const gameKey = game => JSON.stringify(game, (k, v) => (k === 'offers' || k === 'players' ? undefined : v));
+function optionsOf(game) {
+  const hit = optionsMemo.get(game.id);
+  if (hit && hit.offers === game.offers && hit.players === game.players && (hit.game === game || hit.key === gameKey(game))) {
+    if (hit.game !== game) Object.assign(hit, { game, options: hit.options.map(o => ({ ...o, game })) });
+    return hit.options;
+  }
+  const options = gameOptions(game);
+  optionsMemo.set(game.id, { game, key: gameKey(game), offers: game.offers, players: game.players, options });
+  return options;
+}
+
 function buildBets(data) {
   const t = state.t;
   const bets = [];
@@ -284,7 +303,7 @@ function buildBets(data) {
     if (gameOffers.has(game.id)) game.offers = gameOffers.get(game.id).offers;
     // And its players with their season numbers (players.mjs), once read.
     if (gamePlayers.get(game.id)?.players) game.players = gamePlayers.get(game.id).players;
-    for (const o of gameOptions(game)) bets.push(named(game, o, matchup));
+    for (const o of optionsOf(game)) bets.push(named(game, o, matchup));
   }
   if (data.f1) {
     // Before qualifying the lottery prices the race on its own curve.
