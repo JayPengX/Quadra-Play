@@ -151,7 +151,9 @@ export async function loadGamePlayers(game, getJson) {
     getJson(rosterUrl(path, game.espnTeams.away), 'espn-roster').catch(() => null),
     leagueAthletes(game.sport, getJson).catch(() => null)
   ]);
-  if (!home && !away) return null;
+  // Unread (a roster, or the league's season numbers the other sports need):
+  // a failure to try again, never a game with no players.
+  if (!home || !away || (family !== 'soccer' && !league)) throw new Error('players unread');
   const players = [];
   for (const [side, data] of [['home', home], ['away', away]]) {
     for (const p of parseRoster(data, game.sport)) {

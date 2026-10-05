@@ -15,7 +15,7 @@ import {
   WEEKLY_GRANT, newAccount, balance, canClaim, claimGrant, newSlipId, placeSlip, placeFreeSlip, FREE_MIN_ODDS, freeOddsOk, legResult, applyResults, mergeAccounts, recoverFromWallet, refundLost, mergeDistinct, poolEntries, compactAccount, cashOut, isAccount
 } from './lib/account.mjs';
 import { cashOutValue, CASHOUT_KEEP } from './lib/cashout.mjs';
-import { renderHome } from './home.js';
+import { renderHome, tasteKey } from './home.js';
 import { mountLottery } from './lottery-ui.js';
 import { mountStats } from './stats-ui.js';
 import {
@@ -969,13 +969,20 @@ const LIVE_OFFERS_FRESH_MS = 12_000;
 // A game's players (ESPN's rosters and seasons): read once a game is opened,
 // for the model's players' markets and everyone's picture.
 const gamePlayers = new Map();
+// A read that failed is tried again the next time the game is wanted, 20 s on.
+const PLAYERS_RETRY_MS = 20_000;
 function wantPlayers(game) {
-  if (game?.live || !game?.espnTeams || !hasPlayers(game.sport) || gamePlayers.has(game.id)) return;
+  if (game?.live || !game?.espnTeams || !hasPlayers(game.sport)) return;
+  const had = gamePlayers.get(game.id);
+  if (had && !(had.failed && Date.now() - had.failed > PLAYERS_RETRY_MS)) return;
   gamePlayers.set(game.id, { loading: true });
-  loadPlayers(game).then(players => {
-    gamePlayers.set(game.id, { players: players ?? [] });
-    rebuildBoard();
-  });
+  loadPlayers(game)
+    .then(players => gamePlayers.set(game.id, { players: players ?? [] }))
+    .catch(() => {
+      gamePlayers.set(game.id, { failed: Date.now() });
+      setTimeout(() => state.sheetGame === game.id && wantPlayers(game), PLAYERS_RETRY_MS + 100);
+    })
+    .finally(rebuildBoard);
 }
 function wantOffers(game) {
   wantPlayers(game);
@@ -1023,7 +1030,7 @@ function offersForSlip() {
   }
 }
 // A game whose markets or players are still on their way (a pick on it stays on the slip).
-const gameWaiting = game => Boolean(game && ((game.kambiId && !gameOffers.has(game.id)) || (game.espnTeams && hasPlayers(game.sport) && !gamePlayers.get(game.id)?.players)));
+const gameWaiting = game => Boolean(game && ((game.kambiId && !gameOffers.has(game.id)) || (game.espnTeams && hasPlayers(game.sport) && !gamePlayers.get(game.id)?.players && !gamePlayers.get(game.id)?.failed)));
 
 // One line of a two-way market: the line (tagged when the lottery posts it)
 // and its two picks.
@@ -1372,12 +1379,16 @@ function drawLive() {
 // on screen (the proxy keeps live answers 10 seconds), at once on coming back
 // to the app or to a tab that shows them.
 const LIVE_REFRESH_MS = 15_000;
-let liveBusy = false;
+let liveBusy = null;
 let liveAgain = false;
-async function refreshLive() {
+// Resolves once the games in play are drawn (a read already on its way: that one).
+function refreshLive() {
   // Asked again while reading (the other leagues just came in): once more after.
-  if (liveBusy) return void (liveAgain = true);
-  liveBusy = true;
+  // (Its promise: that next read's, which the one under way starts as it ends.)
+  if (liveBusy) return ((liveAgain = true), liveBusy.then(() => liveBusy));
+  return (liveBusy = readLive());
+}
+async function readLive() {
   try {
     const data = await loadLive(new Date(), LIVE_MIN_LIQUIDITY);
     state.liveData = data;
@@ -1399,7 +1410,7 @@ async function refreshLive() {
   } catch (error) {
     console.error(error);
   } finally {
-    liveBusy = false;
+    liveBusy = null;
     if (liveAgain) {
       liveAgain = false;
       refreshLive();
@@ -3162,8 +3173,10 @@ const BOOT_LIMIT_MS = 45_000;
 const BOOT_FULL_MS = 9_000;
 // The first screen's logos (only those in view), at most.
 const BOOT_IMAGES_MS = 2_500;
-// A saved board waits this long at most for the balance and the live games.
-const SNAPSHOT_WAIT_MS = 3_000;
+// A saved board: the loading screen stays until today's board has replaced
+// it (so nothing reshuffles right after it lifts), this long at most; past
+// it the saved board opens and today's swaps in when it's ready.
+const SNAPSHOT_WAIT_MS = 6_000;
 const within = (promise, ms, fallback) => Promise.race([Promise.resolve(promise).catch(() => fallback), new Promise(resolve => setTimeout(() => resolve(fallback), ms))]);
 // Every picture on screen in `root` loaded (or failed): no logo pops in as
 // the page opens. Pictures further down wait for their turn (lazy), then
@@ -3273,13 +3286,13 @@ async function load() {
   // the pass) and the live games too.
   const firstScreen = () => Promise.all([state.accountIn, refreshLive()]);
   if (saved) {
-    // The saved board opens once those are in (a second or so, never more
-    // than SNAPSHOT_WAIT_MS), while today's board loads behind it.
-    within(firstScreen(), SNAPSHOT_WAIT_MS).then(() => {
+    // Only if today's board is slow (SNAPSHOT_WAIT_MS): the saved one opens.
+    setTimeout(() => {
+      if (!state.booting) return;
       clearTimeout(limit);
       if (state.tab === 'home') drawHome();
       open();
-    });
+    }, SNAPSHOT_WAIT_MS);
   }
   try {
     // The main board first (the request queue serves it before anything else).
@@ -3305,26 +3318,35 @@ async function load() {
     };
     const extraGames = loadExtraLeagues(now, games => (pending.push(...games), join())).catch(error => (console.error(error), []));
     // Their scoreboards tell which leagues have a game on: the live board again.
-    extraGames.then(() => {
+    // (The first screen waits for this one: every league's games in play.)
+    const liveIn = extraGames.then(() => {
       state.boardComplete = true;
-      refreshLive();
+      return refreshLive();
     });
     const extraFutures = loadExtraFutures().catch(error => (console.error(error), []));
     if (saved) {
-      // Swapped in whole (every league's games at once), so the list doesn't
-      // shrink to the main leagues and grow back.
-      const games = await within(extraGames, BOOT_LIMIT_MS, []);
+      // Swapped in whole (every league's games that came in time, the live
+      // games too), so the list doesn't shrink to the main leagues and grow
+      // back; a league later than that joins as it comes.
+      await within(Promise.all([liveIn, firstScreen()]), Math.max(500, SNAPSHOT_WAIT_MS - 300 - (Date.now() - startedAt)));
       const ids = new Set(fresh.games.map(g => g.id));
-      fresh.games = [...fresh.games, ...(games || []).filter(g => !ids.has(g.id))].sort((a, b) => a.startUtc.localeCompare(b.startUtc));
-      const futures = await within(extraFutures, 4000, null);
+      fresh.games = [...fresh.games, ...pending.splice(0).filter(g => !ids.has(g.id))].sort((a, b) => a.startUtc.localeCompare(b.startUtc));
+      const futures = await within(extraFutures, 300, null);
       if (futures) {
         const keys = new Set(fresh.futures.map(f => f.key));
         fresh.futures = [...fresh.futures, ...futures.filter(f => !keys.has(f.key))];
       }
       state.data = fresh;
       state.fromSnapshot = false;
+      joining = true;
       renderAll();
+      if (state.booting) {
+        await within(imagesReady($('panel-' + state.tab)), 800);
+        clearTimeout(limit);
+        open();
+      }
       warmImages();
+      extraGames.then(() => (join(), saveSnapshot()));
       saveSnapshot();
       if (!futures)
         extraFutures.then(async more => {
@@ -3357,7 +3379,7 @@ async function load() {
       // and the games in play (each league drawn as it arrives, behind it),
       // then the logos of the first screen; past BOOT_FULL_MS it opens with
       // what has come and the rest keeps joining.
-      await within(Promise.all([extraGames, firstScreen()]), Math.max(1_000, BOOT_FULL_MS - (Date.now() - startedAt)));
+      await within(Promise.all([liveIn, firstScreen()]), Math.max(1_000, BOOT_FULL_MS - (Date.now() - startedAt)));
       clearTimeout(drawTimer);
       renderAll();
       await within(imagesReady($('panel-' + state.tab)), BOOT_IMAGES_MS);
@@ -3599,10 +3621,15 @@ const gated = installGate('odds', state.locale);
 watchUpdates({ current: document.querySelector('meta[name="build-version"]')?.content, key: 'oddsStudy', cachePrefix: 'quadra-odds-' });
 renderStatic();
 renderTabs();
+let tasteWas = '';
 q.on('wallet', wallet => {
   state.wallet = wallet;
   renderAccount();
   renderParlay();
+  // What 為你推薦 comes from changed (the pass's follows came in): home again.
+  const taste = tasteKey(wallet);
+  if (taste !== tasteWas && state.data && state.tab === 'home' && !state.booting) drawHome();
+  tasteWas = taste;
 });
 q.on('active', live => {
   if (!live) return;
@@ -3712,10 +3739,10 @@ async function boot() {
   // Signing in (a round trip) goes out first; the saved board is drawn
   // while it's on its way, not before it.
   const starting = q.start();
+  // The saved board is drawn behind the loading screen, which lifts once
+  // today's board, the balance and the games on now have replaced it (load:
+  // SNAPSHOT_WAIT_MS at most), so nothing moves right after it lifts.
   drawSnapshot();
-  // The saved board is the first screen at once: today's games, the balance
-  // and the games on now replace it as they come, behind no loading screen.
-  if (state.fromSnapshot) hideLoading();
   const first = await starting;
   state.wallet = first.wallet || q.wallet;
   const loading = load();

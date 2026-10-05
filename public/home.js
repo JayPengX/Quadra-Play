@@ -70,6 +70,9 @@ const norm = name =>
 
 const TIER_WEIGHT = { major: 0.6, minor: 0.3, thin: 0.05 };
 
+// What 為你推薦 is drawn from on the pass (Orbit Sports' follows, every
+// app's affinity): when it changes, home is drawn again (app.js).
+export const tasteKey = wallet => JSON.stringify([fixturesTaste(cachedPayload, wallet), Object.keys(affinity(wallet, Date.now(), ['odds', 'stock', 'match'])).sort().slice(0, 40)]);
 export function renderHome(ctx) {
   const { state, el, fmtMoney, fmtTime } = ctx;
   const root = document.getElementById('home-body');

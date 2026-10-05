@@ -695,7 +695,8 @@ export async function loadGameOffers(game, { live = false } = {}) {
 }
 
 // One game's players with their season numbers (players.mjs), or null.
-export const loadPlayers = game => loadGamePlayers(game, getJson).catch(() => null);
+// Rejects when a list couldn't be read (the app tries again later).
+export const loadPlayers = game => loadGamePlayers(game, getJson);
 
 // ---- Results (for saved slips) ------------------------------------------------
 
