@@ -2,7 +2,8 @@
 // Polymarket), the next F1 race-winner market and championship (futures)
 // markets through the shared sports proxy, which adds the CORS headers
 // Polymarket doesn't send.
-import { proxyJson } from '#kit/quadra.mjs';
+import * as kit from '#kit/quadra.mjs';
+const { proxyJson } = kit;
 import { americanToProbability, devigProportional, devigPower } from './odds.mjs';
 import { normalizeTeamName, teamZh, LEAGUES, familyOf, isSoccer, rememberLogo, rememberTeams, hasTeams } from './teams.mjs';
 import { runOrder, shareLeft } from './live.mjs';
@@ -694,7 +695,8 @@ export async function loadOdds(now = new Date(), onProgress) {
       fetchPolymarketEvents(POLYMARKET_TAG.nba, 'polymarket-events'),
       // The whole season (the plain scoreboard stays on the last race until the
       // week's first session): the next race's qualifying time.
-      getJson(`${ESPN}/racing/f1/scoreboard?dates=${now.getUTCFullYear()}`),
+      // (Last night's pack: never the 6 MB page through the proxy.)
+      (kit.packJson ? kit.packJson(`sports/f1/${now.getUTCFullYear()}.json`) : Promise.reject(new Error('old kit'))).catch(() => getJson(`${ESPN}/racing/f1/scoreboard?dates=${now.getUTCFullYear()}`)),
       getJson(KAMBI_F1_LIST)
     ].map(track)
   );
