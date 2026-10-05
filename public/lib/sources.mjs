@@ -479,14 +479,17 @@ export function parseF1Pole(events, raceUtc) {
     .filter(d => d.raw > 0 && !/^(driver [a-z]|other)$/i.test(d.name));
   if (drivers.length < 10) return null;
   const fair = devigPower(drivers.map(d => d.raw));
-  return { source: 'polymarket', drivers: drivers.map((d, i) => ({ name: d.name, fair: fair[i] })).sort((a, b) => b.fair - a.fair) };
+  // How much it's traded (the pole model trusts it by this): the event's, else its markets'.
+  const volume = Number(event.volume) || (event.markets || []).reduce((a, m) => a + (Number(m.volume) || 0), 0);
+  return { source: 'polymarket', volume, drivers: drivers.map((d, i) => ({ name: d.name, fair: fair[i] })).sort((a, b) => b.fair - a.fair) };
 }
 export function parseKambiF1Pole(offers) {
   const offer = (offers?.betOffers || []).find(o => /pole|qualifying/i.test(o.criterion?.englishLabel || '') && !/sprint|team|constructor/i.test(o.criterion?.englishLabel || '') && !o.suspended);
   const drivers = (offer?.outcomes || []).filter(o => o.odds > 1000 && o.participant).map(o => ({ name: o.participant, raw: 1000 / o.odds }));
   if (drivers.length < 10) return null;
   const fair = devigPower(drivers.map(d => d.raw));
-  return { source: 'kambi', drivers: drivers.map((d, i) => ({ name: d.name, fair: fair[i] })).sort((a, b) => b.fair - a.fair) };
+  // (A bookmaker's own prices: taken as fully traded.)
+  return { source: 'kambi', volume: Infinity, drivers: drivers.map((d, i) => ({ name: d.name, fair: fair[i] })).sort((a, b) => b.fair - a.fair) };
 }
 
 // Safety car, virtual safety car and red flag during the race: yes or no.
@@ -538,6 +541,26 @@ export function parseF1Schedule(data, startUtc) {
     best = { gap, raceUtc: new Date(race.date).toISOString(), qualifyingUtc: qual ? new Date(qual.date).toISOString() : null };
   }
   return best ? { raceUtc: best.raceUtc, qualifyingUtc: best.qualifyingUtc } : null;
+}
+
+// Each driver's places in the season's qualifying sessions before `beforeUtc`
+// (ESPN's season scoreboard), newest first: [{ name, places }] (the pole model's form).
+export function parseF1QualiForm(data, beforeUtc) {
+  const sessions = (data?.events || [])
+    .map(e => (e.competitions || []).find(c => c.type?.abbreviation === 'Qual' && c.status?.type?.completed))
+    .filter(c => c && Date.parse(c.date) < Date.parse(beforeUtc))
+    .sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
+    .slice(0, 8);
+  const by = new Map();
+  sessions.forEach((c, i) => {
+    for (const x of c.competitors || []) {
+      const name = x.athlete?.displayName;
+      if (!name || !(Number(x.order) > 0)) continue;
+      if (!by.has(name)) by.set(name, Array(sessions.length).fill(0));
+      by.get(name)[i] = Number(x.order);
+    }
+  });
+  return [...by].map(([name, places]) => ({ name, places }));
 }
 
 // ---- Futures ---------------------------------------------------------------
@@ -674,7 +697,8 @@ export async function loadOdds(now = new Date(), onProgress) {
     Object.assign(race, {
       qualifyingUtc: parseF1Schedule(f1Espn, race.startUtc)?.qualifyingUtc ?? null,
       flags: parseF1Flags(f1, race.startUtc),
-      pole: parseF1Pole(f1, race.startUtc) ?? (sameRace ? parseKambiF1Pole(kambiOffers) : null)
+      pole: parseF1Pole(f1, race.startUtc) ?? (sameRace ? parseKambiF1Pole(kambiOffers) : null),
+      qualiForm: parseF1QualiForm(f1Espn, race.startUtc)
     });
   }
   return {

@@ -538,6 +538,67 @@ export function f1PoleFromWinner(drivers) {
   return drivers.map((d, i) => ({ name: d.name, fair: w[i] / sum }));
 }
 
+// Pole position, our own estimate, and how far to trust a market's (Polymarket
+// opens its pole market days before qualifying with next to nothing traded:
+// every one of the first fifteen near 8%, a board the house would lose on).
+//   form     each driver's qualifying places in the season's last sessions,
+//            newest first ([{ name, places: [1, 3, …] }]): strength by how
+//            near the front, recent ones counting most
+//   winners  the race winner's chances (the bookmakers' board, liquid)
+//   market   { drivers: [{ name, fair }], volume } or null
+// The estimate is half form, half the winner board (form alone without one);
+// the market counts as much as it's traded (all of it from $100k) and as it
+// tells the drivers apart (none when it's flat).
+const nameKey = n => {
+  const s = String(n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const last = s.includes(',') ? s.split(',')[0] : s.split(/\s+/).at(-1);
+  return last.replace(/[^a-z]/g, '');
+};
+export const POLE_FORM = { sessions: 6, decay: 0.75, spread: 2.2, sharpen: 1.5, marketFull: 100_000 };
+export function f1PoleModel({ form = [], winners = [], market = null } = {}) {
+  const C = POLE_FORM;
+  const names = new Map();
+  for (const d of [...winners, ...form, ...(market?.drivers || [])]) if (!names.has(nameKey(d.name))) names.set(nameKey(d.name), d.name);
+  const norm = m => {
+    const sum = [...m.values()].reduce((a, b) => a + b, 0);
+    return sum > 0 ? new Map([...m].map(([k, v]) => [k, v / sum])) : null;
+  };
+  // Form: each session's place as a weight (1st 1, falling away), newest first.
+  const fm = new Map();
+  for (const d of form) {
+    const places = (d.places || []).slice(0, C.sessions);
+    let w = 0;
+    let s = 0;
+    places.forEach((q, i) => {
+      if (!(q > 0)) return;
+      const r = C.decay ** i;
+      w += r;
+      s += r * Math.exp(-(q - 1) / C.spread);
+    });
+    if (w) fm.set(nameKey(d.name), (s / w) ** C.sharpen);
+  }
+  const fromForm = norm(fm);
+  const fromWin = winners.length ? norm(new Map(f1PoleFromWinner(winners).map(d => [nameKey(d.name), d.fair]))) : null;
+  const keys = [...names.keys()];
+  let model = new Map(keys.map(k => [k, fromForm && fromWin ? 0.5 * (fromForm.get(k) || 0) + 0.5 * (fromWin.get(k) || 0) : (fromForm || fromWin)?.get(k) || 0]));
+  if (![...model.values()].some(v => v > 0)) model = null;
+  // The market's weight: traded, and telling the drivers apart.
+  let w = 0;
+  const mk = market?.drivers?.length ? norm(new Map(market.drivers.map(d => [nameKey(d.name), d.fair]))) : null;
+  if (mk) {
+    const n = mk.size;
+    const top = Math.max(...mk.values());
+    const sharp = Math.max(0, Math.min(1, (top * n - 1) / 3));
+    const traded = Math.max(0, Math.min(1, (Number(market.volume) || 0) / C.marketFull));
+    // (A bookmaker's own board, volume Infinity, is a price set by people
+    // who'd lose on it: taken whole.)
+    w = !model || market.volume === Infinity ? 1 : sharp * traded;
+  }
+  const out = keys.map(k => ({ name: names.get(k), fair: (model?.get(k) || 0) * (1 - w) + (mk?.get(k) || 0) * w }));
+  const sum = out.reduce((a, d) => a + d.fair, 0) || 1;
+  return { drivers: out.map(d => ({ ...d, fair: d.fair / sum })).filter(d => d.fair > 0).sort((a, b) => b.fair - a.fair), marketWeight: w };
+}
+
 // Each driver's chance of a top-three finish from the win chances (Harville:
 // second place goes as the win chances of the rest, and so on), priced to
 // return what the race's winner board does on average (the lottery takes

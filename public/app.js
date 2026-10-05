@@ -28,7 +28,7 @@ import { f1Driver, f1Constructor, findTeamLogo, countryFlag, countryCode, league
 import { flagUrl } from '#kit/logos.mjs';
 import { logoPicture, raceName } from '#kit/logos.mjs';
 import { houseRule, houseCut, minLegsProblem, leagueTier } from './lib/rules.mjs';
-import { gameOptions, offerOptions, crowdPool, f1Podium, f1Markets, f1PoleFromWinner } from './lib/board.mjs';
+import { gameOptions, offerOptions, crowdPool, f1Podium, f1Markets, f1PoleFromWinner, f1PoleModel } from './lib/board.mjs';
 import { auditPools } from './lib/audit.mjs';
 import { recommend } from './lib/recommend.mjs';
 
@@ -350,11 +350,13 @@ function buildBets(data) {
     for (const p of more.teams) {
       bets.push({ id: `f1team|${p.team}`, gameId: 'f1team', kind: 'f1team', sport: 'f1', market: 'f1team', matchup: raceName(data.f1.title, state.locale), start: data.f1.startUtc, team: p.team, label: `F1 ${t('f1TeamShort')} ${p.team}`, shortLabel: p.team, fairChance: p.fair, estOdds: p.odds, errKey: 'extra', lock: p.lock, minLegs: p.minLegs });
     }
-    // 排位賽第一 (pole position), until qualifying starts: Polymarket's or
-    // Kambi's price when either has one, else from the race winner's chances
-    // (the pole sitter is usually among the favourites, a little more so).
+    // 排位賽第一 (pole position), until qualifying starts: our own estimate
+    // (the season's qualifying form and the race winner's chances), with
+    // Polymarket's or Kambi's prices counted as far as they're traded and
+    // tell the drivers apart (board.mjs f1PoleModel).
     if (data.f1.qualifyingUtc && Date.parse(data.f1.qualifyingUtc) > Date.now()) {
-      const pole = data.f1.pole?.drivers?.length ? data.f1.pole.drivers : f1PoleFromWinner(data.f1.drivers);
+      const model = f1PoleModel({ form: data.f1.qualiForm || [], winners: data.f1.drivers || [], market: data.f1.pole });
+      const pole = model.drivers.length ? model.drivers : f1PoleFromWinner(data.f1.drivers);
       for (const d of pole) {
         const w = winners.find(b => normalizeTeamName(b.driverEn) === normalizeTeamName(d.name));
         const driver = w?.driver ?? f1Driver(d.name);
@@ -371,7 +373,7 @@ function buildBets(data) {
           shortLabel: name,
           driverEn: d.name,
           driver,
-          poleSource: data.f1.pole?.source ?? 'model',
+          poleSource: model.marketWeight >= 0.5 ? data.f1.pole?.source ?? 'model' : 'model',
           fairChance: d.fair,
           fairMargin: null,
           errKey: data.f1.pole ? `f1Pre${d.fair < 0.01 ? 'Longshot' : ''}` : 'extra',
