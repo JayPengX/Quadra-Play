@@ -113,7 +113,9 @@ export function estimateFuturesOdds(fairChances, overround) {
 export function estimateF1LotteryOdds(fairChance, phase = 'post') {
   const { scale, exponent, steps } = F1_PRICING[phase] ?? F1_PRICING.post;
   const [, step] = steps.find(([min]) => fairChance >= min);
-  return step ?? Math.max(F1_MIN_ODDS, round2(1 / (scale * fairChance ** exponent)));
+  // The lottery's fixed longshot prices, but never one paying back more than
+  // it takes on average (a 0.33% driver at 325 did: 109 for every 100).
+  return step ? Math.min(step, Math.floor(1 / fairChance)) : Math.max(F1_MIN_ODDS, round2(1 / (scale * fairChance ** exponent)));
 }
 
 // Average amount returned per `stake` over many identical bets.

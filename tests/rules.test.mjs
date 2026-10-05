@@ -124,6 +124,8 @@ test('F1: before qualifying the lottery prices on its own curve', () => {
   assert.equal(estimateF1LotteryOdds(0.0005, 'pre'), 500);
   // After qualifying, the race-eve curve (the default).
   assert.equal(estimateF1LotteryOdds(0.0035), 275);
+  // Never paying back more than it takes on average: a 0.33% driver isn't 325.
+  assert.equal(estimateF1LotteryOdds(0.0033, 'pre'), 303);
   // The phase from ESPN's schedule: qualifying 12:00 UTC on the 25th.
   const schedule = parseF1Schedule(fixture('espn-f1-2026-09-26.json'), '2026-09-26T11:00:00Z');
   assert.equal(schedule.qualifyingUtc, '2026-09-25T12:00:00.000Z');

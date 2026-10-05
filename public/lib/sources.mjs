@@ -420,6 +420,20 @@ export function parsePolymarketEpl(events, now) {
   return games;
 }
 
+// A race's winner board counts only when it's a market, not empty books:
+// its prices add up to about one (an untraded driver's price is the middle
+// of a 1%-60% book; Singapore 2026's "chances" came to 500%, and the
+// favourites' rivals were priced at 65), and most of it is quoted tight.
+const BOARD_MAX_SUM = 1.35;
+export function trustedBoard(markets) {
+  const books = markets.map(m => ({ p: Number(parseJsonArray(m.outcomePrices)?.[0]) || 0, bid: Number(m.bestBid), ask: Number(m.bestAsk) })).filter(b => b.p > 0);
+  const sum = books.reduce((t, b) => t + b.p, 0);
+  if (!books.length || sum > BOARD_MAX_SUM) return false;
+  const quoted = books.filter(b => Number.isFinite(b.bid) && Number.isFinite(b.ask) && b.ask > 0);
+  if (!quoted.length) return true;
+  const tight = quoted.filter(b => b.ask - b.bid <= Math.max(0.04, 0.4 * b.p));
+  return tight.reduce((t, b) => t + b.p, 0) >= 0.7 * quoted.reduce((t, b) => t + b.p, 0);
+}
 export function parseF1RaceWinner(events, now) {
   const event = events
     .filter(e => /-grand-prix-winner-\d{4}-\d{2}-\d{2}$/.test(e.slug) && Date.parse(e.startTime) > now.getTime())
@@ -431,6 +445,7 @@ export function parseF1RaceWinner(events, now) {
     // Every priced driver, like the lottery's full list; Polymarket's unpriced
     // placeholders ("Driver A", "Other") drop out here.
     .filter(d => d.raw > 0 && !/^(driver [a-z]|other)$/i.test(d.name));
+  if (!trustedBoard(event.markets.filter(m => !m.closed))) return null;
   const fair = devigPower(drivers.map(d => d.raw));
   return {
     title: event.title,
@@ -449,7 +464,8 @@ const KAMBI_F1_LIST = `${KAMBI}/listView/formula_1/all/all/all/competitions.json
 export function nextKambiF1Race(list, now) {
   return (list?.events || [])
     .map(x => x.event)
-    .filter(e => e && /^race:/i.test(e.name || '') && e.state === 'NOT_STARTED' && Date.parse(e.start) > now.getTime())
+    // A Grand Prix ("Race: Bahrain GP 2026", "Singapore GP 2026"), not the season's championships.
+    .filter(e => e && /^race:|\bGP\b|grand prix/i.test(e.name || '') && !/champion/i.test(e.name || '') && e.state === 'NOT_STARTED' && Date.parse(e.start) > now.getTime())
     .sort((a, b) => Date.parse(a.start) - Date.parse(b.start))[0] ?? null;
 }
 export function parseKambiF1Race(event, offers) {
@@ -477,7 +493,7 @@ export function parseF1Pole(events, raceUtc) {
     .filter(m => !m.closed)
     .map(m => ({ name: m.groupItemTitle || futureTeamName(m) || m.question, raw: Number(parseJsonArray(m.outcomePrices)?.[0]) }))
     .filter(d => d.raw > 0 && !/^(driver [a-z]|other)$/i.test(d.name));
-  if (drivers.length < 10) return null;
+  if (drivers.length < 10 || !trustedBoard(event.markets.filter(m => !m.closed))) return null;
   const fair = devigPower(drivers.map(d => d.raw));
   // How much it's traded (the pole model trusts it by this): the event's, else its markets'.
   const volume = Number(event.volume) || (event.markets || []).reduce((a, m) => a + (Number(m.volume) || 0), 0);

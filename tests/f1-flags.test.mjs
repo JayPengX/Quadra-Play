@@ -1,9 +1,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { nextKambiF1Race, parseKambiF1Race, parseF1Flags, parseOpenF1Flags, F1_FLAG_BASE } from '../public/lib/sources.mjs';
+import { nextKambiF1Race, parseKambiF1Race, parseF1RaceWinner, trustedBoard, parseF1Flags, parseOpenF1Flags, F1_FLAG_BASE } from '../public/lib/sources.mjs';
 import { legResult } from '../public/lib/account.mjs';
 
 const NOW = new Date('2026-09-29T06:00:00Z');
+
+test("Kambi's race found by what it is: a Grand Prix however it's named, never a championship", () => {
+  const list = { events: [{ event: { id: 1, name: 'Drivers Championship 2026', start: '2026-10-01T13:00:00Z', state: 'NOT_STARTED' } }, { event: { id: 3, name: 'Singapore GP 2026', start: '2026-10-11T12:00:00Z', state: 'NOT_STARTED' } }] };
+  assert.equal(nextKambiF1Race(list, NOW).id, 3);
+});
+
+test("a race's board of empty books is no market: Singapore 2026's (its prices adding up to 500%)", () => {
+  const m = (name, p, bid, ask) => ({ groupItemTitle: name, outcomePrices: JSON.stringify([String(p), String(1 - p)]), bestBid: bid, bestAsk: ask });
+  const empty = [m('Max Verstappen', 0.33, 0.27, 0.39), m('Kimi Antonelli', 0.27, 0.21, 0.33), m('George Russell', 0.135, 0.02, 0.25), m('Charles Leclerc', 0.17, 0.04, 0.3), m('Arvid Lindblad', 0.309, 0.01, 0.608), m('Fernando Alonso', 0.248, 0.001, 0.495), m('Lance Stroll', 0.0055, 0.001, 0.01)];
+  assert.equal(trustedBoard(empty), false);
+  const event = { slug: 'f1-singapore-grand-prix-winner-2026-10-11', title: 'Singapore Grand Prix: Driver Winner', startTime: '2026-10-11T12:00:00Z', markets: empty };
+  assert.equal(parseF1RaceWinner([event], NOW), null, 'Kambi prices it instead');
+  const real = [m('Max Verstappen', 0.32, 0.31, 0.33), m('Kimi Antonelli', 0.23, 0.22, 0.24), m('George Russell', 0.13, 0.12, 0.14), m('Charles Leclerc', 0.13, 0.12, 0.14), m('Lance Stroll', 0.002, 0.001, 0.004)];
+  assert.equal(trustedBoard(real), true);
+});
 
 test("Kambi's next race: the drivers' chances from its winner prices", () => {
   const list = {
