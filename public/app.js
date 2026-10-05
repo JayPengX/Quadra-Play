@@ -8,7 +8,7 @@ import { ticketProfile, accountTickets } from './lib/profile.mjs';
 import { useSourcesSession, loadOdds, loadExtraLeagues, loadExtraFutures, taipeiDayKey, fetchOutcomes, loadLive, parseInning, loadFutureTeams, futureTeamLeagues, loadGameOffers, loadPlayers } from './lib/sources.mjs';
 import { propName } from './lib/props.mjs';
 import { hasPlayers } from './lib/players.mjs';
-import { personPhoto } from '#kit/photos.mjs';
+import { personPhoto, driverPic, teamPic } from '#kit/photos.mjs';
 import { inningsLeft, liveBaseball, liveSoccer, liveGoals, livePoints, fitGoals, liveMarkets, liveOdds, pregameRuns, nextRunChances, nextRunOdds, LIVE_MIN_LIQUIDITY, LIVE_THREE_WAY, PERIODS } from './lib/live.mjs';
 import { fitHockey } from './lib/markets.mjs';
 import {
@@ -1432,16 +1432,10 @@ setInterval(() => livePulse(), LIVE_REFRESH_MS);
 
 // ---- Championships and F1: one board each -------------------------------------
 
-// An F1 constructor: its colour and a short name ("MCL").
-function constructorBadge(name, size = '') {
-  const c = f1Constructor(name);
-  return badge(c.short, c.color, `badge-text ${size}`);
-}
-
-function driverBadge(bet, size = '') {
-  const initials = bet.driverEn.split(/\s+/).filter(w => !/^jr\.?$/i.test(w)).map(w => w[0]).slice(0, 2).join('').toUpperCase();
-  return el('span', { class: `driver-badge ${size}`, style: `--team:${bet.driver.color}`, 'aria-hidden': 'true', text: initials });
-}
+// An F1 team: its logo on its colour; a driver: their face (the team's colour
+// and initials until it comes). The kit's, as Orbit Sports shows them.
+const constructorBadge = (name, size = '') => teamPic(name, { cls: size });
+const driverBadge = (bet, size = '') => driverPic(bet.driverEn, { cls: size });
 
 // One row per team or driver: picture, name, chance, then the estimated odds
 // and average back as a button that puts the pick on the slip.

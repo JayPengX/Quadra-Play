@@ -145,6 +145,7 @@ footer { padding: 10px 0 0; text-align: center; }
   display: inline-grid; place-items: center; border-radius: 50%; background: var(--surface-sunken); color: var(--text-secondary);
   font-size: 0.7rem; font-weight: 700;
 }
+.q-person.logo-sm, .q-team-disc.logo-sm { width: 20px; height: 20px; font-size: 0.5rem; }
 .driver-badge {
   width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; flex: none;
   color: #fff; font-weight: 800; font-size: 0.8rem; letter-spacing: 0.02em; background: var(--team);
