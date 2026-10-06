@@ -242,3 +242,20 @@ test('the NBA shows only from opening night to the end of June', async () => {
   assert.equal(nbaInSeason(new Date('2027-06-30T07:00:00Z')), true);
   assert.equal(nbaInSeason(new Date('2027-07-15T07:00:00Z')), false);
 });
+
+// Polymarket's F1 tag holds IndyCar's races too; one that's a "Grand Prix" and sooner is never F1's.
+test("F1 parser never takes another series' grand prix", () => {
+  const board = [
+    { groupItemTitle: 'Kimi Antonelli', outcomePrices: '["0.5","0.5"]' },
+    { groupItemTitle: 'George Russell', outcomePrices: '["0.3","0.7"]' },
+    { groupItemTitle: 'Max Verstappen', outcomePrices: '["0.2","0.8"]' }
+  ];
+  const f1 = parseF1RaceWinner(
+    [
+      { slug: 'indycar-sonsio-grand-prix-winner-2026-09-26', title: 'IndyCar', startTime: '2026-09-26T09:00:00Z', markets: board },
+      { slug: 'f1-azerbaijan-grand-prix-winner-2026-09-26', title: 'Azerbaijan Grand Prix: Driver Winner', startTime: '2026-09-26T11:00:00Z', markets: board }
+    ],
+    NOW
+  );
+  assert.equal(f1?.slug, 'f1-azerbaijan-grand-prix-winner-2026-09-26');
+});

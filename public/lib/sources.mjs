@@ -437,7 +437,7 @@ export function trustedBoard(markets) {
 }
 export function parseF1RaceWinner(events, now) {
   const event = events
-    .filter(e => /-grand-prix-winner-\d{4}-\d{2}-\d{2}$/.test(e.slug) && Date.parse(e.startTime) > now.getTime())
+    .filter(e => /^f1-.*-grand-prix-winner-\d{4}-\d{2}-\d{2}$/.test(e.slug) && Date.parse(e.startTime) > now.getTime())
     .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime))[0];
   if (!event) return null;
   const drivers = (event.markets || [])
