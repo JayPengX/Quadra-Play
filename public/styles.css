@@ -489,12 +489,18 @@ body.searching #live, body.searching #f1, body.searching #futures, body.searchin
 /* A game's other markets: one tab per kind, one row per line */
 /* One row that scrolls sideways when the markets don't fit (never a lone
    tab wrapped onto a second row); when they fit, they share the width. */
-.market-tabs {
-  display: flex; flex-wrap: nowrap; gap: 2px; width: 100%; box-sizing: border-box; margin-bottom: 10px;
+/* The capsule (.tab-strip: track and inset) holds the row; the row scrolls
+   inside it, and only the tabs fade at an edge with more beyond. */
+.tab-strip { min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden; margin-bottom: 10px; padding: 4px; border-radius: 999px; background: var(--q-fill, var(--surface-sunken)); }
+.market-tabs.segmented {
+  display: flex; flex-wrap: nowrap; gap: 4px; width: 100%; box-sizing: border-box; padding: 0; background: none; border-radius: 999px;
   overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; scroll-snap-type: x proximity;
 }
 .market-tabs::-webkit-scrollbar { display: none; }
-.market-tabs button { flex: 1 0 auto; padding: 6px 9px; scroll-snap-align: start; }
+.market-tabs button { flex: 1 0 auto; padding: 7px 14px; scroll-snap-align: start; }
+.market-tabs.more-right { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
+.market-tabs.more-left { -webkit-mask-image: linear-gradient(to right, transparent, #000 32px); mask-image: linear-gradient(to right, transparent, #000 32px); }
+.market-tabs.more-left.more-right { -webkit-mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); }
 .market-panel { display: grid; gap: 12px; }
 .line-table { display: grid; gap: 6px; }
 .line-head, .line-row { display: grid; grid-template-columns: minmax(4.6em, 0.8fr) 1fr 1fr; gap: 8px; align-items: center; }
@@ -836,7 +842,7 @@ img[src*='thesportsdb'] { object-fit: contain; }
 
 /* F1: one card, its markets as tabs. */
 .board-tabs { padding: 10px 12px 0; }
-.board-tabs .market-tabs { margin-bottom: 0; }
+.board-tabs .tab-strip { margin-bottom: 0; }
 .board-lead { margin: 8px 14px 0; font-size: 0.8rem; color: var(--text-muted); }
 .market-tabs button.has-pick { position: relative; }
 .market-tabs button.has-pick::after { content: ''; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
@@ -1287,7 +1293,8 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 .game.in-sheet .game-top .league-badge, .game.in-sheet .game-series { display: none; }
 .game.in-sheet .team-rows { padding-left: 0; padding-right: 0; }
 .game.in-sheet .game-more { margin: 10px -18px 0; padding: 14px 18px 4px; border-top: 1px solid var(--border); background: none; }
-.game.in-sheet .market-tabs { position: sticky; top: 60px; z-index: 1; background: var(--q-page); padding: 4px 0; }
+/* In a sheet: the capsule stays at the top, a dark track on the sheet (opaque, so rows scroll under it). */
+.game.in-sheet .tab-strip { position: sticky; top: 60px; z-index: 1; background: var(--q-page); box-shadow: 0 0 0 6px var(--surface, var(--q-surface)); }
 .slip-bar.in-sheet { position: sticky; left: auto; right: auto; bottom: calc(12px + env(safe-area-inset-bottom)); width: 100%; margin: 0 0 calc(12px + env(safe-area-inset-bottom)); }
 .slip-bar.in-sheet[hidden] { display: none; }
 #game-sheet-body:has(+ .slip-bar.in-sheet:not([hidden])) { padding-bottom: 12px; }

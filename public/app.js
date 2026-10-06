@@ -112,6 +112,22 @@ state.t = makeT(state.locale);
 
 const $ = id => document.getElementById(id);
 
+// A sideways tab row (.market-tabs) fades on the side that has more tabs
+// off screen, so a cut-off last tab reads as "more this way".
+// The capsule around a tab row: its track and inset (the row inside only scrolls, and fades).
+const tabStrip = row => (row ? el('div', { class: 'tab-strip' }, [row]) : null);
+function markScroll(row) {
+  const more = row.scrollWidth - row.clientWidth > 2;
+  row.classList.toggle('more-left', more && row.scrollLeft > 2);
+  row.classList.toggle('more-right', more && row.scrollLeft < row.scrollWidth - row.clientWidth - 2);
+}
+if (typeof document !== 'undefined') {
+  document.addEventListener('scroll', e => e.target?.classList?.contains('market-tabs') && markScroll(e.target), true);
+  const marked = () => document.querySelectorAll('.market-tabs').forEach(markScroll);
+  let queued = false;
+  new MutationObserver(() => queued || ((queued = true), requestAnimationFrame(() => ((queued = false), marked())))).observe(document.documentElement, { childList: true, subtree: true });
+  addEventListener('resize', marked);
+}
 function el(tag, props = {}, children = []) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(props)) {
@@ -879,7 +895,7 @@ function gameMore(game, bets) {
   else if (current) panel = marketPanel(game, current, bets.filter(b => b.kind === current.kind));
   // Kambi's full list on its way: say so under the model's markets.
   const waiting = (game.kambiId && !gameOffers.has(game.id) && offersLoading.has(game.id)) || gamePlayers.get(game.id)?.loading;
-  return el('div', { class: 'game-more' }, [tabs, panel, waiting ? el('p', { class: 'muted offers-wait', text: t('offersLoading') }) : !panel ? el('p', { class: 'muted offers-wait', text: t('offersNone') }) : null]);
+  return el('div', { class: 'game-more' }, [tabStrip(tabs), panel, waiting ? el('p', { class: 'muted offers-wait', text: t('offersLoading') }) : !panel ? el('p', { class: 'muted offers-wait', text: t('offersNone') }) : null]);
 }
 
 // Players' markets: one chip per market (進球, 射正 1.5 …), then each
@@ -3109,7 +3125,7 @@ function renderF1() {
       emblem: 'f1',
       title: raceName(f1.title, state.locale),
       sub: `${fmtTime(f1.startUtc)} · ${t(f1.phase === 'pre' ? 'f1PhasePre' : 'f1PhasePost')}`,
-      tabs: tabRow,
+      tabs: tabStrip(tabRow),
       lead: current.sub ? t(current.sub) : null,
       bets: list,
       id: current.kind,
