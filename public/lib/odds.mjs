@@ -4,24 +4,12 @@ import { minLegsProblem, BASE_CUT } from './rules.mjs';
 // A game's winner: lottery implied chance ~= fair chance x K, the lottery's
 // two-way cut (rules.mjs BASE_CUT), whatever priced the game.
 export const K_WIN = BASE_CUT.twoWay;
-// F1 race winner, drivers the lottery prices one by one. The lottery prices
-// the race twice: before qualifying and again once the grid is set.
-// - After qualifying: lottery implied chance ~= 1.17 x fair chance ^ 0.765.
-//   Fitted on the lottery's 2026 Azerbaijan GP board on race eve (8 drivers
-//   at 1% or more, against Polymarket's devigged prices the same hour): about
-//   10% average error. Longshots: a 0.35% driver 275, 0.08-0.13% drivers
-//   mostly 500 (one 275, one 56).
-// - Before qualifying: implied chance ~= fair chance ^ 0.692, no scale.
-//   Checked on 9 prices from two snapshots of the same race's board the
-//   morning before qualifying (average error ~8%). Longshots: a 0.6% driver
-//   65, 0.15-0.25% drivers 325, the rest 500.
-// Steps: [fair chance at or above, price], checked in order.
-export const F1_PRICING = {
-  pre: { scale: 1, exponent: 0.692, steps: [[0.01, null], [0.004, 65], [0.001, 325], [0, 500]] },
-  post: { scale: 1.17, exponent: 0.765, steps: [[0.01, null], [0.004, 65], [0.0015, 275], [0, 500]] }
-};
-// Never below this, however big the favourite.
-export const F1_MIN_ODDS = 1.05;
+// F1: a driver's price is plain math on their chance, nothing fitted: the
+// house's outright margin on it (rules.mjs BASE_CUT.outright), at most the
+// lottery's 500 and never under 1.01. The chance is what the sources say at
+// their most (sources.mjs mergeF1Boards), so a thin market's quote can't
+// make a contender a longshot.
+export const F1_CUT = BASE_CUT.outright;
 // The lottery reprices once qualifying is over: this long after it starts.
 export const F1_REPRICE_AFTER_MS = 90 * 60_000;
 
@@ -110,12 +98,9 @@ export function estimateFuturesOdds(fairChances, overround) {
   });
 }
 
-export function estimateF1LotteryOdds(fairChance, phase = 'post') {
-  const { scale, exponent, steps } = F1_PRICING[phase] ?? F1_PRICING.post;
-  const [, step] = steps.find(([min]) => fairChance >= min);
-  // The lottery's fixed longshot prices, but never one paying back more than
-  // it takes on average (a 0.33% driver at 325 did: 109 for every 100).
-  return step ? Math.min(step, Math.floor(1 / fairChance)) : Math.max(F1_MIN_ODDS, round2(1 / (scale * fairChance ** exponent)));
+export function estimateF1Odds(fairChance) {
+  if (!(fairChance > 0)) return LOTTERY_MAX_ODDS;
+  return Math.min(LOTTERY_MAX_ODDS, Math.max(1.01, round2(1 / (fairChance * F1_CUT))));
 }
 
 // Average amount returned per `stake` over many identical bets.
@@ -149,10 +134,11 @@ export const ODDS_ERROR = {
   extra: { rel: 0.12, checked: false },
   topInning: { rel: 0.03, checked: true }, // the lottery's own table, 8 games
   epl: { rel: 0.1, checked: false }, // soccer never checked
-  f1: { rel: 0.1, checked: true }, // 8 prices, race eve (after qualifying)
-  f1Longshot: { rel: 0.4, checked: true }, // 275 vs 500 can't be told apart
-  f1Pre: { rel: 0.08, checked: true }, // 9 prices, before qualifying
-  f1PreLongshot: { rel: 0.35, checked: true }, // 325 vs 500 can't be told apart
+  // F1: plain math on the sources' highest chance (no longer fitted to the lottery's board).
+  f1: { rel: 0.1, checked: false },
+  f1Longshot: { rel: 0.3, checked: false },
+  f1Pre: { rel: 0.1, checked: false },
+  f1PreLongshot: { rel: 0.3, checked: false },
   future_al: { rel: 0.06, checked: true },
   future_nl: { rel: 0.2, checked: true },
   future_ws: { rel: 0.15, checked: true },

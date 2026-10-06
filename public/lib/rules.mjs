@@ -67,7 +67,9 @@ export const BASE_CUT = {
   score: 1.5,
   topInning: 1.92, // the lottery's own table
   nextRun: 1.31, // 第N分, live
-  live: 1.16 // 場中 win, total, run line
+  live: 1.16, // 場中 win, total, run line
+  // An F1 race's drivers (and its pole): about a bookmaker's own winner board (Kambi's Singapore GP 2026 adds up to ~1.23).
+  outright: 1.2
 };
 
 // Leagues by how well known they are (what home leads with; not the cut).

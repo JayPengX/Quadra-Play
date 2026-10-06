@@ -8,7 +8,7 @@
 // rest are reactions to what happens to them (chasing losses, cashing out,
 // sulking after a near miss …). Each person draws every trait on its own
 // share, one at most from each group of how-they-bet traits.
-import { SLIP_RULES, afterTax, seededRandom, estimateF1LotteryOdds } from './odds.mjs';
+import { SLIP_RULES, afterTax, seededRandom, estimateF1Odds } from './odds.mjs';
 import { houseRule } from './rules.mjs';
 import { crowdPool, f1Podium, gameOptions } from './board.mjs';
 import { recommend } from './recommend.mjs';
@@ -869,7 +869,7 @@ function buildTemplate(sport, seed) {
   const family = SIM_SPORTS[sport]?.family;
   if (family === 'racing') {
     const sum = F1_FIELD.reduce((a, b) => a + b, 0);
-    const options = F1_FIELD.map((p, i) => ({ id: `f1|t${i}`, gameId: 'f1t', sport, kind: 'f1', market: 'f1', fairChance: p / sum, estOdds: estimateF1LotteryOdds(p / sum) })).map(o => ({ ...o, ...houseRule('f1', o.estOdds) }));
+    const options = F1_FIELD.map((p, i) => ({ id: `f1|t${i}`, gameId: 'f1t', sport, kind: 'f1', market: 'f1', fairChance: p / sum, estOdds: estimateF1Odds(p / sum) })).map(o => ({ ...o, ...houseRule('f1', o.estOdds) }));
     f1Podium(options.map(o => ({ fair: o.fairChance, odds: o.estOdds }))).forEach((p, i) => options.push({ id: `f1pod|t${i}`, gameId: 'f1t', sport, kind: 'f1podium', market: `f1podium|${i}`, fairChance: p.fair, estOdds: p.odds, lock: p.lock, minLegs: p.minLegs }));
     return crowdPool(options).map(b => ({ ...b, gameKey: `${sport}|f1t` }));
   }

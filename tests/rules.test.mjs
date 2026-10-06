@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { houseRule, minLegsProblem, houseCut, BASE_CUT, leagueTier } from '../public/lib/rules.mjs';
 import { recommend } from '../public/lib/recommend.mjs';
-import { slipErrors, estimateF1LotteryOdds, f1Phase } from '../public/lib/odds.mjs';
+import { slipErrors, estimateF1Odds, f1Phase } from '../public/lib/odds.mjs';
 import { parseKambiEvents, parseKambiLive } from '../public/lib/kambi.mjs';
 import { goalMarkets } from '../public/lib/markets.mjs';
 import { legResult } from '../public/lib/account.mjs';
@@ -113,19 +113,8 @@ test('new soccer plays: half-time/full-time and total-goal bands add up and sett
   assert.equal(legResult({ kind: 'q1', side: 'draw', sport: 'nba' }, { status: 'final', awayScore: 100, homeScore: 98, awayInnings: [25, 30], homeInnings: [25, 20] }), 'won');
 });
 
-test('F1: before qualifying the lottery prices on its own curve', () => {
-  // The lottery's board the morning before qualifying (2026 Azerbaijan GP).
-  const near = (a, b, eps) => assert.ok(Math.abs(a - b) <= eps, `${a} vs ${b}`);
-  near(estimateF1LotteryOdds(0.4081, 'pre'), 1.86, 0.01);
-  near(estimateF1LotteryOdds(0.041, 'pre'), 9.1, 0.1);
-  near(estimateF1LotteryOdds(0.0287, 'pre'), 11.67, 0.01);
-  assert.equal(estimateF1LotteryOdds(0.0064, 'pre'), 65);
-  assert.equal(estimateF1LotteryOdds(0.0025, 'pre'), 325);
-  assert.equal(estimateF1LotteryOdds(0.0005, 'pre'), 500);
-  // After qualifying, the race-eve curve (the default).
-  assert.equal(estimateF1LotteryOdds(0.0035), 275);
-  // Never paying back more than it takes on average: a 0.33% driver isn't 325.
-  assert.equal(estimateF1LotteryOdds(0.0033, 'pre'), 303);
+test('F1: the phase (before or after qualifying) is only said, not priced differently', () => {
+  assert.equal(estimateF1Odds(0.041), estimateF1Odds(0.041));
   // The phase from ESPN's schedule: qualifying 12:00 UTC on the 25th.
   const schedule = parseF1Schedule(fixture('espn-f1-2026-09-26.json'), '2026-09-26T11:00:00Z');
   assert.equal(schedule.qualifyingUtc, '2026-09-25T12:00:00.000Z');
@@ -178,7 +167,7 @@ test('double chance, first-half total and podium settle', () => {
 test('F1 podium chances add up to three and pay what the winner board does', async () => {
   const { f1Podium } = await import('../public/lib/board.mjs');
   const fair = [0.4, 0.25, 0.15, 0.1, 0.05, 0.03, 0.02];
-  const drivers = fair.map(p => ({ fair: p, odds: estimateF1LotteryOdds(p) }));
+  const drivers = fair.map(p => ({ fair: p, odds: estimateF1Odds(p) }));
   const podium = f1Podium(drivers);
   close(podium.reduce((s, p) => s + p.fair, 0), 3, 0.01);
   assert.ok(podium.every((p, i) => p.fair >= fair[i] && p.odds >= 1.01));

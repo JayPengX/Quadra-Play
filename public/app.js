@@ -1,5 +1,5 @@
 import {
-  FUTURES_OVERROUND, ODDS_ERROR, estimateF1LotteryOdds, f1Phase, estimateFuturesOdds, slipPayoutTable, settleSlip, boostRate, PARLAY_BOOST, median, quantile, SLIP_RULES, afterTax, slipErrors, slipSizes, combosBySize, comboCount, estimateLineOdds, MLB_MARKET_OVERROUND
+  FUTURES_OVERROUND, ODDS_ERROR, estimateF1Odds, f1Phase, estimateFuturesOdds, slipPayoutTable, settleSlip, boostRate, PARLAY_BOOST, median, quantile, SLIP_RULES, afterTax, slipErrors, slipSizes, combosBySize, comboCount, estimateLineOdds, MLB_MARKET_OVERROUND
 } from './lib/odds.mjs';
 import {
   FANS, STYLES, SPORTS, SIM_SPORTS, sportTemplate, weekOfYear, crowdPools, crowdSize, hashString, simulateCrowd, MONTH_WEEKS, PERIOD_MONTHS, monthWeeks
@@ -334,7 +334,7 @@ function buildBets(data) {
     for (const o of optionsOf(game)) bets.push(named(game, o, matchup));
   }
   if (data.f1) {
-    // Before qualifying the lottery prices the race on its own curve.
+    // Before or after qualifying (said beside the prices; the math is the same).
     const phase = f1Phase(new Date(), { qualifyingUtc: data.f1.qualifyingUtc, raceUtc: data.f1.startUtc });
     data.f1.phase = phase;
     for (const d of data.f1.drivers) {
@@ -354,7 +354,7 @@ function buildBets(data) {
         fairChance: d.fair,
         fairMargin: null,
         errKey: `${phase === 'pre' ? 'f1Pre' : 'f1'}${d.fair < 0.01 ? 'Longshot' : ''}`,
-        estOdds: estimateF1LotteryOdds(d.fair, phase)
+        estOdds: estimateF1Odds(d.fair)
       });
     }
     // 前三名: the same drivers finishing in the top three.
@@ -405,7 +405,7 @@ function buildBets(data) {
           fairChance: d.fair,
           fairMargin: null,
           errKey: data.f1.pole ? `f1Pre${d.fair < 0.01 ? 'Longshot' : ''}` : 'extra',
-          estOdds: estimateF1LotteryOdds(d.fair, 'pre')
+          estOdds: estimateF1Odds(d.fair)
         });
       }
     }

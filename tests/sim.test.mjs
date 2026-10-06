@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { estimateLotteryOdds, estimateF1LotteryOdds, SLIP_RULES } from '../public/lib/odds.mjs';
+import { estimateLotteryOdds, estimateF1Odds, SLIP_RULES } from '../public/lib/odds.mjs';
 import {
   simulateCrowd,
   simulateCrowdStats,
@@ -202,7 +202,7 @@ test('anyone can be replayed exactly, and a replayed season tells the same numbe
 test('everyone bets into one world: a race has one winner for all', () => {
   const raw = [0.41, 0.22, 0.145, 0.115, 0.0555, 0.034, 0.0275, 0.0065, ...Array(14).fill(0.0015), 0.0025, 0.002, 0.0005];
   const sum = raw.reduce((a, b) => a + b);
-  const f1 = raw.map(p => ({ gameId: 'race', kind: 'f1', key: 'f1|race', fairChance: p / sum, odds: estimateF1LotteryOdds(p / sum) }));
+  const f1 = raw.map(p => ({ gameId: 'race', kind: 'f1', key: 'f1|race', fairChance: p / sum, odds: estimateF1Odds(p / sum) }));
   const sportPools = Object.fromEntries(SPORTS.map(sp => [sp, crowdPools(sp === 'f1' ? f1 : sportTemplate(sp))]));
   let longshotSeasons = 0;
   for (const seed of [1, 2, 3, 4, 5, 6]) {

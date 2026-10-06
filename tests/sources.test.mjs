@@ -259,3 +259,19 @@ test("F1 parser never takes another series' grand prix", () => {
   );
   assert.equal(f1?.slug, 'f1-azerbaijan-grand-prix-winner-2026-09-26');
 });
+
+test("an F1 race's boards as one: each driver at the most any says, a trade counted as a price", async () => {
+  const { mergeF1Boards, parseF1RaceWinner } = await import('../public/lib/sources.mjs');
+  const merged = mergeF1Boards(
+    { drivers: [{ name: 'Max Verstappen', fair: 0.27 }, { name: 'George Russell', fair: 0.025 }, { name: 'Carlos Sainz Jr.', fair: 0.005 }] },
+    { drivers: [{ name: 'Max Verstappen', fair: 0.22 }, { name: 'George Russell', fair: 0.1 }, { name: 'Carlos Sainz', fair: 0.004 }] }
+  );
+  assert.deepEqual(merged.map(d => [d.name, d.fair]), [['Max Verstappen', 0.27], ['George Russell', 0.1], ['Carlos Sainz Jr.', 0.005]]);
+  // Polymarket: a thin quote under a real trade gives way to the trade.
+  const market = (name, price, last, volume) => ({ groupItemTitle: name, outcomePrices: JSON.stringify([String(price), String(1 - price)]), lastTradePrice: last, volume, closed: false, bestBid: price - 0.005, bestAsk: price + 0.005 });
+  const now = new Date('2026-10-07T00:00:00Z');
+  const event = { slug: 'f1-singapore-grand-prix-winner-2026-10-11', title: 'Singapore Grand Prix', startTime: '2026-10-11T12:00:00Z', markets: [market('Max Verstappen', 0.5, 0.5, 1300), market('Kimi Antonelli', 0.45, 0.45, 1200), market('George Russell', 0.025, 0.15, 3327), market('Lewis Hamilton', 0.025, null, 0)] };
+  const race = parseF1RaceWinner([event], now);
+  assert.equal(race.drivers.find(d => d.name === 'George Russell').fair, 0.15);
+  assert.ok(race.drivers.find(d => d.name === 'Lewis Hamilton').fair < 0.05, 'never traded: its quote alone');
+});

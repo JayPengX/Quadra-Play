@@ -442,7 +442,8 @@ export function parseF1RaceWinner(events, now) {
   if (!event) return null;
   const drivers = (event.markets || [])
     .filter(m => !m.closed)
-    .map(m => ({ name: m.groupItemTitle || m.question, raw: Number(parseJsonArray(m.outcomePrices)?.[0]) }))
+    // Its last trade too, where it has traded: a price someone paid.
+    .map(m => ({ name: m.groupItemTitle || m.question, raw: Number(parseJsonArray(m.outcomePrices)?.[0]), last: Number(m.volume) > 0 ? Number(m.lastTradePrice) || 0 : 0 }))
     // Every priced driver, like the lottery's full list; Polymarket's unpriced
     // placeholders ("Driver A", "Other") drop out here.
     .filter(d => d.raw > 0 && !/^(driver [a-z]|other)$/i.test(d.name));
@@ -451,11 +452,32 @@ export function parseF1RaceWinner(events, now) {
   return {
     title: event.title,
     slug: event.slug,
+    source: 'polymarket',
     startUtc: new Date(event.startTime).toISOString(),
     drivers: drivers
-      .map((d, i) => ({ name: d.name, fair: fair[i] }))
+      .map((d, i) => ({ name: d.name, fair: Math.max(fair[i], d.last > 0 && d.last < 1 ? d.last : 0) }))
       .sort((a, b) => b.fair - a.fair)
   };
+}
+
+// The race's boards as one: each driver at the most any of them gives
+// (a bookmaker's board and a prediction market's quote and trades). The
+// house prices on that, so a thin board can't make a contender a longshot
+// (Singapore 2026: Polymarket quoted Russell 2.5% with his last trade at
+// 15%; Kambi had him at ~10%). Drivers matched by surname.
+const surnameKey = n => {
+  const words = String(n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\b(jr|sr)\b\.?/g, '').trim().split(/\s+/);
+  return words.at(-1).replace(/[^a-z]/g, '');
+};
+export function mergeF1Boards(...boards) {
+  const out = new Map();
+  for (const board of boards.filter(Boolean))
+    for (const d of board.drivers || []) {
+      const k = surnameKey(d.name);
+      const had = out.get(k);
+      if (!had || d.fair > had.fair) out.set(k, { name: had?.name ?? d.name, fair: Math.max(had?.fair ?? 0, d.fair) });
+    }
+  return [...out.values()].sort((a, b) => b.fair - a.fair);
 }
 
 // Kambi's F1 race, for when Polymarket hasn't opened the next one yet (it
@@ -705,11 +727,13 @@ export async function loadOdds(now = new Date(), onProgress) {
   // MotoGP is no longer sold (open bets still settle from its results).
   const moto = null;
   let race = parseF1RaceWinner(f1, now);
-  // Polymarket not open for the next race yet (or only for a later one): Kambi's.
+  // Kambi's board for the same race (or the next one when Polymarket hasn't opened it).
   const kambiRace = nextKambiF1Race(f1Kambi, now);
   let kambiOffers = null;
   if (kambiRace && (!race || Date.parse(kambiRace.start) < Date.parse(race.startUtc) + DAY_MS)) kambiOffers = await getJson(`${KAMBI}/betoffer/event/${kambiRace.id}.json?lang=en_GB&market=GB`).catch(() => null);
-  if (kambiRace && (!race || Date.parse(kambiRace.start) < Date.parse(race.startUtc) - DAY_MS)) race = parseKambiF1Race(kambiRace, kambiOffers) ?? race;
+  const kambiBoard = kambiRace ? parseKambiF1Race(kambiRace, kambiOffers) : null;
+  if (kambiBoard && (!race || Date.parse(kambiRace.start) < Date.parse(race.startUtc) - DAY_MS)) race = kambiBoard;
+  else if (kambiBoard && race && Math.abs(Date.parse(kambiRace.start) - Date.parse(race.startUtc)) < DAY_MS) race = { ...race, source: 'polymarket+kambi', drivers: mergeF1Boards(race, kambiBoard) };
   if (race) {
     const sameRace = kambiRace && Math.abs(Date.parse(kambiRace.start) - Date.parse(race.startUtc)) < DAY_MS;
     Object.assign(race, {

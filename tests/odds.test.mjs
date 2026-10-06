@@ -6,7 +6,8 @@ import {
   devigTwoWay,
   devigPower,
   estimateLotteryOdds,
-  estimateF1LotteryOdds,
+  estimateF1Odds,
+  F1_CUT,
   estimateFuturesOdds,
   evaluateSlip,
   lotteryTotalLines,
@@ -54,21 +55,16 @@ test('lottery estimate reproduces real MLB prices within a few cents', () => {
   close(estimateLotteryOdds(0.502, K_WIN), 1.73, 0.02);
 });
 
-test('F1 estimate matches the lottery board on race eve', () => {
-  const { drivers } = JSON.parse(readFileSync(new URL('./fixtures/lottery-f1-2026-09-26.json', import.meta.url)));
-  const fair = devigPower(drivers.map(d => d.polymarket));
-  const priced = drivers.map((d, i) => ({ ...d, fair: fair[i], est: estimateF1LotteryOdds(fair[i]) })).filter(d => d.fair >= 0.01);
-  assert.equal(priced.length, 8);
-  const err = priced.reduce((s, d) => s + Math.abs(d.est - d.lottery) / d.lottery, 0) / priced.length;
-  assert.ok(err < 0.11, `average error ${err}`);
-  // The favourite: 1.20 on the board.
-  close(priced[0].est, 1.2, 0.03);
-  // Longshots sit on the lottery's fixed prices.
-  assert.equal(estimateF1LotteryOdds(0.0064), 65);
-  assert.equal(estimateF1LotteryOdds(0.0035), 275);
-  assert.equal(estimateF1LotteryOdds(0.0005), 500);
-  // A huge favourite never drops below the floor.
-  assert.equal(estimateF1LotteryOdds(0.95), 1.05);
+test('F1: a driver is priced by plain math on their chance, nothing fitted', () => {
+  // The house's outright margin on the chance: 1 / (chance x 1.2).
+  assert.equal(F1_CUT, 1.2);
+  close(estimateF1Odds(0.1), 8.33, 0.01);
+  close(estimateF1Odds(0.4), 2.08, 0.01);
+  // Every price returns the same share on average (no longshot paying back more).
+  for (const p of [0.5, 0.2, 0.05, 0.01, 0.004]) close(p * estimateF1Odds(p), 1 / F1_CUT, 0.02);
+  // At most the lottery's 500, never under 1.01.
+  assert.equal(estimateF1Odds(0.0005), 500);
+  assert.equal(estimateF1Odds(0.95), 1.01);
 });
 
 test('expected return and overround', () => {

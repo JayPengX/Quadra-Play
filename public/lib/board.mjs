@@ -604,7 +604,9 @@ export function f1PoleModel({ form = [], winners = [], market = null } = {}) {
 // return what the race's winner board does on average (the lottery takes
 // the same on both), at most the lottery's 500.
 export function f1Podium(drivers) {
-  const p = drivers.map(d => d.fair);
+  // The chances as one field (the merged boards can add up past 1).
+  const total = drivers.reduce((s, d) => s + Math.max(0, d.fair), 0) || 1;
+  const p = drivers.map(d => Math.max(0, d.fair) / total);
   const n = p.length;
   const podium = new Float64Array(n);
   for (let i = 0; i < n; i++) {
