@@ -96,7 +96,7 @@ section { margin-bottom: 26px; }
 .section-heading { font-size: 1.15rem; letter-spacing: -0.01em; margin: 6px 0 10px; display: flex; align-items: center; gap: 8px; }
 .section-heading.small { font-size: 1.02rem; margin-top: 22px; }
 .lede { color: var(--text-secondary); font-size: 0.86rem; margin: -4px 0 12px; }
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; margin-bottom: 14px; }
+.card { background: var(--surface); border: 1px solid transparent; border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; margin-bottom: 14px; }
 .card-title { font-size: 0.98rem; margin-bottom: 10px; }
 footer { padding: 10px 0 0; text-align: center; }
 
@@ -114,28 +114,28 @@ footer { padding: 10px 0 0; text-align: center; }
 .chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 2px 16px; }
 .chips::-webkit-scrollbar { display: none; }
 .chip {
-  flex: none; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--surface);
-  border-radius: 999px; padding: 6px 13px; font-size: 0.86rem; font-weight: 500; box-shadow: var(--shadow-sm); white-space: nowrap;
+  flex: none; display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent; background: var(--q-fill, var(--surface));
+  border-radius: 999px; padding: 6px 13px; font-size: 0.86rem; font-weight: 500; white-space: nowrap;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 @media (hover: hover) { .chip:hover { border-color: var(--accent); } }
 .chip[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .chip .chip-count { font-size: 0.72rem; opacity: 0.75; font-variant-numeric: tabular-nums; }
-.segmented { display: inline-flex; gap: 2px; padding: 3px; background: var(--surface-sunken); border-radius: 12px; flex-wrap: wrap; }
-.segmented button { border: 0; background: none; padding: 6px 12px; border-radius: 9px; font-size: 0.84rem; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
-.segmented button[aria-pressed='true'] { background: var(--surface); color: var(--accent); box-shadow: var(--shadow-sm); }
+.segmented { display: inline-flex; gap: 2px; padding: 3px; background: var(--q-fill, var(--surface-sunken)); border-radius: 999px; flex-wrap: wrap; }
+.segmented button { border: 0; background: none; padding: 6px 14px; border-radius: 999px; font-size: 0.84rem; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+.segmented button[aria-pressed='true'] { background: var(--surface); color: var(--accent); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 3px 8px rgba(0, 0, 0, 0.08); }
 .ghost-button {
-  border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 6px 14px; font-size: 0.85rem;
-  white-space: nowrap; box-shadow: var(--shadow-sm);
+  border: 1px solid transparent; background: var(--q-fill, var(--surface)); border-radius: 999px; padding: 6px 14px; font-size: 0.85rem;
+  font-weight: 600; white-space: nowrap;
 }
 @media (hover: hover) { .ghost-button:hover { border-color: var(--accent); } }
 .ghost-button[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .primary-button {
   font-weight: 700; font-size: 0.95rem; color: #fff; background: var(--accent); border: 0; border-radius: 999px; padding: 10px 22px;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35); transition: background 0.15s, transform 0.1s;
+  transition: background 0.15s, transform 0.1s;
 }
 @media (hover: hover) { .primary-button:hover { background: var(--accent-strong); } }
-.primary-button:active { transform: translateY(1px); }
+.primary-button:active { transform: scale(0.97); }
 .button-row { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* ---- Logos and badges ------------------------------------------------------------ */
@@ -154,7 +154,7 @@ footer { padding: 10px 0 0; text-align: center; }
 
 /* ---- Game cards --------------------------------------------------------------------- */
 .games-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); align-items: start; }
-.game { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.game { background: var(--surface); border: 1px solid transparent; border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
 .game-top { display: flex; align-items: center; gap: 8px; padding: 10px 14px 4px; font-size: 0.74rem; color: var(--text-muted); }
 .game-series { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
 .game-time { flex: none; font-weight: 600; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
@@ -167,8 +167,8 @@ footer { padding: 10px 0 0; text-align: center; }
 /* A pick: tap to add it to the slip. Odds big; chance and average back small. */
 .pick {
   position: relative; display: grid; gap: 1px; align-content: center; justify-items: center; text-align: center;
-  min-width: 92px; padding: 6px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border);
-  background: var(--surface-raised); transition: border-color 0.15s, background 0.15s, transform 0.1s; font-variant-numeric: tabular-nums;
+  min-width: 92px; padding: 6px 10px; border-radius: var(--radius-sm); border: 1px solid transparent;
+  background: var(--q-fill, var(--surface-raised)); transition: border-color 0.15s, background 0.15s, transform 0.1s; font-variant-numeric: tabular-nums;
 }
 @media (hover: hover) { button.pick:hover { border-color: var(--accent); } }
 button.pick:active { transform: scale(0.98); }
@@ -189,7 +189,7 @@ button.pick:active { transform: scale(0.98); }
 .game.tappable { cursor: pointer; }
 .game-more { border-top: 1px solid var(--border); padding: 12px 14px 14px; background: var(--surface-raised); display: grid; gap: 12px; }
 .markets { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); }
-.market { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px 10px; display: grid; gap: 6px; }
+.market { background: var(--surface); border: 1px solid transparent; border-radius: var(--radius-sm); padding: 8px 10px 10px; display: grid; gap: 6px; }
 .market-head { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; font-weight: 700; color: var(--text-secondary); min-width: 0; }
 .market-head .market-title { overflow-wrap: anywhere; }
 .market-picks { display: grid; gap: 6px; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); }
@@ -210,7 +210,7 @@ button.pick:active { transform: scale(0.98); }
 .tag-real { color: var(--accent); border-color: var(--accent); }
 
 /* ---- F1 and championships ----------------------------------------------------------- */
-.board { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.board { background: var(--surface); border: 1px solid transparent; border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
 .board-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--surface-raised); border-bottom: 1px solid var(--border); }
 .board-emblem { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 1.4rem; background: var(--hero); flex: none; box-shadow: var(--shadow-sm); }
 .board-title { font-weight: 700; font-size: 0.98rem; line-height: 1.25; }
@@ -223,8 +223,8 @@ button.pick:active { transform: scale(0.98); }
 .entry-name { flex: 1 1 auto; min-width: 0; font-weight: 600; font-size: 0.9rem; overflow-wrap: anywhere; }
 .entry-name small { display: block; font-size: 0.7rem; color: var(--text-muted); font-weight: 400; }
 .entry-odds {
-  flex: none; min-width: 66px; display: grid; justify-items: center; padding: 4px 10px; border-radius: 10px; border: 1px solid var(--border);
-  background: var(--surface-raised); font-size: 1rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.2;
+  flex: none; min-width: 66px; display: grid; justify-items: center; padding: 4px 10px; border-radius: 10px; border: 1px solid transparent;
+  background: var(--q-fill, var(--surface-raised)); font-size: 1rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.2;
 }
 @media (hover: hover) { .entry-odds:hover { border-color: var(--accent); } }
 .entry-odds small { font-size: 0.66rem; font-weight: 600; color: var(--text-muted); }
@@ -259,12 +259,12 @@ button.pick:active { transform: scale(0.98); }
 .slip-sizes { display: flex; flex-wrap: wrap; gap: 6px; }
 .slip-sizes .chip { font-size: 0.78rem; padding: 4px 10px; }
 .stake-box { display: flex; align-items: center; gap: 8px; }
-.stake-box input { width: 5.5em; font: inherit; font-weight: 700; font-size: 1rem; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-raised); color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.stake-box input { width: 5.5em; font: inherit; font-weight: 700; font-size: 1rem; padding: 7px 10px; border-radius: 10px; border: 1px solid transparent; background: var(--q-fill, var(--surface-raised)); color: var(--text-primary); font-variant-numeric: tabular-nums; }
 .stake-box small { color: var(--text-muted); font-size: 0.74rem; }
 .slip-errors { margin: 0 0 10px; padding: 8px 10px 8px 28px; color: var(--bad); background: var(--bad-wash); border-radius: var(--radius-sm); font-size: 0.84rem; }
 .mode-note { font-size: 0.78rem; color: var(--text-muted); margin: -4px 0 12px; }
 
-.stat { background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; }
+.stat { background: var(--q-fill, var(--surface-raised)); border: 1px solid transparent; border-radius: var(--radius-sm); padding: 10px 12px; }
 .stat-value { font-size: 1.3rem; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 
 .info { font-size: 0.78rem; color: var(--text-muted); }
@@ -291,10 +291,10 @@ button.pick:active { transform: scale(0.98); }
 .chart .median { fill: none; stroke: var(--text-secondary); stroke-width: 1.75; stroke-linejoin: round; }
 .chart .hit { fill: transparent; cursor: crosshair; }
 .chart .hit:focus { outline: none; }
-.tooltip { position: absolute; pointer-events: none; z-index: 2; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; font-size: 0.78rem; min-width: 150px; box-shadow: var(--shadow); }
+.tooltip { position: absolute; pointer-events: none; z-index: 2; background: var(--surface); border: 1px solid transparent; border-radius: 10px; padding: 8px 10px; font-size: 0.78rem; min-width: 150px; box-shadow: var(--shadow); }
 
 .players { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 12px; margin-bottom: 14px; }
-.player { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px; font-size: 0.82rem; position: relative; overflow: hidden; }
+.player { background: var(--surface); border: 1px solid transparent; border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px; font-size: 0.82rem; position: relative; overflow: hidden; }
 .player::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 4px; background: var(--player); }
 .player-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; }
 .habit-tag { font-size: 0.7rem; font-weight: 600; color: var(--text-secondary); background: var(--surface-sunken); border-radius: 999px; padding: 1px 8px; }
@@ -304,7 +304,7 @@ button.pick:active { transform: scale(0.98); }
 .player-line strong { font-weight: 700; font-variant-numeric: tabular-nums; font-size: 0.82rem; }
 
 .stories { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
-.story { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 16px; display: grid; gap: 6px; align-content: start; }
+.story { background: var(--surface); border: 1px solid transparent; border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 16px; display: grid; gap: 6px; align-content: start; }
 .facts { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; font-size: 0.86rem; color: var(--text-secondary); }
 .facts li { position: relative; padding-left: 22px; }
 .facts li::before { content: '💡'; position: absolute; left: 0; top: 0; font-size: 0.85rem; }
@@ -362,7 +362,7 @@ details.market[open] > summary { margin-bottom: 6px; }
 /* ---- The search bar: Quadra Securities' own ---- */
 .search-box { position: relative; margin-bottom: 12px; }
 .search-box svg { position: absolute; left: 13px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); fill: none; stroke: var(--text-muted); stroke-width: 2.2; stroke-linecap: round; }
-.search-box input { width: 100%; min-width: 0; border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 10px 16px 10px 40px; font: inherit; font-size: 1rem; font-weight: 500; color: var(--text-primary); box-shadow: var(--shadow-sm); }
+.search-box input { width: 100%; min-width: 0; border: 1px solid transparent; background: var(--surface); border-radius: 999px; padding: 10px 16px 10px 40px; font: inherit; font-size: 1rem; font-weight: 500; color: var(--text-primary); box-shadow: var(--shadow-sm); }
 .search-box input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
 body.searching #live, body.searching #f1, body.searching #futures, body.searching .toolbar { display: none; }
 
@@ -376,7 +376,7 @@ body.searching #live, body.searching #f1, body.searching #futures, body.searchin
    categories: a pill, filled with the app's colour when chosen. */
 .sport-tile, .day-tile {
   flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px;
-  border: 1px solid var(--border); border-radius: 999px; background: var(--surface); box-shadow: var(--shadow-sm);
+  border: 1px solid transparent; border-radius: 999px; background: var(--surface); box-shadow: var(--shadow-sm);
   font-size: 0.86rem; transition: border-color 0.15s, background 0.15s, color 0.15s; font-variant-numeric: tabular-nums;
 }
 @media (hover: hover) { .sport-tile:hover, .day-tile:hover { border-color: var(--accent); } }
@@ -539,7 +539,7 @@ body.searching #live, body.searching #f1, body.searching #futures, body.searchin
 .market-tag.tag-runline { background: var(--bad-wash); color: var(--bad); }
 .leg-odds { font-size: 1.1rem; }
 .leg-odds small { font-size: 0.7rem; font-weight: 600; color: var(--text-muted); margin-right: 1px; }
-.pay-box { display: grid; gap: 6px; margin: 0 0 12px; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--surface-raised); border: 1px solid var(--border); }
+.pay-box { display: grid; gap: 6px; margin: 0 0 12px; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--q-fill, var(--surface-raised)); border: 1px solid transparent; }
 .pay-title { font-size: 0.78rem; font-weight: 700; color: var(--text-secondary); }
 .pay-line { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 0.86rem; font-variant-numeric: tabular-nums; }
 .pay-line span { color: var(--text-secondary); min-width: 0; overflow-wrap: anywhere; }
@@ -569,7 +569,7 @@ body.searching #live, body.searching #f1, body.searching #futures, body.searchin
 /* History: views, groups and slip cards */
 .history-tabs { display: flex; width: 100%; max-width: 460px; margin-bottom: 14px; }
 .history-tabs button { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
-.saved-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; padding: 12px 14px; margin-bottom: 12px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+.saved-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; padding: 12px 14px; margin-bottom: 12px; border-radius: var(--radius); background: var(--surface); border: 1px solid transparent; box-shadow: var(--shadow-sm); }
 .saved-toolbar .history-filter { margin-bottom: 0; }
 .slip-group { margin-bottom: 16px; }
 .group-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin: 6px 2px 10px; }
@@ -659,7 +659,7 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .lotto-seg { display: flex; width: 100%; margin-bottom: 14px; }
 .lotto-seg button { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .lotto-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 10px; }
-.lotto-card { position: relative; display: grid; align-content: start; gap: 4px; min-height: 124px; padding: 14px; overflow: hidden; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); color: var(--text-primary); text-align: left; font: inherit; cursor: pointer; }
+.lotto-card { position: relative; display: grid; align-content: start; gap: 4px; min-height: 124px; padding: 14px; overflow: hidden; border: 1px solid transparent; border-radius: 18px; background: var(--surface); color: var(--text-primary); text-align: left; font: inherit; cursor: pointer; }
 .lotto-card::before { content: ''; position: absolute; inset: 0 0 auto; height: 4px; background: var(--lotto); }
 .lotto-name { font-weight: 800; font-size: 1.02rem; color: var(--lotto); }
 .lotto-price { color: var(--text-muted); font-size: 0.8rem; }
@@ -678,18 +678,18 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .lotto-pick { display: grid; gap: 10px; }
 .lotto-pick .muted { margin: 4px 0 0; font-size: 0.82rem; }
 .num-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 5px; }
-.num-cell { aspect-ratio: 1; border: 1px solid var(--border); border-radius: 50%; background: var(--q-surface); color: var(--text-secondary); font: 650 0.82rem/1 var(--q-font); font-variant-numeric: tabular-nums; cursor: pointer; }
+.num-cell { aspect-ratio: 1; border: 1px solid transparent; border-radius: 50%; background: var(--q-surface); color: var(--text-secondary); font: 650 0.82rem/1 var(--q-font); font-variant-numeric: tabular-nums; cursor: pointer; }
 .num-cell.on { border-color: transparent; background: var(--lotto); color: #fff; }
 .lotto-tools, .lotto-sides { display: flex; flex-wrap: wrap; gap: 8px; }
 .q-chip.on { border-color: transparent; background: var(--lotto); color: #fff; }
 .lotto-h { margin: 6px 0 0; font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); }
 .digit-row { display: flex; justify-content: center; gap: 10px; }
 .digit { display: grid; justify-items: center; gap: 4px; }
-.digit button { width: 48px; height: 32px; border: 1px solid var(--border); border-radius: 10px; background: var(--q-surface); color: var(--text-secondary); cursor: pointer; }
+.digit button { width: 48px; height: 32px; border: 1px solid transparent; border-radius: 10px; background: var(--q-fill, var(--q-surface)); color: var(--text-secondary); cursor: pointer; }
 .digit strong { display: grid; place-items: center; width: 48px; height: 56px; border-radius: 14px; background: var(--lotto); color: #fff; font-size: 1.8rem; }
 .lotto-mult { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 14px 0 4px; font-weight: 650; }
 .stepper { display: inline-flex; align-items: center; gap: 12px; }
-.stepper button { width: 36px; height: 36px; border: 1px solid var(--border); border-radius: 50%; background: var(--q-surface); font-size: 1.1rem; cursor: pointer; }
+.stepper button { width: 36px; height: 36px; border: 1px solid transparent; border-radius: 50%; background: var(--q-surface); font-size: 1.1rem; cursor: pointer; }
 .lotto-prizes { margin: 10px 0; font-size: 0.84rem; }
 .lotto-prizes summary { cursor: pointer; color: var(--text-secondary); font-weight: 650; }
 .lotto-prizes table { width: 100%; margin-top: 6px; border-collapse: collapse; }
@@ -741,7 +741,7 @@ img[src*='thesportsdb'] { object-fit: contain; }
 @keyframes sc-pop { from { transform: scale(0.9); opacity: 0; } }
 
 .lotto-tickets { display: grid; gap: 10px; }
-.lotto-ticket { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--border); border-left: 4px solid var(--lotto); border-radius: 14px; background: var(--surface); color: inherit; text-align: left; font: inherit; }
+.lotto-ticket { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid transparent; border-left: 4px solid var(--lotto); border-radius: 14px; background: var(--surface); color: inherit; text-align: left; font: inherit; }
 .lotto-ticket.won { background: color-mix(in srgb, var(--good) 7%, var(--surface)); }
 .lt-head { display: flex; justify-content: space-between; gap: 10px; }
 .lt-head strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -774,14 +774,14 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .lotto-done-mark { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; font-size: 2rem; font-weight: 900; color: #fff; background: var(--lotto); box-shadow: 0 10px 28px -10px var(--lotto); }
 .lotto-done strong { font-size: 1.1rem; }
 .lotto-done .lotto-buybar { width: calc(100% + 36px); margin-top: 18px; }
-.lotto-summary { display: flex; justify-content: space-between; gap: 12px; padding: 12px 14px; margin: 4px 0 6px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); font-size: 0.9rem; }
+.lotto-summary { display: flex; justify-content: space-between; gap: 12px; padding: 12px 14px; margin: 4px 0 6px; border-radius: 14px; background: var(--surface); border: 1px solid transparent; font-size: 0.9rem; }
 .lotto-summary strong { color: var(--accent); }
 .lotto-id { display: grid; min-width: 0; line-height: 1.2; }
 .lotto-id .lotto-name { font-size: 1rem; }
 .lotto-card .lotto-quick { min-height: 34px; background: color-mix(in srgb, var(--lotto) 12%, transparent); color: var(--lotto); border: 0; }
 
 /* The 彩券 tab's way to the tickets (they live in 紀錄). */
-.lotto-mine-link { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 16px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); box-shadow: var(--shadow-sm); color: inherit; font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.lotto-mine-link { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 16px; padding: 14px 16px; border: 1px solid transparent; border-radius: var(--radius-sm); background: var(--surface); box-shadow: var(--shadow-sm); color: inherit; font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
 .lotto-mine-link span:first-child { flex: 1; }
 .lotto-mine-link .chev { color: var(--text-muted); font-size: 1.2rem; }
 
@@ -795,11 +795,11 @@ img[src*='thesportsdb'] { object-fit: contain; }
 #stats-body .down { color: var(--st-down); }
 .st-periods { display: flex; gap: 6px; }
 .st-periods button {
-  flex: 0 0 auto; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface);
+  flex: 0 0 auto; padding: 7px 14px; border-radius: 999px; border: 1px solid transparent; background: var(--surface);
   color: var(--text-secondary); font: 600 0.85rem/1 inherit; font-family: inherit; cursor: pointer;
 }
 .st-periods button[aria-pressed='true'] { background: var(--text-primary); color: var(--page); border-color: transparent; }
-.st-card { margin: 0; padding: 16px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); display: grid; gap: 10px; }
+.st-card { margin: 0; padding: 16px; border-radius: var(--radius); background: var(--surface); border: 1px solid transparent; box-shadow: var(--shadow-sm); display: grid; gap: 10px; }
 .st-head h3 { font-size: 1rem; font-weight: 800; }
 .st-head p { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
 
@@ -823,10 +823,10 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .lt-line > .num { flex: none; font-size: 0.8rem; color: var(--text-muted); }
 .lt-line.won > .num { color: var(--good); font-weight: 750; }
 .lt-cards { display: flex; flex-wrap: wrap; gap: 6px; }
-.lt-card { min-width: 52px; min-height: 36px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-sunken); color: var(--text-muted); font: 650 0.8rem/1 var(--q-font); font-variant-numeric: tabular-nums; cursor: pointer; }
+.lt-card { min-width: 52px; min-height: 36px; padding: 4px 8px; border: 1px solid transparent; border-radius: 8px; background: var(--q-fill, var(--surface-sunken)); color: var(--text-muted); font: 650 0.8rem/1 var(--q-font); font-variant-numeric: tabular-nums; cursor: pointer; }
 .lt-card.won { border-color: transparent; background: color-mix(in srgb, var(--good) 16%, var(--surface)); color: var(--good); }
 .lotto-more { justify-self: center; }
-.lt-group { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--border); border-left: 4px solid var(--lotto); border-radius: 14px; background: var(--surface); text-align: left; }
+.lt-group { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid transparent; border-left: 4px solid var(--lotto); border-radius: 14px; background: var(--surface); text-align: left; }
 .lt-group.won { background: color-mix(in srgb, var(--good) 7%, var(--surface)); }
 .lotto-day-head, .lotto-done-head { text-align: left; }
 .lt-line .balls { flex: 1; min-width: 0; }
@@ -926,7 +926,7 @@ img[src*='thesportsdb'] { object-fit: contain; }
 
 /* 我的彩券, simpler: a plain card each, its name and what it cost on the left,
    one net tag on the right; the day and the whole list the same tag. */
-.lt-group, .lt-group.out-up, .lt-group.out-part, .lt-group.out-none { gap: 10px; padding: 14px; border: 1px solid var(--border); border-left: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: var(--q-shadow-sm, none); }
+.lt-group, .lt-group.out-up, .lt-group.out-part, .lt-group.out-none { gap: 10px; padding: 14px; border: 1px solid transparent; border-left: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: var(--q-shadow-sm, none); }
 .lt-group .lt-head { align-items: center; }
 .lt-title { display: grid; gap: 2px; min-width: 0; }
 .lt-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -944,7 +944,7 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .lt-card.out-even { color: var(--text-primary); font-weight: 800; }
 
 /* ---- Home: the balance, featured games, your bets, the lottery ---- */
-.wallet-card { display: grid; gap: 2px; margin: 4px 0 22px; padding: 16px 18px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+.wallet-card { display: grid; gap: 2px; margin: 4px 0 22px; padding: 16px 18px; border-radius: var(--radius); background: var(--surface); border: 1px solid transparent; box-shadow: var(--shadow-sm); }
 .wallet-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .wallet-label { font-size: 0.8rem; color: var(--text-muted); }
 .wallet-plus { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.16em; color: color-mix(in srgb, var(--q-plus-gold, #d9b877) 75%, var(--text-primary)); }
@@ -959,7 +959,7 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .home-sub { margin: 2px 0 0; color: var(--text-muted); font-size: 0.78rem; }
 .home-link { flex: none; border: 0; background: none; padding: 4px 0; font: inherit; font-size: 0.84rem; font-weight: 650; color: var(--accent); cursor: pointer; white-space: nowrap; }
 .features { display: grid; gap: 10px; }
-.feature { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; }
+.feature { background: var(--surface); border: 1px solid transparent; border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; }
 .feature-top { display: flex; align-items: center; gap: 8px; width: 100%; padding: 11px 14px 4px; border: 0; background: none; font: inherit; font-size: 0.76rem; color: var(--text-muted); text-align: left; cursor: pointer; }
 .feature-series { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .feature-tag { flex: none; padding: 1px 7px; border-radius: 999px; font-size: 0.68rem; font-weight: 700; color: var(--accent); background: var(--accent-wash); }
@@ -971,7 +971,7 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .feature-draw { display: grid; place-items: center; width: 30px; height: 30px; flex: none; color: var(--text-muted); font-weight: 800; }
 .feature-row .pick { flex: none; min-width: 74px; }
 .feature-more { display: block; width: 100%; padding: 9px 14px; border: 0; border-top: 1px solid var(--border); background: var(--surface-raised); font: inherit; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); text-align: left; cursor: pointer; }
-.bet-rows { display: grid; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-sm); overflow: hidden; }
+.bet-rows { display: grid; border: 1px solid transparent; border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-sm); overflow: hidden; }
 .bet-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 14px; }
 .bet-row + .bet-row { border-top: 1px solid var(--border); }
 .bet-main { display: grid; gap: 2px; flex: 1; min-width: 0; padding: 0; border: 0; background: none; font: inherit; text-align: left; color: var(--text-primary); cursor: pointer; }
@@ -981,7 +981,7 @@ img[src*='thesportsdb'] { object-fit: contain; }
 .bet-cash small { font-size: 0.68rem; font-weight: 700; }
 .bet-cash strong { font-size: 0.9rem; white-space: nowrap; }
 .bet-cash.off { border-color: var(--border); background: var(--surface-sunken); color: var(--text-muted); cursor: default; }
-.jackpots { display: grid; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-sm); overflow: hidden; }
+.jackpots { display: grid; border: 1px solid transparent; border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-sm); overflow: hidden; }
 .jackpot { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 12px 14px; border: 0; background: none; font: inherit; text-align: left; color: var(--text-primary); cursor: pointer; }
 .jackpot + .jackpot { border-top: 1px solid var(--border); }
 .jackpot-what { display: grid; gap: 1px; min-width: 0; }
@@ -1009,7 +1009,7 @@ img[src*='thesportsdb'] { object-fit: contain; }
 
 /* ---- Saved slips: cash out ---- */
 .cashout { display: grid; gap: 6px; margin: 12px 0 0; }
-.cashout-btn { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; min-height: 46px; padding: 0 16px; border: 0; border-radius: 12px; background: var(--good); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.cashout-btn { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; min-height: 46px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--good); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
 .cashout-btn strong { font-size: 1.02rem; font-variant-numeric: tabular-nums; }
 .cashout.off .cashout-btn { background: var(--surface-sunken); color: var(--text-muted); cursor: default; }
 .cashout .q-plus-hint { justify-self: end; }
@@ -1031,7 +1031,7 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 
 /* ---- Slip: quick stakes ---- */
 .stake-quick { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin: 8px 0 0; }
-.stake-quick button { padding: 8px 0; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); font: inherit; font-size: 0.84rem; font-weight: 700; color: var(--text-secondary); cursor: pointer; font-variant-numeric: tabular-nums; }
+.stake-quick button { padding: 8px 0; border: 1px solid transparent; border-radius: 999px; background: var(--q-fill, var(--surface)); font: inherit; font-size: 0.84rem; font-weight: 700; color: var(--text-secondary); cursor: pointer; font-variant-numeric: tabular-nums; }
 .stake-quick button[aria-pressed='true'] { border-color: var(--accent); background: var(--accent-wash); color: var(--accent); }
 
 /* ---- After a bet ---- */
@@ -1043,7 +1043,7 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 
 /* ---- Home: 精選串關 ---- */
 .combos { display: grid; gap: 10px; }
-.combo { border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); overflow: hidden; }
+.combo { border-radius: var(--radius); background: var(--surface); border: 1px solid transparent; box-shadow: var(--shadow-sm); overflow: hidden; }
 .combo-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 14px 8px; }
 .combo-head strong { font-size: 1rem; }
 .combo-tag { flex: none; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 750; color: var(--good); background: var(--good-wash); white-space: nowrap; }
@@ -1072,7 +1072,7 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 .wallet-welcome { margin: 10px 0 0; font-size: 0.84rem; font-weight: 700; color: var(--accent); }
 
 /* Free bets (Plus weekly, the welcome offer), above the stake. */
-.free-bets { display: grid; gap: 8px; margin: 10px 0; padding: 12px; border-radius: 12px; border: 1px solid var(--q-border); background: var(--q-surface); }
+.free-bets { display: grid; gap: 8px; margin: 10px 0; padding: 12px; border-radius: 12px; border: 1px solid transparent; background: var(--q-surface); }
 .free-bets-head { display: grid; gap: 2px; }
 .free-bets-head small { font-size: 12px; }
 .free-bets-row { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -1155,7 +1155,7 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 .wins-rhythm .wr-bar.on { background: linear-gradient(180deg, #fde68a, #f59e0b); }
 .wins-rhythm .wr-bar.now { box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.6); }
 .wins-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.wins-tile { display: grid; align-content: start; gap: 2px; min-width: 0; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+.wins-tile { display: grid; align-content: start; gap: 2px; min-width: 0; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid transparent; box-shadow: var(--shadow-sm); }
 .wins-tile small { font-size: 0.72rem; font-weight: 600; color: var(--text-muted); }
 .wins-tile strong { font-size: 1.25rem; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wins-tile span { font-size: 0.72rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1255,7 +1255,7 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 /* 為你推薦: a row of pick cards, swiped sideways. */
 .fys { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(264px, 84%); gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: 16px; margin: 0 -16px; padding: 2px 16px 6px; scrollbar-width: none; }
 .fys::-webkit-scrollbar { display: none; }
-.fy { --tone: var(--accent); --wash: var(--accent-wash); display: grid; scroll-snap-align: start; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; position: relative; }
+.fy { --tone: var(--accent); --wash: var(--accent-wash); display: grid; scroll-snap-align: start; background: var(--surface); border: 1px solid transparent; border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; position: relative; }
 .fy::before { content: ''; position: absolute; inset: 0 0 auto; height: 3px; background: var(--tone); }
 .fy.follow { --tone: var(--gold); --wash: color-mix(in srgb, var(--gold) 13%, transparent); }
 .fy.backed, .fy.steady { --tone: var(--good); --wash: var(--good-wash); }
