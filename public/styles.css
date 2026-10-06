@@ -538,7 +538,7 @@ body.searching #live, body.searching #f1, body.searching #futures, body.searchin
 /* Slip: what each pick is, what it pays */
 .leg-pick { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .leg-pick strong { overflow-wrap: anywhere; }
-.parlay-legs .slip-leg-game { white-space: normal; overflow: visible; }
+.parlay-legs .slip-leg-game { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .market-tag { flex: none; font-size: 0.66rem; font-weight: 700; padding: 1px 6px; border-radius: 6px; background: var(--surface-sunken); color: var(--text-secondary); }
 .market-tag.tag-ml { background: var(--accent-wash); color: var(--accent); }
 .market-tag.tag-total, .market-tag.tag-teamtotal { background: var(--good-wash); color: var(--good); }
@@ -1219,7 +1219,7 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 .logo.photo { object-fit: cover; object-position: 50% 20%; border-radius: 50%; background: var(--q-surface-2, #eef1f5); }
 /* 紀錄's summary cells. */
 .acct-cells { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding-top: 10px; border-top: 1px solid var(--q-divider, rgba(0, 0, 0, 0.08)); }
-.acct-cell { display: grid; gap: 2px; min-width: 0; }
+.acct-cell { display: grid; gap: 2px; min-width: 0; align-content: start; }
 .acct-cell span { font-size: 0.72rem; color: var(--q-muted); }
 .acct-cell strong { font-size: 0.98rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .acct-cell small { font-size: 0.68rem; color: var(--q-muted); }
@@ -1298,3 +1298,61 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 .slip-bar.in-sheet { position: sticky; left: auto; right: auto; bottom: calc(12px + env(safe-area-inset-bottom)); width: 100%; margin: 0 0 calc(12px + env(safe-area-inset-bottom)); }
 .slip-bar.in-sheet[hidden] { display: none; }
 #game-sheet-body:has(+ .slip-bar.in-sheet:not([hidden])) { padding-bottom: 12px; }
+
+/* ---- Pictures drawn, not emoji (icons.js) ---- */
+.pi { display: inline-grid; place-items: center; width: 1em; height: 1em; flex: none; line-height: 0; }
+.pi svg { display: block; }
+.with-icon { display: inline-flex; align-items: center; gap: 6px; }
+.with-icon .pi { width: 1.05em; height: 1.05em; }
+.flag-badge.pi { width: 32px; height: 32px; }
+.flag-badge.logo-sm.pi { width: 28px; height: 28px; }
+
+/* ---- A ticket's picks: every line kept to one row ---- */
+.saved-legs li { display: grid; grid-template-columns: 20px 30px minmax(0, 1fr) auto; align-items: center; column-gap: 10px; padding: 9px 12px; }
+.leg-result { width: 20px; height: 20px; display: grid; place-items: center; }
+.leg-result .pi { width: 18px; height: 18px; }
+.leg-waiting .leg-result, .leg-cashed .leg-result { color: var(--text-muted); }
+.leg-live .leg-result .pi { width: 12px; height: 12px; }
+.saved-legs .leg-body { gap: 3px; }
+.leg-pick { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.leg-pick strong { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+.leg-pick .market-tag { flex: none; }
+.saved-legs .leg-inplay { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.78rem; }
+.saved-legs .leg-final { font-variant-numeric: tabular-nums; }
+.saved-legs .leg-odds { white-space: nowrap; }
+/* The money box: its figures on one row, a free bet's split as a line across it. */
+.saved-pay { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; align-items: start; }
+.pay-cells { display: flex; gap: 10px; min-width: 0; }
+.pay-cells > .pay-cell { flex: 1 1 0; }
+.pay-note { display: flex; align-items: center; gap: 6px; margin: 2px 0 0; padding-top: 8px; border-top: 1px solid var(--border); font-size: 0.78rem; font-weight: 600; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pay-note-icon { width: 15px; height: 15px; color: var(--accent); }
+
+/* ---- Home: a slip with its picks' pictures; the money a line of its own ---- */
+.bet-row { padding: 12px 12px 12px 14px; }
+.bet-pics { display: flex; flex: none; align-items: center; }
+.bet-pics > * { width: 34px; height: 34px; border-radius: 50%; box-shadow: 0 0 0 2px var(--surface); background: var(--surface-raised); flex: none; object-fit: cover; }
+.bet-pics > * + * { margin-left: -12px; }
+.bet-pics .logo, .bet-pics picture, .bet-pics img { width: 34px; height: 34px; }
+.bet-main { gap: 3px; }
+.bet-money { display: flex; align-items: baseline; gap: 5px; font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap; }
+.bet-money strong { font-size: 0.86rem; color: var(--text-primary); }
+.bet-arrow { color: var(--text-muted); }
+.bet-cash.free { display: inline-flex; align-items: center; gap: 5px; min-width: 0; color: var(--text-secondary); }
+.bet-cash.free .pi { width: 16px; height: 16px; color: var(--accent); }
+.wallet-welcome { display: flex; align-items: center; gap: 8px; }
+.wallet-welcome .pi { width: 18px; height: 18px; }
+
+/* ---- Home: a lottery game as its ball, the next draw, the last numbers, the jackpot ---- */
+.jackpot { padding: 12px 14px; }
+.jp-emblem.lotto-emblem { width: 42px; height: 42px; font-size: 1.05rem; }
+.jackpot-what { flex: 1; gap: 4px; }
+.jackpot { align-items: flex-start; }
+.jackpot-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-width: 0; }
+.jackpot-when { font-size: 0.74rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jp-balls { margin-top: 3px; }
+.jp-balls { display: flex; gap: 3px; flex-wrap: nowrap; overflow: hidden; }
+.jp-ball { flex: none; width: 21px; height: 21px; border-radius: 50%; display: grid; place-items: center; font-size: 0.64rem; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text-primary); background: var(--surface-raised); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lotto) 35%, var(--border)); }
+.jp-ball.second { color: #fff; background: var(--lotto); box-shadow: none; }
+
+/* A ticket's progress in one row. */
+.saved-progress { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

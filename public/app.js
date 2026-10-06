@@ -19,13 +19,14 @@ import { cashOutValue, CASHOUT_KEEP } from './lib/cashout.mjs';
 import { renderHome, tasteKey } from './home.js';
 import { mountLottery } from './lottery-ui.js';
 import { mountStats } from './stats-ui.js';
+import { icon } from './icons.js';
 import {
   othersBalance, installGate, watchUpdates, quadraSession, tabBar, topActions, recordAffinity, affinityPatch, notify, schedulePush, storedAccount, PLUS, plusMember, openPlus, ask, tell, freeBets
 } from '#kit/quadra.mjs';
 import { pack, unpack } from './lib/codec.mjs';
 import { historyStats, funFacts, crowdPercentile } from './lib/history.mjs';
 import { detectLocale, makeT } from './lib/i18n.mjs';
-import { f1Driver, f1Constructor, findTeamLogo, countryFlag, countryCode, leagueLogo, teamLogo, teamZh, LEAGUES, familyOf, isSoccer, isDuel, normalizeTeamName } from './lib/teams.mjs';
+import { f1Driver, f1Constructor, findTeamLogo, countryFlag, countryCode, leagueLogo, teamLogo, teamZh, teamNameZh, LEAGUES, familyOf, isSoccer, isDuel, normalizeTeamName } from './lib/teams.mjs';
 import { flagUrl } from '#kit/logos.mjs';
 import { logoPicture, raceName } from '#kit/logos.mjs';
 import { houseRule, houseCut, minLegsProblem, leagueTier } from './lib/rules.mjs';
@@ -173,6 +174,16 @@ function fmtOdds(o) {
   return o.toFixed(2);
 }
 
+// A day and time in one short run ("10/10 21:00", Taiwan time): where a
+// line has no room for the weekday.
+function fmtShort(iso) {
+  return formatter('short', locale => new Intl.DateTimeFormat(locale, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Taipei' }))
+    .format(new Date(iso))
+    .replace(/[,，]\s*/, ' ');
+}
+// A saved pick's name as shown now: a driver as the app names them today
+// (a ticket from before keeps "G.羅素"; the initial is no longer said).
+const shownLabel = leg => String(leg.shortLabel || leg.label || '').replace(/^[A-Z]{1,3}\.(?=[\u4e00-\u9fff])/, '');
 // Taiwan time, like the lottery, wherever the page is opened.
 function fmtTime(iso) {
   return formatter('time', locale =>
@@ -1816,11 +1827,32 @@ function marketTag(kind) {
 
 // A pick on a slip: what it is (with its market), then its game and start
 // time in full (the time tells doubleheader games apart).
+// A pick in two short lines, each kept to one row: the market and the pick,
+// then when and which game ("10/10 21:00 · 費城人 @ 勇士").
 function legMain(leg) {
   return el('span', { class: 'leg-main' }, [
-    el('span', { class: 'leg-pick' }, [leg.live ? el('span', { class: 'market-tag tag-live', text: state.t('tagLive') }) : null, marketTag(leg.kind), el('strong', { text: leg.shortLabel })]),
-    el('small', { class: 'slip-leg-game', text: leg.start ? `${leg.matchup} · ${fmtTime(leg.start)}` : leg.matchup })
+    el('span', { class: 'leg-pick' }, [leg.live ? el('span', { class: 'market-tag tag-live', text: state.t('tagLive') }) : null, marketTag(leg.kind), el('strong', { text: shownLabel(leg) })]),
+    el('small', { class: 'slip-leg-game', text: [leg.start ? fmtShort(leg.start) : '', shortMatchup(leg)].filter(Boolean).join(' · ') })
   ]);
+}
+// A pick with its team's short name where it names one ("布魯克林籃網 -3.5" → "籃網 -3.5").
+function shortPick(leg) {
+  const label = shownLabel(leg);
+  if (state.locale !== 'zh') return label;
+  for (const side of ['away', 'home']) {
+    const en = leg[side] ?? leg.game?.[side]?.en;
+    const zh = en && teamNameZh(leg.sport, en, familyOf(leg.sport));
+    if (zh?.full && zh.short && label.includes(zh.full)) return label.replace(zh.full, zh.short);
+  }
+  return label;
+}
+// A game by its teams' short names ("籃網 @ 黃蜂"; football: home first, "vs"),
+// so the line fits; the game's own text when there are no two teams.
+function shortMatchup(leg) {
+  const [away, home] = [leg.away ?? leg.game?.away?.en, leg.home ?? leg.game?.home?.en];
+  if (!away || !home) return leg.matchup;
+  const name = n => (state.locale === 'zh' ? teamNameZh(leg.sport, n, familyOf(leg.sport))?.short : null) || n;
+  return isSoccer(leg.sport) ? `${name(home)} vs ${name(away)}` : `${name(away)} @ ${name(home)}`;
 }
 
 // Payout at a glance: for a parlay the odds multiplied out, for singles each
@@ -1905,7 +1937,13 @@ function payCell(label, value, cls = '', sub = '') {
   return el('div', { class: 'pay-cell' }, [el('small', { text: label }), el('strong', { class: cls, text: value }), sub ? el('small', { class: 'pay-sub', text: sub }) : null]);
 }
 // A free bet's slip: the whole stake, and how it was paid under it.
-const freeCell = slip => payCell(state.t('slipCost'), fmtMoney(slip.stake, { sign: false }), '', slip.cost > 0 ? state.t('placeFreePlus', { f: fmtMoney(slip.freeValue ?? slip.stake - slip.cost, { sign: false }), v: fmtMoney(slip.cost, { sign: false }) }) : state.t('placeFree', { v: fmtMoney(slip.freeValue ?? slip.stake, { sign: false }) }));
+const freeCell = slip => payCell(state.t('slipCost'), fmtMoney(slip.stake, { sign: false }));
+// How a free bet's stake was paid, a line across the money box ("免費 NT$200 ＋ 自付 NT$800").
+const freeNote = slip =>
+  el('p', { class: 'pay-note' }, [
+    icon('gift', 'pay-note-icon'),
+    el('span', { text: slip.cost > 0 ? state.t('placeFreePlus', { f: fmtMoney(slip.freeValue ?? slip.stake - slip.cost, { sign: false }), v: fmtMoney(slip.cost, { sign: false }) }) : state.t('placeFree', { v: fmtMoney(slip.freeValue ?? slip.stake, { sign: false }) }) })
+  ]);
 
 function payLine(label, value, cls = '') {
   return el('div', { class: `pay-line ${cls}` }, [el('span', { text: label }), el('strong', { text: value })]);
@@ -2120,6 +2158,7 @@ function legLogo(bet) {
 
 // A saved pick's picture: its team's logo, the driver's badge, or the league's logo.
 function legIcon(leg) {
+  if (FLAG_KINDS.has(leg.kind)) return icon(leg.kind, 'flag-badge logo-sm');
   if ((leg.kind === 'f1' || leg.kind === 'f1pole' || leg.kind === 'f1podium') && leg.driver) {
     const driver = f1Driver(leg.driver);
     return driverBadge({ driverEn: leg.driver, driver }, 'logo-sm');
@@ -2173,10 +2212,10 @@ function freeBetRow(tokens, free, freeOn, rerender, freeShape = true) {
   const t = state.t;
   const days = x => Math.max(1, Math.ceil((x.until - Date.now()) / 86_400_000));
   return el('div', { class: 'free-bets' }, [
-    el('div', { class: 'free-bets-head' }, [el('strong', { text: t('freeBetsTitle') }), el('small', { class: 'muted', text: t('freeBetsSub') })]),
+    el('div', { class: 'free-bets-head' }, [el('strong', { class: 'with-icon' }, [icon('gift'), el('span', { text: t('freeBetsTitle') })]), el('small', { class: 'muted', text: t('freeBetsSub') })]),
     el('div', { class: 'free-bets-row', role: 'group' }, tokens.map(x =>
       el('button', { type: 'button', class: 'free-bet', 'aria-pressed': String(free?.id === x.id), onclick: () => ((state.useFree = free?.id === x.id ? null : x.id), rerender()) }, [
-        el('strong', { class: 'num', text: `🎁 ${fmtMoney(x.value, { sign: false })}` }),
+        el('strong', { class: 'num with-icon' }, [icon('gift'), el('span', { text: fmtMoney(x.value, { sign: false }) })]),
         el('small', { text: x.id === 'eco:fb:welcome' ? `${t('freeBetWelcome')} · ${t('freeBetDays', { n: days(x) })}` : x.id.startsWith('eco:fb:') ? `✦ ${t('freeBetPlus')} · ${t('freeBetDays', { n: days(x) })}` : t('freeBetDays', { n: days(x) }) })
       ])
     )),
@@ -2375,7 +2414,6 @@ function slipRange(slip) {
   };
 }
 
-const LEG_ICON = { won: '✓', lost: '✗', void: '↺', live: '●', waiting: '⏳', cashed: '–' };
 
 // A free bet's slip: the free part, and what was put on top.
 
@@ -2499,8 +2537,10 @@ function scoreText(leg, score) {
 function legFinalLine(leg) {
   const f = leg.final;
   if (!f) return null;
-  const text = f.winner ? `${state.t('finalWinner')} ${f.winner}` : `${state.t('finalScore')} ${scoreText(leg, f)}`;
-  return el('span', { class: 'leg-inplay muted', text });
+  // The score alone ("終場 2 : 6", in the game line's order): the teams are on the line above.
+  const order = isSoccer(leg.sport) ? ['home', 'away'] : ['away', 'home'];
+  const text = f.winner ? `${state.t('finalWinner')} ${String(f.winner).replace(/^[A-Z]{1,3}\.(?=[\u4e00-\u9fff])/, '')}` : `${state.t('finalScore')} ${f[order[0]]} : ${f[order[1]]}`;
+  return el('span', { class: 'leg-inplay leg-final muted', text });
 }
 
 function legLiveLine(leg) {
@@ -2573,20 +2613,21 @@ function savedSlipCard(slip) {
     el('div', { class: 'leg-bar', role: 'img', 'aria-label': t('slipProgress', { k: decided, n }) }, states.map(st => el('span', { class: `seg seg-${st}` }))),
     el('p', { class: 'saved-progress' }, [
       document.createTextNode(t('slipProgress', { k: decided, n })),
-      !settled && nextStart ? el('span', { class: 'muted', text: ` · ${t('slipNextStart', { time: fmtTime(nextStart) })}` }) : null
+      !settled && nextStart ? el('span', { class: 'muted', text: ` · ${t('slipNextStart', { time: fmtShort(nextStart) })}` }) : null
     ]),
     !settled ? slipNowLine(slip, states) : null,
     el('ul', { class: 'parlay-legs saved-legs' },
       slip.legs.map((leg, k) =>
         el('li', { class: `leg-${states[k]}` }, [
-          el('span', { class: 'leg-result', 'aria-label': t(`legState_${states[k]}`), title: t(`legState_${states[k]}`), text: LEG_ICON[states[k]] }),
+          el('span', { class: 'leg-result', role: 'img', 'aria-label': t(`legState_${states[k]}`), title: t(`legState_${states[k]}`) }, [icon(states[k])]),
           legIcon(leg),
           el('span', { class: 'leg-body' }, [legMain(leg), states[k] === 'live' ? legLiveLine(leg) : leg.result ? legFinalLine(leg) : null]),
           el('span', { class: 'leg-odds' }, [el('small', { text: '@' }), document.createTextNode(fmtOdds(leg.odds))])
         ])
       )
     ),
-    el('div', { class: 'saved-pay' }, settled
+    el('div', { class: 'saved-pay' }, [
+      el('div', { class: 'pay-cells' }, settled
       ? [
           slip.free ? freeCell(slip) : payCell(t('slipCost'), fmtMoney(slip.cost, { sign: false })),
           payCell(t('slipPaidLabel'), fmtMoney(slip.payout, { sign: false })),
@@ -2598,6 +2639,8 @@ function savedSlipCard(slip) {
           decided && range.locked > 0 ? payCell(t('slipLocked'), fmtMoney(range.locked, { sign: false }), 'back-high') : null,
           payCell(decided ? t('slipMost') : slip.free ? t('payAllFree') : t('payAll'), fmtMoney(range.most, { sign: false }), dead ? 'back-low' : '')
         ]),
+      slip.free ? freeNote(slip) : null
+    ]),
     slip.boost && boostRate(Math.max(...slip.sizes), slip.boost) > 0 ? el('p', { class: 'saved-boost', text: t('slipBoosted', { v: `+${Math.round(boostRate(Math.max(...slip.sizes), slip.boost) * 100)}%` }) }) : null,
     settled || dead || slip.free ? null : cashOutRow(slip),
   ]);
@@ -3072,7 +3115,8 @@ function numberField(input, { digits = 7, onEnter = null } = {}) {
 
 // F1: one card, a tab per market (the winner, places, head to heads, the
 // winning team, and safety car, VSC and red flag each on their own).
-const FLAG_ICON = { f1sc: '🚗', f1vsc: '🟨', f1red: '🟥' };
+// Each flag market's board, as the race shows it (icons.js).
+const FLAG_KINDS = new Set(['f1sc', 'f1vsc', 'f1red']);
 const F1_TABS = [
   { kind: 'f1', tab: 'f1WinnerTab', sub: null, notes: ['f1Intro', 'f1PhaseNote'] },
   { kind: 'f1pole', tab: 'f1PoleShort', sub: 'f1PoleSub', notes: ['f1PoleNote'], shown: 10 },
@@ -3118,7 +3162,7 @@ function renderF1() {
     const on = tabRow.querySelector('[aria-selected="true"]');
     if (on && tabRow.scrollWidth > tabRow.clientWidth) tabRow.scrollLeft = Math.max(0, on.offsetLeft - (tabRow.clientWidth - on.offsetWidth) / 2);
   });
-  const badge = b => (current.flag ? el('span', { class: 'flag-badge', 'aria-hidden': 'true', text: FLAG_ICON[b.kind] }) : b.kind === 'f1team' ? constructorBadge(b.team) : driverBadge(b));
+  const badge = b => (current.flag ? icon(b.kind, 'flag-badge') : b.kind === 'f1team' ? constructorBadge(b.team) : driverBadge(b));
   const sub = b => (current.flag ? null : b.kind === 'f1team' ? '' : b.kind === 'f1h2h' ? `vs ${b.rivalLabel}` : b.driver.team);
   $('f1-body').replaceChildren(
     board({
@@ -3688,7 +3732,7 @@ function homeCtx() {
   };
   return {
     openSlip: () => openSlip(),
-    slipCount: () => slipLegs().legs.length, state, q, el, fmtMoney, fmtOdds, fmtTime, pickTitle, pickButton, teamName, gameSeries, matchupText, logoImg, leagueImg, toggleLeg, takeParlay, showTab, openGame, openLive, liveStateText, betKeys, track, funds, slipRange, cashOutPrice, doCashOut, leagueTier: shownTier, isSoccer, parlayPays, boostPct: n => Math.round(boostRate(n, boostX()) * 100) };
+    slipCount: () => slipLegs().legs.length, state, q, el, fmtMoney, fmtOdds, fmtTime, fmtShort, shownLabel, shortPick, legIcon, pickTitle, pickButton, teamName, gameSeries, matchupText, logoImg, leagueImg, toggleLeg, takeParlay, showTab, openGame, openLive, liveStateText, betKeys, track, funds, slipRange, cashOutPrice, doCashOut, leagueTier: shownTier, isSoccer, parlayPays, boostPct: n => Math.round(boostRate(n, boostX()) * 100) };
 }
 statsUi = mountStats({ state, el, svgEl, fmtMoney, fmtInt, fmtPctShort, fmtOdds, fmtTime, showTab, sportName: key => (key === 'mixed' ? state.t('sportMixed') : state.t(`sport_${key}`) === `sport_${key}` ? String(key).toUpperCase() : state.t(`sport_${key}`)), youCard, crowdCard, funCard, picksCard, breakdownCard });
 lotteryUi = mountLottery({ state, q, el, fmtMoney, funds, commitAccount, track, getAccount: () => state.account, syncNow, showTickets });

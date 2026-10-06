@@ -19,6 +19,7 @@
 import { rank, affinity, plusMember, plusCard, vipStatus, vipName, VIP, tell, welcomeDue, WELCOME, cachedPayload } from '#kit/quadra.mjs';
 import { tasteOf, gameInterest, forYouPicks, fixturesTaste, leagueTaste, spreadLeagues } from './lib/foryou.mjs';
 import { GAMES, nextDraw, latestResults, gameName } from './lib/lottery.mjs';
+import { icon } from './icons.js';
 
 const TXT = {
   zh: {
@@ -30,7 +31,7 @@ const TXT = {
     overdrawn: '透支 · 月息 1%', cover: '賣出持股補足',
     vipNone: 'VIP 回饋', vipNoneSub: '本月投注滿 {v} 起，最高回饋 {top}', vipBack: '本月回饋 {p} · 約 {v}', vipNext: '再投注 {v} 升{name}', vipTop: '最高等級', vipPaid: '上月回饋 {v} 已入帳',
     vipTitle: 'VIP 投注回饋', vipBody: '每月投注決定等級，下個月初自動回饋。免費，不用報名。', vipTier: '月投注 {min} 起 · 回饋 {back}',
-    welcome: '🎁 第一次下注，就送 {v} 免費投注',
+    welcome: '第一次下注，就送 {v} 免費投注',
     forYou: '為你推薦', why_follow: '★ 追蹤 · {team}', why_backed: '↺ 押過 · {team}', why_like: '♥ 常看 · {team}', why_league: '你常玩的{league}', why_sport: '你常玩的{league}', why_value: '🔥 划算', why_steady: '✓ 穩', why_shot: '⚡ 值博', payLine: '押 {s} 可贏 {w}', comboMine: '為你串 3 場',
     combos: '精選串關', comboSafe: '穩膽 3 串', comboBold: '高賠 3 串', comboTag: '{n} 串 1', comboTagBoost: '{n} 串 1 · 加成 +{b}%', comboStake: '投注 {v} · 賠率 ×{x}', comboGo: '加入投注單'
   },
@@ -43,7 +44,7 @@ const TXT = {
     overdrawn: 'Overdrawn · 1% a month', cover: 'Sell to cover',
     vipNone: 'VIP cashback', vipNoneSub: 'From {v} staked this month, up to {top} back', vipBack: '{p} back this month · about {v}', vipNext: '{v} more for {name}', vipTop: 'Top tier', vipPaid: 'Last month’s {v} paid in',
     vipTitle: 'VIP cashback', vipBody: 'A month’s stakes set your tier; the cashback arrives early next month. Free, nothing to sign up for.', vipTier: '{min}+ a month · {back} back',
-    welcome: '🎁 Place your first bet and get a {v} free bet',
+    welcome: 'Place your first bet and get a {v} free bet',
     forYou: 'For you', why_follow: '★ Following · {team}', why_backed: '↺ Backed · {team}', why_like: '♥ Watching · {team}', why_league: 'Your {league}', why_sport: 'Your {league}', why_value: '🔥 Value', why_steady: '✓ Steady', why_shot: '⚡ Long shot', payLine: '{s} wins {w}', comboMine: 'Your treble',
     combos: 'Parlays of the day', comboSafe: 'Favourites treble', comboBold: 'Big-price treble', comboTag: '{n}-pick parlay', comboTagBoost: '{n}-pick · +{b}% boost', comboStake: 'Stake {v} · odds ×{x}', comboGo: 'Add to slip'
   }
@@ -232,16 +233,22 @@ export function renderHome(ctx) {
   const prices = new Map(open.filter(s => !s.free).map(s => [s.id, ctx.cashOutPrice(s)]));
   const cashable = [...prices.values()].reduce((s, v) => s + (v || 0), 0);
   const most = open.reduce((s, x) => s + Math.max(0, ctx.slipRange(x).most), 0);
+  // A slip: its picks' pictures (a team's logo, a driver's face) overlapping,
+  // the picks, when and how many, then what's in and what it can pay, each a
+  // line of its own; its cash-out (or the free bet's mark) at the side.
   const slipRow = s => {
     const value = prices.get(s.id);
     const first = s.legs.map(l => l.start).filter(Boolean).sort()[0];
+    const most = Math.max(0, ctx.slipRange(s).most);
     return el('div', { class: 'bet-row' }, [
+      el('span', { class: `bet-pics n${Math.min(3, s.legs.length)}`, 'aria-hidden': 'true' }, s.legs.slice(0, 3).map(l => ctx.legIcon(l))),
       el('button', { class: 'bet-main', type: 'button', onclick: () => ctx.showTab('history') }, [
-        el('strong', { text: s.legs.map(l => l.shortLabel || l.label).slice(0, 2).join('、') + (s.legs.length > 2 ? '…' : '') }),
-        el('small', { text: [f('legs', { n: s.legs.length }), first ? fmtTime(first) : null, `${money(s.cost)} → ${money(Math.max(0, ctx.slipRange(s).most))}`].filter(Boolean).join(' · ') })
+        el('strong', { text: s.legs.map(l => ctx.shortPick(l)).slice(0, 3).join('、') + (s.legs.length > 3 ? '…' : '') }),
+        el('small', { text: [first ? ctx.fmtShort(first) : null, f('legs', { n: s.legs.length })].filter(Boolean).join(' · ') }),
+        el('span', { class: 'bet-money num' }, [el('span', { text: money(s.cost) }), el('span', { class: 'bet-arrow', text: '→' }), el('strong', { text: money(most) })])
       ]),
       s.free
-        ? el('span', { class: 'bet-cash off' }, [el('small', { text: `🎁 ${T.freeBet}` })])
+        ? el('span', { class: 'bet-cash off free' }, [icon('gift'), el('small', { text: T.freeBet })])
         : el('button', { class: `bet-cash${value == null ? ' off' : ''}`, type: 'button', disabled: value == null ? '' : null, onclick: () => ctx.doCashOut(s, value) }, [
             el('small', { text: value == null ? T.paused : T.cashOut }),
             value == null ? null : el('strong', { class: 'num', text: money(value) })
@@ -257,12 +264,21 @@ export function renderHome(ctx) {
       .catch(() => {});
   }
   const when = at => new Date(at).toLocaleString(lang === 'en' ? 'en-US' : 'zh-TW', { month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Taipei' });
+  // Each game: its ball in its colour, the name and the next draw, the last
+  // draw's numbers as small balls, and the jackpot (539: what a ticket costs).
+  const ball = (n, cls = '') => el('span', { class: `jp-ball${cls ? ` ${cls}` : ''}`, text: String(n).padStart(2, '0') });
   const lottoCards = ['super638', 'lotto649', 'daily539'].map(id => {
     const d = nextDraw(id);
-    const jp = latest?.[id]?.jackpot;
+    const last = latest?.[id];
+    const jp = last?.jackpot;
+    const balls = last?.numbers?.length ? [...last.numbers.map(n => ball(n)), last.zone2 != null && Number.isFinite(last.zone2) ? ball(last.zone2, 'second') : null, last.special != null && Number.isFinite(last.special) ? ball(last.special, 'second') : null].filter(Boolean) : [];
     return el('button', { class: 'jackpot', type: 'button', style: `--lotto:${GAMES[id].color}`, onclick: () => ((state.lotteryView = 'draws'), ctx.showTab('lottery')) }, [
-      el('span', { class: 'jackpot-what' }, [el('span', { class: 'jackpot-name', text: gameName(id, lang) }), el('small', { text: d ? f('drawIn', { when: when(d.at) }) : '' })]),
-      el('strong', { class: 'jackpot-amount num', text: jp ? compactMoney(jp, lang) : money(GAMES[id].price) })
+      el('span', { class: 'lotto-emblem jp-emblem', 'aria-hidden': 'true', text: gameName(id, lang).slice(0, 1) }),
+      el('span', { class: 'jackpot-what' }, [
+        el('span', { class: 'jackpot-top' }, [el('span', { class: 'jackpot-name', text: gameName(id, lang) }), el('strong', { class: 'jackpot-amount num', text: jp ? compactMoney(jp, lang) : money(GAMES[id].price) })]),
+        el('small', { class: 'jackpot-when', text: d ? f('drawIn', { when: when(d.at) }) : '' }),
+        balls.length ? el('span', { class: 'jp-balls' }, balls) : null
+      ])
     ]);
   });
 
@@ -296,7 +312,7 @@ export function renderHome(ctx) {
     cash < 0
       ? el('button', { class: 'wallet-od', type: 'button', onclick: () => ctx.q.go('stock', 'portfolio') }, [el('span', { text: T.overdrawn }), el('strong', { text: `${T.cover} ›` })])
       : null,
-    state.wallet && welcomeDue(state.wallet) ? el('p', { class: 'wallet-welcome', text: f('welcome', { v: money(WELCOME.bet) }) }) : null,
+    state.wallet && welcomeDue(state.wallet) ? el('p', { class: 'wallet-welcome' }, [icon('gift'), el('span', { text: f('welcome', { v: money(WELCOME.bet) }) })]) : null,
     open.length
       ? el('div', { class: 'wallet-stats' }, [
           el('div', {}, [el('small', { text: T.atStake }), el('strong', { class: 'num', text: `${money(atStake)} · ${f('slipsN', { n: open.length })}` })]),
