@@ -1333,6 +1333,9 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 .bet-pics > * { width: 34px; height: 34px; border-radius: 50%; box-shadow: 0 0 0 2px var(--surface); background: var(--surface-raised); flex: none; object-fit: cover; }
 .bet-pics > * + * { margin-left: -12px; }
 .bet-pics .logo, .bet-pics picture, .bet-pics img { width: 34px; height: 34px; }
+/* A face or a team's disc (the kit's, sized logo-sm everywhere else) fills its circle, not a 20px corner of it. */
+.bet-pics .q-person.logo-sm, .bet-pics .q-team-disc.logo-sm, .bet-pics .q-driver-badge.logo-sm { width: 34px; height: 34px; font-size: 0.72rem; }
+.bet-pics picture > .q-person { display: block; }
 .bet-main { gap: 3px; }
 .bet-money { display: flex; align-items: baseline; gap: 5px; font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap; }
 .bet-money strong { font-size: 0.86rem; color: var(--text-primary); }

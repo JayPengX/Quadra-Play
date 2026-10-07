@@ -3354,9 +3354,12 @@ async function load() {
     }, SNAPSHOT_WAIT_MS);
   }
   try {
-    // The main board first (the request queue serves it before anything else).
+    // The main board and every other league read at once (the request queue
+    // serves the main board's first); the other leagues used to start only
+    // once the main board was in, which held the loading screen a few
+    // seconds longer than either needed.
     const now = new Date();
-    const fresh = await loadOdds(now, saved ? undefined : onProgress);
+    const freshIn = loadOdds(now, saved ? undefined : onProgress);
     const addGames = games => {
       if (!games.length || !state.data) return;
       const ids = new Set(state.data.games.map(g => g.id));
@@ -3376,13 +3379,14 @@ async function load() {
       }, 250);
     };
     const extraGames = loadExtraLeagues(now, games => (pending.push(...games), join())).catch(error => (console.error(error), []));
+    const extraFutures = loadExtraFutures().catch(error => (console.error(error), []));
+    const fresh = await freshIn;
     // Their scoreboards tell which leagues have a game on: the live board again.
     // (The first screen waits for this one: every league's games in play.)
     const liveIn = extraGames.then(() => {
       state.boardComplete = true;
       return refreshLive();
     });
-    const extraFutures = loadExtraFutures().catch(error => (console.error(error), []));
     if (saved) {
       // Swapped in whole (every league's games that came in time, the live
       // games too), so the list doesn't shrink to the main leagues and grow
@@ -3804,7 +3808,11 @@ async function boot() {
   const starting = q.start();
   // The saved board is drawn behind the loading screen, which lifts once
   // today's board, the balance and the games on now have replaced it (load:
-  // SNAPSHOT_WAIT_MS at most), so nothing moves right after it lifts.
+  // SNAPSHOT_WAIT_MS at most), so nothing moves right after it lifts. Drawn
+  // once the sign-in has gone out (start awaits before it asks; drawn at
+  // once, the board's long first pricing held the request back most of a
+  // second).
+  await Promise.race([starting, new Promise(resolve => setTimeout(resolve, 30))]);
   drawSnapshot();
   const first = await starting;
   state.wallet = first.wallet || q.wallet;

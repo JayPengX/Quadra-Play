@@ -33,8 +33,18 @@ const DAY_MS = 86_400_000;
 const TAIPEI_OFFSET_MS = 8 * 60 * 60 * 1000;
 
 // Taiwan date (YYYY-MM-DD) of a moment. Taiwan has no daylight saving time.
+// Kept by the moment asked (every bet of a game asks with its start, a
+// redraw thousands of times: a fifth of a second on a phone).
+const dayKeys = new Map();
 export function taipeiDayKey(date) {
-  return new Date(new Date(date).getTime() + TAIPEI_OFFSET_MS).toISOString().slice(0, 10);
+  const at = typeof date === 'string' || typeof date === 'number' ? date : null;
+  if (at != null && dayKeys.has(at)) return dayKeys.get(at);
+  const key = new Date(new Date(date).getTime() + TAIPEI_OFFSET_MS).toISOString().slice(0, 10);
+  if (at != null) {
+    if (dayKeys.size > 5000) dayKeys.clear();
+    dayKeys.set(at, key);
+  }
+  return key;
 }
 
 // End of the day `days` after today, Taiwan time. MLB games are listed up to
