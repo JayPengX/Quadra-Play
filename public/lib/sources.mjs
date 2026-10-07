@@ -487,8 +487,10 @@ const KAMBI_F1_LIST = `${KAMBI}/listView/formula_1/all/all/all/competitions.json
 export function nextKambiF1Race(list, now) {
   return (list?.events || [])
     .map(x => x.event)
-    // A Grand Prix ("Race: Bahrain GP 2026", "Singapore GP 2026"), not the season's championships.
-    .filter(e => e && /^race:|\bGP\b|grand prix/i.test(e.name || '') && !/champion/i.test(e.name || '') && e.state === 'NOT_STARTED' && Date.parse(e.start) > now.getTime())
+    // A Grand Prix ("Race: Bahrain GP 2026", "Singapore GP 2026"), not the season's
+    // championships nor the weekend's other sessions (" Practice 1: Singapore GP 2026",
+    // two days before the race and with no winner board: Russell went 3% on Polymarket alone).
+    .filter(e => e && /^race:|\bGP\b|grand prix/i.test(e.name || '') && !/champion|practice|qualifying|sprint|shootout/i.test(e.name || '') && e.state === 'NOT_STARTED' && Date.parse(e.start) > now.getTime())
     .sort((a, b) => Date.parse(a.start) - Date.parse(b.start))[0] ?? null;
 }
 export function parseKambiF1Race(event, offers) {

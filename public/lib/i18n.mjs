@@ -212,7 +212,7 @@ export const STRINGS = {
         ['新玩法', '足球的半全場（9 種）、總進球數、雙重機會（三個結果猜中兩個之一）、上半場大小、單隊大小；籃球和美足的第一節、上半場大小、單隊總分；冰球的單隊大小；棒球的首分和最高得分局（所有棒球聯賽）；F1 前三名。'],
         ['更多運動', '日職、韓職、中職、歐洲籃球、韓國職業足球的賠率來自 Kambi（一家歐洲莊家的公開賠率），有比賽時才會出現。'],
         ['冠軍盤', 'MLB、NBA、英超之外，還有 NFL、NHL、WNBA、大學美足、歐冠、歐霸、西甲、義甲、德甲、法甲、美職足和 F1 車手、車隊年度冠軍（來自 Polymarket）。'],
-        ['F1 分站冠軍', '運彩在排位賽前後各開一次：排位賽前照 2026/9/25 早上的盤（公平機率^0.692，冷門 65、325、500），排位賽後照正賽前一晚的盤（1.17 × 公平機率^0.765，冷門 65、275、500）。排位賽時間來自 ESPN 的賽程。']
+        ['F1 分站冠軍', '每位車手的機率取各來源中最高的：Kambi 的盤（去水）、Polymarket 的報價（去水）和它有成交時的最後成交價。賠率 = 1 ÷（機率 × 1.2），最高 500、最低 1.01。排位賽前後算法相同；排位賽時間來自 ESPN 的賽程。']
       ]],
       ['運彩的規則', [
         ['鎖盤 🔒', '賠率太低（1.05 以下）或太高（一般玩法 8 倍以上、比分這類玩法 80 倍以上）的選項，運彩不開放，只顯示 🔒。F1 和冠軍盤不設上限，但 1.30 以下的大熱門也鎖。'],
@@ -797,7 +797,7 @@ export const STRINGS = {
         ['New plays', 'Soccer half-time/full-time (9 outcomes), total goals, double chance (either of two results), first-half total and team totals; basketball and football first quarter, first-half total and team totals; hockey team totals; baseball first to score and top-scoring inning (every baseball league); F1 podium.'],
         ['More sports', 'NPB, KBO, CPBL, EuroLeague and K League from Kambi (a European bookmaker\'s public odds), whenever there are matches.'],
         ['Championships', 'Besides MLB, the NBA and the Premier League: NFL, NHL, WNBA, college football, Champions League, Europa League, La Liga, Serie A, Bundesliga, Ligue 1, MLS, and the F1 drivers\' and constructors\' titles (from Polymarket).'],
-        ['F1 race winner', 'The lottery prices each race twice. Before qualifying: its board the morning before qualifying on 25 Sep 2026 (fair ^ 0.692; long shots 65, 325, 500). After: its race-eve board (1.17 x fair ^ 0.765; 65, 275, 500). Qualifying times come from ESPN\'s schedule.']
+        ['F1 race winner', 'Each driver\'s chance is the most any source gives: Kambi\'s board (devigged), Polymarket\'s quote (devigged) and its last trade where it has traded. The price is 1 / (chance x 1.2), at most 500 and never under 1.01, the same before and after qualifying. Qualifying times come from ESPN\'s schedule.']
       ]],
       ['The lottery\'s rules', [
         ['Locked 🔒', 'Prices too short (1.05 or less) or too long (8+ on ordinary markets, 80+ on scores and the like): the lottery doesn\'t sell them. F1 and championships have no upper limit, but a favourite under 1.30 is locked too.'],

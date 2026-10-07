@@ -8,6 +8,9 @@ const NOW = new Date('2026-09-29T06:00:00Z');
 test("Kambi's race found by what it is: a Grand Prix however it's named, never a championship", () => {
   const list = { events: [{ event: { id: 1, name: 'Drivers Championship 2026', start: '2026-10-01T13:00:00Z', state: 'NOT_STARTED' } }, { event: { id: 3, name: 'Singapore GP 2026', start: '2026-10-11T12:00:00Z', state: 'NOT_STARTED' } }] };
   assert.equal(nextKambiF1Race(list, NOW).id, 3);
+  // The weekend's practice and qualifying open first and have no winner board.
+  const weekend = { events: [{ event: { id: 4, name: ' Practice 1: Singapore GP 2026', start: '2026-10-09T08:30:00Z', state: 'NOT_STARTED' } }, { event: { id: 5, name: 'Qualifying: Singapore GP 2026', start: '2026-10-10T13:00:00Z', state: 'NOT_STARTED' } }, ...list.events] };
+  assert.equal(nextKambiF1Race(weekend, NOW).id, 3);
 });
 
 test("a race's board of empty books is no market: Singapore 2026's (its prices adding up to 500%)", () => {
