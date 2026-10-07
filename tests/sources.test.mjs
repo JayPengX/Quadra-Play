@@ -274,7 +274,7 @@ test("an F1 race's boards as one: each driver at the most any says, a trade coun
   const event = { slug: 'f1-singapore-grand-prix-winner-2026-10-11', title: 'Singapore Grand Prix', startTime: '2026-10-11T12:00:00Z', markets: [market('Max Verstappen', 0.5, 0.5, 1300), market('Kimi Antonelli', 0.45, 0.45, 1200), market('George Russell', 0.028, 0.15, 3680, 0.004), market('Lando Norris', 0.025, 0.15, 900), market('Lewis Hamilton', 0.025, null, 0)] };
   const race = parseF1RaceWinner([event], now);
   const russell = race.drivers.find(d => d.name === 'George Russell');
-  assert.ok(russell.firm && russell.fair === 0.028, 'firm: his quote as traded, not the old trade');
+  assert.ok(russell.firm && Math.abs(russell.fair - 0.03) < 1e-9, 'firm: at its ask, not the old trade');
   assert.equal(race.drivers.find(d => d.name === 'Lando Norris').fair, 0.15, 'under $1,000 traded: the trade counts');
   assert.ok(race.drivers.find(d => d.name === 'Lewis Hamilton').fair < 0.05, 'never traded: its quote alone');
   const kambi = { drivers: [{ name: 'George Russell', fair: 0.11 }, { name: 'Lewis Hamilton', fair: 0.11 }] };

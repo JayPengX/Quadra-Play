@@ -453,7 +453,7 @@ export function parseF1RaceWinner(events, now) {
   const drivers = (event.markets || [])
     .filter(m => !m.closed)
     // Its last trade too, where it has traded: a price someone paid.
-    .map(m => ({ name: m.groupItemTitle || m.question, raw: Number(parseJsonArray(m.outcomePrices)?.[0]), last: Number(m.volume) > 0 ? Number(m.lastTradePrice) || 0 : 0, firm: firmQuote(m) }))
+    .map(m => ({ name: m.groupItemTitle || m.question, raw: Number(parseJsonArray(m.outcomePrices)?.[0]), last: Number(m.volume) > 0 ? Number(m.lastTradePrice) || 0 : 0, firm: firmQuote(m), ask: Number(m.bestAsk) }))
     // Every priced driver, like the lottery's full list; Polymarket's unpriced
     // placeholders ("Driver A", "Other") drop out here.
     .filter(d => d.raw > 0 && !/^(driver [a-z]|other)$/i.test(d.name));
@@ -465,9 +465,10 @@ export function parseF1RaceWinner(events, now) {
     source: 'polymarket',
     startUtc: new Date(event.startTime).toISOString(),
     drivers: drivers
-      // A firm quote is the market's word now, as it trades (an older trade
-      // may be from before a grid penalty; the devig would stretch a longshot's).
-      .map((d, i) => (d.firm ? { name: d.name, fair: d.raw, firm: true } : { name: d.name, fair: Math.max(fair[i], d.last > 0 && d.last < 1 ? d.last : 0) }))
+      // A firm quote is the market's word now (an older trade may be from
+      // before a grid penalty), at its ask: what buying it there costs, so
+      // the house never pays out longer than the market (the cut on top).
+      .map((d, i) => (d.firm ? { name: d.name, fair: Math.max(d.raw, d.ask), firm: true } : { name: d.name, fair: Math.max(fair[i], d.last > 0 && d.last < 1 ? d.last : 0) }))
       .sort((a, b) => b.fair - a.fair)
   };
 }
