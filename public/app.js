@@ -3643,11 +3643,15 @@ const FIT_SELECTOR = '.stat-value, .player-line strong, .lapse-stats strong, .st
 function fitNumbers(nodes) {
   for (const node of nodes) node.style.fontSize = '';
   const sizes = nodes.map(node => {
-    const box = node.clientWidth;
-    const need = node.scrollWidth;
-    if (!box || need <= box + 0.5) return null;
+    // (Fractional widths: whole pixels rounded a 64.4px number into a 64px
+    // box, which then showed 11,7… instead of shrinking.)
+    const box = node.getBoundingClientRect().width;
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const need = range.getBoundingClientRect().width;
+    if (!box || need <= box) return null;
     const full = parseFloat(getComputedStyle(node).fontSize);
-    return Math.max(full * 0.6, Math.floor(((full * box) / need) * 10) / 10);
+    return Math.max(full * 0.6, Math.floor(((full * (box - 0.5)) / need) * 10) / 10);
   });
   nodes.forEach((node, i) => sizes[i] && (node.style.fontSize = `${sizes[i]}px`));
 }
