@@ -435,6 +435,16 @@ export function trustedBoard(markets) {
   const tight = quoted.filter(b => b.ask - b.bid <= Math.max(0.04, 0.4 * b.p));
   return tight.reduce((t, b) => t + b.p, 0) >= 0.7 * quoted.reduce((t, b) => t + b.p, 0);
 }
+// A driver's quote that money stands behind: $1,000 traded on it and the book
+// tight (bid to ask within a point, or a quarter of the price). Singapore 2026:
+// Russell at 2.6-3.0% on $3.7k, his grid penalty priced in; Kambi still had 8.0.
+export const FIRM_VOLUME = 1000;
+export function firmQuote(m) {
+  const bid = Number(m.bestBid);
+  const ask = Number(m.bestAsk);
+  if (!(Number(m.volume) >= FIRM_VOLUME) || !(bid > 0) || !(ask > bid)) return false;
+  return ask - bid <= Math.max(0.01, 0.25 * ((bid + ask) / 2));
+}
 export function parseF1RaceWinner(events, now) {
   const event = events
     .filter(e => /^f1-.*-grand-prix-winner-\d{4}-\d{2}-\d{2}$/.test(e.slug) && Date.parse(e.startTime) > now.getTime())
@@ -443,7 +453,7 @@ export function parseF1RaceWinner(events, now) {
   const drivers = (event.markets || [])
     .filter(m => !m.closed)
     // Its last trade too, where it has traded: a price someone paid.
-    .map(m => ({ name: m.groupItemTitle || m.question, raw: Number(parseJsonArray(m.outcomePrices)?.[0]), last: Number(m.volume) > 0 ? Number(m.lastTradePrice) || 0 : 0 }))
+    .map(m => ({ name: m.groupItemTitle || m.question, raw: Number(parseJsonArray(m.outcomePrices)?.[0]), last: Number(m.volume) > 0 ? Number(m.lastTradePrice) || 0 : 0, firm: firmQuote(m) }))
     // Every priced driver, like the lottery's full list; Polymarket's unpriced
     // placeholders ("Driver A", "Other") drop out here.
     .filter(d => d.raw > 0 && !/^(driver [a-z]|other)$/i.test(d.name));
@@ -455,16 +465,20 @@ export function parseF1RaceWinner(events, now) {
     source: 'polymarket',
     startUtc: new Date(event.startTime).toISOString(),
     drivers: drivers
-      .map((d, i) => ({ name: d.name, fair: Math.max(fair[i], d.last > 0 && d.last < 1 ? d.last : 0) }))
+      // A firm quote is the market's word now, as it trades (an older trade
+      // may be from before a grid penalty; the devig would stretch a longshot's).
+      .map((d, i) => (d.firm ? { name: d.name, fair: d.raw, firm: true } : { name: d.name, fair: Math.max(fair[i], d.last > 0 && d.last < 1 ? d.last : 0) }))
       .sort((a, b) => b.fair - a.fair)
   };
 }
 
 // The race's boards as one: each driver at the most any of them gives
-// (a bookmaker's board and a prediction market's quote and trades). The
-// house prices on that, so a thin board can't make a contender a longshot
-// (Singapore 2026: Polymarket quoted Russell 2.5% with his last trade at
-// 15%; Kambi had him at ~10%). Drivers matched by surname.
+// (a bookmaker's board and a prediction market's quote and trades), so a
+// thin board can't make a contender a longshot. A firm quote (firmQuote:
+// traded and tight) stands over the others, the most of the firm ones:
+// it moves with the news (Singapore 2026: Russell from the back of the grid,
+// 3% on Polymarket's traded book while Kambi still had ~10%). Drivers
+// matched by surname.
 const surnameKey = n => {
   const words = String(n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\b(jr|sr)\b\.?/g, '').trim().split(/\s+/);
   return words.at(-1).replace(/[^a-z]/g, '');
@@ -475,7 +489,8 @@ export function mergeF1Boards(...boards) {
     for (const d of board.drivers || []) {
       const k = surnameKey(d.name);
       const had = out.get(k);
-      if (!had || d.fair > had.fair) out.set(k, { name: had?.name ?? d.name, fair: Math.max(had?.fair ?? 0, d.fair) });
+      const firm = !!d.firm;
+      if (!had || (firm && !had.firm) || (firm === !!had.firm && d.fair > had.fair)) out.set(k, { name: had?.name ?? d.name, fair: d.fair, ...(firm || had?.firm ? { firm: true } : {}) });
     }
   return [...out.values()].sort((a, b) => b.fair - a.fair);
 }

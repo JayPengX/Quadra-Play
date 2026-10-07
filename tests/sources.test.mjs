@@ -267,11 +267,18 @@ test("an F1 race's boards as one: each driver at the most any says, a trade coun
     { drivers: [{ name: 'Max Verstappen', fair: 0.22 }, { name: 'George Russell', fair: 0.1 }, { name: 'Carlos Sainz', fair: 0.004 }] }
   );
   assert.deepEqual(merged.map(d => [d.name, d.fair]), [['Max Verstappen', 0.27], ['George Russell', 0.1], ['Carlos Sainz Jr.', 0.005]]);
-  // Polymarket: a thin quote under a real trade gives way to the trade.
-  const market = (name, price, last, volume) => ({ groupItemTitle: name, outcomePrices: JSON.stringify([String(price), String(1 - price)]), lastTradePrice: last, volume, closed: false, bestBid: price - 0.005, bestAsk: price + 0.005 });
+  // Polymarket: a thin quote under a real trade gives way to the trade; a firm
+  // quote (traded, tight) is the price whatever the older trades or Kambi say.
+  const market = (name, price, last, volume, spread = 0.01) => ({ groupItemTitle: name, outcomePrices: JSON.stringify([String(price), String(1 - price)]), lastTradePrice: last, volume, closed: false, bestBid: price - spread / 2, bestAsk: price + spread / 2 });
   const now = new Date('2026-10-07T00:00:00Z');
-  const event = { slug: 'f1-singapore-grand-prix-winner-2026-10-11', title: 'Singapore Grand Prix', startTime: '2026-10-11T12:00:00Z', markets: [market('Max Verstappen', 0.5, 0.5, 1300), market('Kimi Antonelli', 0.45, 0.45, 1200), market('George Russell', 0.025, 0.15, 3327), market('Lewis Hamilton', 0.025, null, 0)] };
+  const event = { slug: 'f1-singapore-grand-prix-winner-2026-10-11', title: 'Singapore Grand Prix', startTime: '2026-10-11T12:00:00Z', markets: [market('Max Verstappen', 0.5, 0.5, 1300), market('Kimi Antonelli', 0.45, 0.45, 1200), market('George Russell', 0.028, 0.15, 3680, 0.004), market('Lando Norris', 0.025, 0.15, 900), market('Lewis Hamilton', 0.025, null, 0)] };
   const race = parseF1RaceWinner([event], now);
-  assert.equal(race.drivers.find(d => d.name === 'George Russell').fair, 0.15);
+  const russell = race.drivers.find(d => d.name === 'George Russell');
+  assert.ok(russell.firm && russell.fair === 0.028, 'firm: his quote as traded, not the old trade');
+  assert.equal(race.drivers.find(d => d.name === 'Lando Norris').fair, 0.15, 'under $1,000 traded: the trade counts');
   assert.ok(race.drivers.find(d => d.name === 'Lewis Hamilton').fair < 0.05, 'never traded: its quote alone');
+  const kambi = { drivers: [{ name: 'George Russell', fair: 0.11 }, { name: 'Lewis Hamilton', fair: 0.11 }] };
+  const both = mergeF1Boards(race, kambi);
+  assert.equal(both.find(d => d.name === 'George Russell').fair, russell.fair, "the firm quote over Kambi's");
+  assert.equal(both.find(d => d.name === 'Lewis Hamilton').fair, 0.11, 'not firm: the most any gives');
 });
