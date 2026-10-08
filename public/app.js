@@ -26,7 +26,7 @@ import {
 import { pack, unpack } from './lib/codec.mjs';
 import { historyStats, funFacts, crowdPercentile } from './lib/history.mjs';
 import { detectLocale, makeT } from './lib/i18n.mjs';
-import { f1Driver, f1Constructor, findTeamLogo, countryFlag, countryCode, leagueLogo, teamLogo, teamZh, teamNameZh, LEAGUES, familyOf, isSoccer, isDuel, normalizeTeamName } from './lib/teams.mjs';
+import { f1Driver, f1Constructor, F1_NAMES_ZH, F1_PAGE, findTeamLogo, countryFlag, countryCode, leagueLogo, teamLogo, teamZh, teamNameZh, LEAGUES, familyOf, isSoccer, isDuel, normalizeTeamName } from './lib/teams.mjs';
 import { flagUrl } from '#kit/logos.mjs';
 import { logoPicture, raceName } from '#kit/logos.mjs';
 import { houseRule, houseCut, minLegsProblem, leagueTier } from './lib/rules.mjs';
@@ -181,9 +181,13 @@ function fmtShort(iso) {
     .format(new Date(iso))
     .replace(/[,，]\s*/, ' ');
 }
-// A saved pick's name as shown now: a driver as the app names them today
-// (a ticket from before keeps "G.羅素"; the initial is no longer said).
-const shownLabel = leg => String(leg.shortLabel || leg.label || '').replace(/^[A-Z]{1,3}\.(?=[\u4e00-\u9fff])/, '');
+// A saved pick's name as shown now: a driver as the apps name them today,
+// in English (a ticket from before keeps "G.羅素" or "羅素": George Russell).
+const F1_EN = Object.fromEntries(Object.entries(F1_NAMES_ZH).map(([surname, zh]) => [zh, F1_PAGE[surname] ? F1_PAGE[surname].split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' ') : surname]));
+const shownLabel = leg => {
+  const label = String(leg.shortLabel || leg.label || '').replace(/^[A-Z]{1,3}\.(?=[\u4e00-\u9fff])/, '');
+  return F1_EN[label] || label;
+};
 // A game's time: its day and 待定 while its hour isn't set (a play-off's
 // next game: sold until the earliest it can start, the time it carries).
 const TBD = { zh: '時間待定', en: 'Time TBD' };
