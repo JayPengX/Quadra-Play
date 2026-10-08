@@ -117,14 +117,20 @@ export function blendTotals(now, before, weight = 0.5) {
 
 // ---- Reading them ------------------------------------------------------------------
 
-// Each league's season list, read once (and last season's when this one is
-// young: fewer than YOUNG_GAMES for its regulars).
+// Each league's season list (and last season's when this one is young:
+// fewer than YOUNG_GAMES for its regulars), read again every 6 hours: an app
+// left open across a season's first night would otherwise go on with the
+// list it read before (ESPN's last season, all of it, until this one starts).
 export const YOUNG_GAMES = 15;
+const LIST_MS = 6 * 3_600_000;
 const leagueLists = new Map();
+const listAt = new Map();
 export function leagueAthletes(sport, getJson) {
   const path = LEAGUES[sport]?.path;
   if (!path || familyOf(sport) === 'soccer') return Promise.resolve(null);
+  if (Date.now() - (listAt.get(sport) || 0) > LIST_MS) leagueLists.delete(sport);
   if (!leagueLists.has(sport)) {
+    listAt.set(sport, Date.now());
     const p = (async () => {
       const now = await allPages(getJson, path);
       const list = parseAthletes(now);

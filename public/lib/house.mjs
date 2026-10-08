@@ -3,7 +3,8 @@
 // scoreboard is sold all the same.
 //
 //   Strength   each team's share of wins in ESPN's standings (a draw half a
-//              win), this season's games on top of last season's, which is
+//              win; the US leagues' regular season only, never the
+//              preseason's), this season's games on top of last season's, which is
 //              pulled a third of the way to even (last year's team isn't
 //              this year's). Early in a season last year's counts most; by
 //              its middle, this year's.
@@ -100,10 +101,15 @@ export async function loadStrengths(sport, path, getJson) {
   const slot = tables.get(sport);
   if (slot && Date.now() - slot.at < 6 * 3_600_000) return slot.table;
   const url = `${ESPN_STANDINGS}/${path}/standings`;
-  const now = await getJson(url).catch(() => null);
+  // The regular season's table only (the US leagues): ESPN's default counts
+  // the preseason in (the NBA's October: Brooklyn 1-0 before a real game),
+  // which would carry into the season's first weeks as this season's record.
+  const regular = ['basketball', 'baseball', 'hockey', 'football'].includes(familyOf(sport));
+  const query = extra => [regular ? 'seasontype=2' : '', extra].filter(Boolean).join('&');
+  const now = await getJson(`${url}${query('') ? `?${query('')}` : ''}`).catch(() => null);
   const year = Number(now?.seasons?.[0]?.year ?? now?.season?.year ?? now?.children?.[0]?.standings?.season);
   // Last season's only refines the table: never worth holding the board for.
-  const before = Number.isFinite(year) && year > 2000 ? await Promise.race([getJson(`${url}?season=${year - 1}`).catch(() => null), new Promise(r => setTimeout(r, BEFORE_WAIT_MS, null))]) : null;
+  const before = Number.isFinite(year) && year > 2000 ? await Promise.race([getJson(`${url}?${query(`season=${year - 1}`)}`).catch(() => null), new Promise(r => setTimeout(r, BEFORE_WAIT_MS, null))]) : null;
   const table = strengths(sport, parseStandings(now), parseStandings(before));
   tables.set(sport, { at: Date.now(), table });
   return table;
