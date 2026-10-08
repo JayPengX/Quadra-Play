@@ -203,6 +203,9 @@ export function parseEspnScoreboard(data, sport) {
       seenStarts.get(sport).add(Date.parse(event.date));
     }
     if (!comp || comp.status?.type?.state !== 'pre') continue;
+    // A play-off game not to sell: a side not known yet ("TBD", "CLE/CHW"),
+    // or one only played if needed (sold once it's sure, by Kambi or ESPN).
+    if (comp.competitors.some(c => undecidedSide(c.team)) || /if necessary/i.test(comp.notes?.[0]?.headline || '')) continue;
     const teams = Object.fromEntries(comp.competitors.map(c => [c.homeAway, c.team.displayName]));
     // ESPN's team ids: the rosters of the game's players (players.mjs).
     const teamIds = Object.fromEntries(comp.competitors.map(c => [c.homeAway, c.team.id ? String(c.team.id) : null]));
@@ -238,10 +241,17 @@ export function parseEspnScoreboard(data, sport) {
       if (Number.isFinite(awayLine) && (whole || awayLine % 1 !== 0) && fair) spread = { awayLine, awayFair: fair[0] };
     }
     if (outcomes) espnPregame.set(`${sport}|${event.id}`, { homeWin: outcomes.home, awayWin: outcomes.away, draw: outcomes.draw ?? 0, totalLine: total?.line ?? null, overFair: total?.overFair ?? 0.5 });
-    games.push({ sport, startUtc: new Date(event.date).toISOString(), away: teams.away, home: teams.home, teamIds, neutral: Boolean(comp.neutralSite), preseason: event.season?.type === 1, outcomes, total, spread });
+    // Dated but not timed yet (timeValid false: the day's 00:00 in New York):
+    // a book's time for it (Kambi's, Polymarket's) or it isn't sold.
+    const timeTbd = comp.timeValid === false || undefined;
+    games.push({ sport, startUtc: new Date(event.date).toISOString(), away: teams.away, home: teams.home, teamIds, neutral: Boolean(comp.neutralSite), preseason: event.season?.type === 1, outcomes, total, spread, ...(timeTbd ? { timeTbd } : {}) });
   }
   return games;
 }
+// A play-off place still being played for: ESPN's "TBD", "CLE/CHW", an id of 0 or less.
+const undecidedSide = t => !t || /^tbd$/i.test(String(t.abbreviation || t.displayName || '').trim()) || String(t.abbreviation || '').includes('/') || Number(t.id) <= 0 || /\//.test(String(t.displayName || ''));
+// A game without its time an hour within which a book's own listing can stand for it.
+const TBD_MATCH_MS = 30 * 3_600_000;
 
 // Past the daily pages (football's: its current week, so from now), up to
 // DAYS_AHEAD: the games on the months' pages (ESPN answers `dates=YYYYMM`
@@ -283,7 +293,7 @@ export function attachKambi(games, kambiGames) {
     const t = Date.parse(g.startUtc);
     let flip = false;
     const i = kambiGames.findIndex((k, j) => {
-      if (used.has(j) || Math.abs(Date.parse(k.startUtc) - t) > 12 * 3_600_000) return false;
+      if (used.has(j) || Math.abs(Date.parse(k.startUtc) - t) > (g.timeTbd ? TBD_MATCH_MS : 12 * 3_600_000)) return false;
       if (sameSide(k.home.en, g.home) && sameSide(k.away.en, g.away)) return !(flip = false);
       if (sameSide(k.home.en, g.away) && sameSide(k.away.en, g.home)) return (flip = true);
       return false;
@@ -294,7 +304,9 @@ export function attachKambi(games, kambiGames) {
     const o = k.draftKings;
     const outcomes = o ? (flip ? { ...o, home: o.away, away: o.home } : { ...o }) : null;
     const spread = k.spread ? (flip ? { awayLine: -k.spread.awayLine, awayFair: 1 - k.spread.awayFair } : k.spread) : null;
-    return { ...g, kambi: { outcomes, spread, total: k.total, kambiId: k.kambiId } };
+    // (Its time, where ESPN hasn't set one: Kambi's.)
+    const timed = g.timeTbd ? { startUtc: k.startUtc, timeTbd: undefined } : {};
+    return { ...g, ...timed, kambi: { outcomes, spread, total: k.total, kambiId: k.kambiId } };
   });
 }
 // Each league's Kambi list, asked for alongside its ESPN pages (not after them).
@@ -696,17 +708,24 @@ function sameGame(a, b) {
 }
 
 // DraftKings team names win (ESPN's naming is the stabler of the two).
-export function mergeGames(dkGames, pmGames) {
+// `scheduled`: the sports whose ESPN schedule was read: a Polymarket game
+// not on it isn't one (Polymarket keeps a play-off's possible games open,
+// Yankees–Rays game 5 after the Rays had swept). A game ESPN hasn't timed
+// takes Polymarket's time, or isn't sold.
+export function mergeGames(dkGames, pmGames, { scheduled = new Set() } = {}) {
   const used = new Set();
   const merged = dkGames.map(dk => {
-    const i = pmGames.findIndex((pm, j) => !used.has(j) && sameGame(dk, pm));
+    const i = pmGames.findIndex((pm, j) => !used.has(j) && (sameGame(dk, pm) || (dk.timeTbd && sameGame({ ...dk, startUtc: pm.startUtc }, pm) && Math.abs(Date.parse(dk.startUtc) - Date.parse(pm.startUtc)) <= TBD_MATCH_MS)));
     if (i >= 0) used.add(i);
-    return { base: dk, dk, pm: i >= 0 ? pmGames[i] : null };
+    const pm = i >= 0 ? pmGames[i] : null;
+    const base = dk.timeTbd && pm ? { ...dk, startUtc: pm.startUtc, timeTbd: undefined } : dk;
+    return { base, dk: base, pm };
   });
   pmGames.forEach((pm, j) => {
-    if (!used.has(j)) merged.push({ base: pm, dk: null, pm });
+    if (!used.has(j) && !scheduled.has(pm.sport)) merged.push({ base: pm, dk: null, pm });
   });
   return merged
+    .filter(({ base }) => !base.timeTbd)
     .map(({ base, dk, pm }) => ({
       id: `${base.sport}_${base.startUtc.slice(0, 13)}_${normalizeTeamName(base.away)}_${normalizeTeamName(base.home)}`.replaceAll(' ', ''),
       sport: base.sport,
@@ -773,7 +792,7 @@ export async function loadOdds(now = new Date(), onProgress) {
   }
   return {
     loadedAt: now.toISOString(),
-    games: lotteryGames(mergeGames([...mlbDk, ...eplDk], [...parsePolymarketMlb(mlbPm, now), ...parsePolymarketEpl(eplPm, now)]), now),
+    games: lotteryGames(mergeGames([...mlbDk, ...eplDk], [...parsePolymarketMlb(mlbPm, now), ...parsePolymarketEpl(eplPm, now)], { scheduled: new Set([results[0].status === 'fulfilled' && 'mlb', results[2].status === 'fulfilled' && 'epl'].filter(Boolean)) }), now),
     f1: race,
     moto,
     futures: [...parseFutures(mlbPm, 'mlb'), ...parseFutures(eplPm, 'epl'), ...(nbaInSeason(now) ? parseFutures(nbaPm, 'nba') : [])]
