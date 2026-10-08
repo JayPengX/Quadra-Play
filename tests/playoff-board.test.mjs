@@ -25,9 +25,11 @@ test("ESPN: a side not known yet, or a game only if needed, isn't on the board",
   assert.equal(games[0].timeTbd, true);
 });
 
-test("a game ESPN hasn't timed: a book's time, else not sold", () => {
+test("a game ESPN hasn't timed: a book's time, else the earliest it can start, shown 待定", () => {
   const [g] = parseEspnScoreboard({ events: [event('4', '2026-10-11T04:00Z', LAD, MIL, { note: 'NLCS - Game 1', timeValid: false })] }, 'mlb');
-  assert.equal(mergeGames([g], [], { scheduled: new Set(['mlb']) }).length, 0);
+  const [alone] = mergeGames([{ ...g, house: { away: 0.5, home: 0.5 } }], [], { scheduled: new Set(['mlb']) });
+  assert.equal(alone.timeTbd, true);
+  assert.equal(alone.startUtc, '2026-10-11T16:00:00.000Z', 'sold until noon in New York, the earliest it can start');
   const pm = { sport: 'mlb', startUtc: '2026-10-12T00:08:00.000Z', away: 'Los Angeles Dodgers', home: 'Milwaukee Brewers', outcomes: { away: 0.55, home: 0.45 } };
   const [withPm] = mergeGames([g], [pm], { scheduled: new Set(['mlb']) });
   assert.equal(withPm.startUtc, pm.startUtc);

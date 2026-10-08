@@ -184,6 +184,14 @@ function fmtShort(iso) {
 // A saved pick's name as shown now: a driver as the app names them today
 // (a ticket from before keeps "G.羅素"; the initial is no longer said).
 const shownLabel = leg => String(leg.shortLabel || leg.label || '').replace(/^[A-Z]{1,3}\.(?=[\u4e00-\u9fff])/, '');
+// A game's time: its day and 待定 while its hour isn't set (a play-off's
+// next game: sold until the earliest it can start, the time it carries).
+const TBD = { zh: '時間待定', en: 'Time TBD' };
+function fmtDay(iso) {
+  return formatter('day', locale => new Intl.DateTimeFormat(locale, { month: 'numeric', day: 'numeric', weekday: 'short', timeZone: 'Asia/Taipei' })).format(new Date(iso));
+}
+const gameTime = g => (g?.timeTbd ? `${fmtDay(g.startUtc)} ${TBD[state.locale === 'zh' ? 'zh' : 'en']}` : fmtTime(g.startUtc));
+const legTime = b => (b?.game?.timeTbd ? gameTime(b.game) : fmtTime(b.start));
 // Taiwan time, like the lottery, wherever the page is opened.
 function fmtTime(iso) {
   return formatter('time', locale =>
@@ -855,7 +863,7 @@ function gameCard(game, bets, { inSheet = false } = {}) {
       el('span', { class: 'game-series', text: gameSeries(game) }),
       game.live
         ? el('span', { class: 'game-time live-state' }, [el('span', { class: 'live-dot', text: t('tagLive') }), document.createTextNode(liveStateText(game.live))])
-        : el('span', { class: 'game-time', text: state.query ? `${dayKey(game.startUtc).slice(5).replace('-', '/')} ${hhmm(game.startUtc)}` : hhmm(game.startUtc) })
+        : el('span', { class: 'game-time', text: game.timeTbd ? TBD[state.locale === 'zh' ? 'zh' : 'en'] : state.query ? `${dayKey(game.startUtc).slice(5).replace('-', '/')} ${hhmm(game.startUtc)}` : hhmm(game.startUtc) })
     ]),
     el('div', { class: 'team-rows' }, rows),
     inSheet ? (more ? gameMore(game, others) : el('p', { class: 'muted offers-wait sheet-none', text: t('offersNone') })) : el('button', { class: 'more-toggle', type: 'button', 'aria-haspopup': 'dialog', onclick: open }, [
@@ -3740,7 +3748,7 @@ function homeCtx() {
   };
   return {
     openSlip: () => openSlip(),
-    slipCount: () => slipLegs().legs.length, state, q, el, fmtMoney, fmtOdds, fmtTime, fmtShort, shownLabel, shortPick, legIcon, pickTitle, pickButton, teamName, gameSeries, matchupText, logoImg, leagueImg, toggleLeg, takeParlay, showTab, openGame, openLive, liveStateText, betKeys, track, funds, slipRange, cashOutPrice, doCashOut, leagueTier: shownTier, isSoccer, parlayPays, boostPct: n => Math.round(boostRate(n, boostX()) * 100) };
+    slipCount: () => slipLegs().legs.length, state, q, el, fmtMoney, fmtOdds, fmtTime, gameTime, legTime, fmtShort, shownLabel, shortPick, legIcon, pickTitle, pickButton, teamName, gameSeries, matchupText, logoImg, leagueImg, toggleLeg, takeParlay, showTab, openGame, openLive, liveStateText, betKeys, track, funds, slipRange, cashOutPrice, doCashOut, leagueTier: shownTier, isSoccer, parlayPays, boostPct: n => Math.round(boostRate(n, boostX()) * 100) };
 }
 statsUi = mountStats({ state, el, svgEl, fmtMoney, fmtInt, fmtPctShort, fmtOdds, fmtTime, showTab, sportName: key => (key === 'mixed' ? state.t('sportMixed') : state.t(`sport_${key}`) === `sport_${key}` ? String(key).toUpperCase() : state.t(`sport_${key}`)), youCard, crowdCard, funCard, picksCard, breakdownCard });
 lotteryUi = mountLottery({ state, q, el, fmtMoney, funds, commitAccount, track, getAccount: () => state.account, syncNow, showTickets });

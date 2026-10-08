@@ -75,7 +75,7 @@ const TIER_WEIGHT = { major: 0.6, minor: 0.3, thin: 0.05 };
 // app's affinity): when it changes, home is drawn again (app.js).
 export const tasteKey = wallet => JSON.stringify([fixturesTaste(cachedPayload, wallet), Object.keys(affinity(wallet, Date.now(), ['odds', 'stock', 'match'])).sort().slice(0, 40)]);
 export function renderHome(ctx) {
-  const { state, el, fmtMoney, fmtTime } = ctx;
+  const { state, el, fmtMoney, gameTime, legTime } = ctx;
   const root = document.getElementById('home-body');
   if (!root) return;
   const lang = state.locale === 'en' ? 'en' : 'zh';
@@ -151,7 +151,7 @@ export function renderHome(ctx) {
       el('button', { class: 'feature-top', type: 'button', onclick: () => ctx.openGame(g.id) }, [
         ctx.leagueImg(g.sport, 'logo-xs'),
         el('span', { class: 'feature-series', text: ctx.gameSeries(g) }),
-        el('span', { class: 'feature-time', text: fmtTime(g.startUtc) })
+        el('span', { class: 'feature-time', text: gameTime(g) })
       ]),
       el('div', { class: 'feature-rows' }, sides.map(side => {
         const bet = ml.find(b => b.side === side);
@@ -175,7 +175,7 @@ export function renderHome(ctx) {
     return el('article', { class: `fy ${tone}` }, [
       el('button', { class: 'fy-top', type: 'button', onclick: () => ctx.openGame(g.id) }, [
         el('span', { class: 'fy-why', text: f(`why_${why}`, { team, league }) }),
-        el('span', { class: 'fy-time', text: fmtTime(g.startUtc) })
+        el('span', { class: 'fy-time', text: gameTime(g) })
       ]),
       el('button', { class: 'fy-game', type: 'button', onclick: () => ctx.openGame(g.id) }, [
         face ? ctx.logoImg(g.sport, g[face].en, ctx.teamName(g[face]), 'logo-lg') : ctx.leagueImg(g.sport, 'logo-lg'),
@@ -213,7 +213,7 @@ export function renderHome(ctx) {
         const g = (state.data?.games || []).find(x => x.id === b.gameId);
         return el('li', {}, [
           g && g[b.side] ? ctx.logoImg(g.sport, g[b.side].en, ctx.teamName(g[b.side]), 'logo-sm') : g ? ctx.leagueImg(g.sport, 'logo-sm') : null,
-          el('span', { class: 'combo-pick' }, [el('strong', { text: b.shortLabel || b.label }), el('small', { text: [g ? ctx.gameSeries(g) : '', fmtTime(b.start)].filter(Boolean).join(' · ') })]),
+          el('span', { class: 'combo-pick' }, [el('strong', { text: b.shortLabel || b.label }), el('small', { text: [g ? ctx.gameSeries(g) : '', legTime(b)].filter(Boolean).join(' · ') })]),
           el('b', { class: 'num', text: ctx.fmtOdds(b.estOdds) })
         ]);
       })),

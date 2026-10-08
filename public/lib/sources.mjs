@@ -241,15 +241,19 @@ export function parseEspnScoreboard(data, sport) {
       if (Number.isFinite(awayLine) && (whole || awayLine % 1 !== 0) && fair) spread = { awayLine, awayFair: fair[0] };
     }
     if (outcomes) espnPregame.set(`${sport}|${event.id}`, { homeWin: outcomes.home, awayWin: outcomes.away, draw: outcomes.draw ?? 0, totalLine: total?.line ?? null, overFair: total?.overFair ?? 0.5 });
-    // Dated but not timed yet (timeValid false: the day's 00:00 in New York):
-    // a book's time for it (Kambi's, Polymarket's) or it isn't sold.
+    // Dated but not timed yet (timeValid false: the day's 00:00 in New
+    // York): a book's time for it (Kambi's, Polymarket's) when one lists it,
+    // else the earliest it can start (noon there, 00:00 the next day here),
+    // sold until then, its time shown as 待定.
     const timeTbd = comp.timeValid === false || undefined;
-    games.push({ sport, startUtc: new Date(event.date).toISOString(), away: teams.away, home: teams.home, teamIds, neutral: Boolean(comp.neutralSite), preseason: event.season?.type === 1, outcomes, total, spread, ...(timeTbd ? { timeTbd } : {}) });
+    const start = timeTbd && ET_MIDNIGHT.test(event.date) ? Date.parse(event.date) + 12 * 3_600_000 : Date.parse(event.date);
+    games.push({ sport, startUtc: new Date(start).toISOString(), away: teams.away, home: teams.home, teamIds, neutral: Boolean(comp.neutralSite), preseason: event.season?.type === 1, outcomes, total, spread, ...(timeTbd ? { timeTbd } : {}) });
   }
   return games;
 }
 // A play-off place still being played for: ESPN's "TBD", "CLE/CHW", an id of 0 or less.
 const undecidedSide = t => !t || /^tbd$/i.test(String(t.abbreviation || t.displayName || '').trim()) || String(t.abbreviation || '').includes('/') || Number(t.id) <= 0 || /\//.test(String(t.displayName || ''));
+const ET_MIDNIGHT = /T0[45]:00(:00)?(\.000)?Z$/;
 // A game without its time an hour within which a book's own listing can stand for it.
 const TBD_MATCH_MS = 30 * 3_600_000;
 
@@ -725,7 +729,6 @@ export function mergeGames(dkGames, pmGames, { scheduled = new Set() } = {}) {
     if (!used.has(j) && !scheduled.has(pm.sport)) merged.push({ base: pm, dk: null, pm });
   });
   return merged
-    .filter(({ base }) => !base.timeTbd)
     .map(({ base, dk, pm }) => ({
       id: `${base.sport}_${base.startUtc.slice(0, 13)}_${normalizeTeamName(base.away)}_${normalizeTeamName(base.home)}`.replaceAll(' ', ''),
       sport: base.sport,
@@ -744,6 +747,7 @@ export function mergeGames(dkGames, pmGames, { scheduled = new Set() } = {}) {
       house: dk && !dk.outcomes && !dk.kambi?.outcomes && !pm ? (dk.house ?? null) : null,
       // Settled from a final score alone (schedules.mjs): no markets on parts of it.
       scoreOnly: dk?.scoreOnly || undefined,
+      ...(base.timeTbd ? { timeTbd: true } : {}),
       ...(dk?.teamIds?.home && dk?.teamIds?.away ? { espnTeams: dk.teamIds } : {})
     }))
     .filter(g => g.draftKings || g.polymarket || g.kambi || g.house)
