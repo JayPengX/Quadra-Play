@@ -159,6 +159,8 @@ function ttlFor(url) {
   const day = /scoreboard\?dates=(\d{8})$/.exec(url)?.[1];
   if (day) return Math.abs(Date.parse(`${day.slice(0, 4)}-${day.slice(4, 6)}-${day.slice(6)}T12:00:00Z`) - Date.now()) < 36 * 3_600_000 ? LIVE_TTL : 60_000;
   if (/scoreboard\?dates=/.test(url)) return 60_000;
+  // A finished F1 session from F1's archive: it doesn't change.
+  if (url.startsWith('https://f1-live.quadra/session.json')) return 24 * 3_600_000;
   return LIVE_TTL;
 }
 // What's on now is read again after this long (the proxy keeps it 10 s).
@@ -342,6 +344,7 @@ const fetchEspnMlb = now => fetchMonths('mlb', 'baseball/mlb', now);
 // read with MLB's months while any of its games to come is a play-off one.
 const mlbDay = t => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(t));
 const postKit = import('#kit/postseason.mjs').catch(() => null);
+const f1Kit = import('#kit/f1live.mjs').catch(() => null);
 async function mlbPostseason(pages, now) {
   const playoff = pages.some(p => (p?.events || []).some(e => e.season?.type === 3 && e.status?.type?.state === 'pre'));
   const k = playoff ? await postKit : null;
@@ -817,6 +820,15 @@ export async function loadOdds(now = new Date(), onProgress) {
       pole: parseF1Pole(f1, race.startUtc) ?? (sameRace ? parseKambiF1Pole(kambiOffers) : null),
       qualiForm: parseF1QualiForm(f1Espn, race.startUtc)
     });
+    // Its qualifying past its time and F1's own feed saying it hasn't begun
+    // (a delay: Singapore 2026's ran half an hour late, and 排位賽第一 was off
+    // the board all that time): still sold until it does. Unread, not.
+    if (race.qualifyingUtc && Date.now() >= Date.parse(race.qualifyingUtc) && Date.now() - Date.parse(race.qualifyingUtc) < 3 * 3_600_000) {
+      const kit = await f1Kit;
+      const feed = kit ? await getJson(kit.F1_LIVE).catch(() => null) : null;
+      const waiting = feed && kit.sameSession(feed, 'Qualifying', race.qualifyingUtc) && !feed.clock?.running && (feed.part || 0) <= 1 && /^(Inactive|)$/i.test(feed.session?.status || '') && !(feed.cars || []).some(c => c.best);
+      race.qualifyingWaits = Boolean(waiting);
+    }
   }
   return {
     loadedAt: now.toISOString(),
@@ -1032,6 +1044,14 @@ export async function fetchOutcomes(legs, now = new Date()) {
         // No race run within a week of its date (called off): the stake back.
         else if (Array.isArray(sessions) && now.getTime() - Date.parse(leg.start) > 7 * DAY_MS) out.set(leg.id, { status: 'void' });
         return;
+      }
+      // F1's own timing first (Orbit Sports' too, the kit's f1live.mjs): a
+      // session over is settled at once, one on stands as it is now (目前會中);
+      // ESPN's results (below) came minutes to hours after the flag.
+      if (leg.kind?.startsWith('f1')) {
+        const kit = await f1Kit;
+        const fed = kit?.f1Outcome && (await kit.f1Outcome(getJson, leg.kind === 'f1pole' ? 'Qualifying' : 'Race', leg.start, now.getTime()).catch(() => null));
+        if (fed) return out.set(leg.id, fed);
       }
       if (leg.kind === 'f1pole') {
         // The qualifying's day and the next (its start is the qualifying's).

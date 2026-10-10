@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { houseRule, minLegsProblem, houseCut, BASE_CUT, leagueTier } from '../public/lib/rules.mjs';
+import { shadeLong, withRules, houseRule, minLegsProblem, houseCut, BASE_CUT, leagueTier } from '../public/lib/rules.mjs';
 import { recommend } from '../public/lib/recommend.mjs';
 import { slipErrors, estimateF1Odds, f1Phase } from '../public/lib/odds.mjs';
 import { parseKambiEvents, parseKambiLive } from '../public/lib/kambi.mjs';
@@ -13,19 +13,25 @@ import { LEAGUES } from '../public/lib/teams.mjs';
 const fixture = name => JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
 const close = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} !~ ${b}`);
 
-test('the house locks very short and very long prices, and sells short ones only in parlays', () => {
-  assert.deepEqual(houseRule('ml', 1.04), { lock: 'low', minLegs: 1 });
-  assert.deepEqual(houseRule('ml', 1.1), { lock: null, minLegs: 3 });
-  assert.deepEqual(houseRule('ml', 1.25), { lock: null, minLegs: 2 });
-  assert.deepEqual(houseRule('ml', 1.9), { lock: null, minLegs: 1 });
-  assert.deepEqual(houseRule('ml', 9), { lock: 'high', minLegs: 1 });
-  // Many-outcome markets stay open further out; F1 and championships never lock.
-  assert.deepEqual(houseRule('score', 40), { lock: null, minLegs: 1 });
-  assert.deepEqual(houseRule('score', 90), { lock: 'high', minLegs: 1 });
+test('the house locks only near-certain and far-out prices, sells short ones only in parlays, and shades long ones', () => {
+  assert.deepEqual(houseRule('ml', 1.02), { lock: 'low', minLegs: 1 });
+  assert.deepEqual(houseRule('ml', 1.08), { lock: null, minLegs: 3 });
+  assert.deepEqual(houseRule('ml', 1.2), { lock: null, minLegs: 2 });
+  assert.deepEqual(houseRule('ml', 1.25), { lock: null, minLegs: 1 });
+  // A long price stays on sale (it locked from 8), with more margin on it.
+  assert.deepEqual(houseRule('ml', 9), { lock: null, minLegs: 1 });
+  assert.deepEqual(houseRule('ml', 30), { lock: 'high', minLegs: 1 });
+  assert.equal(shadeLong('ml', 10), 9.4);
+  assert.equal(shadeLong('ml', 4), 4);
+  assert.equal(shadeLong('score', 40), 40);
+  assert.deepEqual(withRules({ kind: 'ml', estOdds: 40 }), { kind: 'ml', estOdds: 34.9, lock: 'high', minLegs: 1 });
+  // Many-outcome markets stay open further out; F1 and championships never lock long.
+  assert.deepEqual(houseRule('score', 90), { lock: null, minLegs: 1 });
+  assert.deepEqual(houseRule('score', 150), { lock: 'high', minLegs: 1 });
   assert.deepEqual(houseRule('f1', 500), { lock: null, minLegs: 1 });
-  // A runaway championship or race favourite is locked, never parlay-only.
-  assert.deepEqual(houseRule('future', 1.05), { lock: 'low', minLegs: 1 });
-  assert.deepEqual(houseRule('f1', 1.2), { lock: 'low', minLegs: 1 });
+  // A runaway championship or race favourite: parlay-only, locked only when all but decided.
+  assert.deepEqual(houseRule('future', 1.05), { lock: 'low', minLegs: 2 });
+  assert.deepEqual(houseRule('f1', 1.2), { lock: null, minLegs: 2 });
   assert.deepEqual(houseRule('future', 1.3), { lock: null, minLegs: 1 });
   // Every combination on the ticket must be big enough for its legs.
   assert.equal(minLegsProblem([{ minLegs: 1 }, { minLegs: 2 }], [2]), 0);

@@ -621,7 +621,7 @@ body.searching #live, body.searching #f1, body.searching #futures, body.searchin
 
 /* Locked by the house; sold only in parlays of 2 or 3+. */
 .pick.locked { opacity: 0.55; cursor: not-allowed; background: var(--surface-sunken); }
-.pick .lock { font-size: 0.8em; margin-right: 2px; }
+.pick .lock { width: 15px; height: 15px; margin: 0 auto; color: var(--text-muted); opacity: .8; }
 /* 限x關: a tag on the button's top-left corner (the 推薦 one is top-right), so
    the button keeps its width and its odds line up with the others. */
 .pick .min-legs, .entry-odds .min-legs { position: absolute; top: -8px; left: 6px; margin: 0; padding: 0 5px; border-radius: 999px; background: var(--surface-sunken); color: var(--text-secondary); font-size: 0.6rem; font-weight: 800; line-height: 1.5; white-space: nowrap; box-shadow: 0 0 0 2px var(--surface); pointer-events: none; }
@@ -1235,12 +1235,17 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 /* A player's photo (the kit's photos.mjs): a round crop on the face. */
 .logo.photo { object-fit: cover; object-position: 50% 20%; border-radius: 50%; background: var(--q-surface-2, #eef1f5); }
 /* 紀錄's summary cells. */
-.acct-cells { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding-top: 10px; border-top: 1px solid var(--q-divider, rgba(0, 0, 0, 0.08)); }
-.acct-cell { display: grid; gap: 2px; min-width: 0; align-content: start; }
-.acct-cell span { font-size: 0.72rem; color: var(--q-muted); }
-.acct-cell strong { font-size: 0.98rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.acct-cell small { font-size: 0.68rem; color: var(--q-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.acct-cell strong.acct-none { color: var(--q-muted); font-weight: 600; }
+.acct-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.acct-tile { display: grid; gap: 2px; min-width: 0; padding: 10px 12px; border-radius: 14px; background: var(--q-fill, var(--surface-sunken)); }
+.acct-tile-label { font-size: 0.74rem; font-weight: 600; color: var(--q-muted); }
+.acct-tile strong { font-size: 1.2rem; font-weight: 800; white-space: nowrap; overflow: hidden; }
+.acct-tile small { font-size: 0.72rem; color: var(--q-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The record so far: 已結算 8 張 · 累計中獎 NT$248, then 淨損益 −NT$1,002 · 回收率 20%. */
+.acct-record { display: grid; gap: 2px; font-size: 0.8rem; color: var(--q-muted); }
+.acct-record p { display: flex; margin: 0; min-width: 0; white-space: nowrap; overflow: hidden; }
+.acct-record span { white-space: nowrap; }
+.acct-record span + span::before { content: '·'; margin: 0 6px; }
+.acct-record strong { font-weight: 750; }
 @media (max-width: 380px) { .acct-cells { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* Home: the balance card's ways in, and calmer live cards. */
 .feature.live { border-color: var(--border); }
@@ -1378,3 +1383,92 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 
 /* A ticket's progress in one row. */
 .saved-progress { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---- A ticket's picks (2026-10-11): the picture, the pick over its second
+   line, the odds over its state; each line one row, nothing cut that matters. */
+.logo-md { width: 34px; height: 34px; }
+.q-person.logo-md, .q-team-disc.logo-md, .q-driver-badge.logo-md, .flag-badge.logo-md.pi { width: 34px; height: 34px; font-size: 0.72rem; }
+.saved-legs li.leg-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; column-gap: 10px; padding: 10px 12px; position: relative; overflow: hidden; }
+.saved-legs li.leg-row::before { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 2px 2px 0; background: transparent; }
+.saved-legs li.leg-won::before, .saved-legs li.leg-live.winning::before { background: var(--good); }
+.saved-legs li.leg-lost::before, .saved-legs li.leg-live.losing::before { background: var(--bad-strong, var(--bad)); }
+.saved-legs li.leg-live::before { background: var(--accent); }
+.saved-legs .leg-pick { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: nowrap; }
+.saved-legs .leg-pick strong { font-size: 0.95rem; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.saved-legs .leg-pick .market-tag { flex: none; }
+.leg-sub { display: block; min-width: 0; font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.leg-sub.live { color: var(--text-secondary); }
+.leg-sub .leg-min { font-weight: 700; color: var(--bad-strong, var(--bad)); }
+.leg-row.winning .leg-live-score { color: var(--good); font-weight: 700; }
+.leg-row.losing .leg-live-score { color: var(--bad-strong, var(--bad)); font-weight: 700; }
+.leg-side { display: grid; justify-items: end; gap: 3px; }
+.leg-side .leg-odds { font-size: 1.05rem; white-space: nowrap; }
+.leg-chip { font-size: 0.68rem; font-weight: 750; line-height: 1.6; padding: 0 7px; border-radius: 999px; white-space: nowrap; background: var(--surface-sunken); color: var(--text-secondary); }
+.leg-chip.winning, .leg-chip.won { background: var(--good-wash, color-mix(in srgb, var(--good) 16%, transparent)); color: var(--good); }
+.leg-chip.losing, .leg-chip.lost { background: color-mix(in srgb, var(--bad) 16%, transparent); color: var(--bad-strong, var(--bad)); }
+.leg-lost .leg-pick strong { text-decoration: line-through; text-decoration-color: var(--bad); }
+/* Where the slip stands, one sentence in its colour. */
+.slip-verdict { display: flex; align-items: center; gap: 8px; margin: 2px 0 0; padding: 8px 12px; border-radius: 12px; font-size: 0.84rem; font-weight: 650; background: var(--surface-sunken); color: var(--text-secondary); }
+.slip-verdict span { min-width: 0; }
+.slip-verdict .verdict-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.slip-verdict.winning { background: color-mix(in srgb, var(--good) 13%, transparent); color: var(--good); }
+.slip-verdict.losing { background: color-mix(in srgb, var(--bad) 13%, transparent); color: var(--bad-strong, var(--bad)); }
+.leg-score-line { display: flex; align-items: baseline; gap: 5px; }
+.leg-score-line .leg-min { flex: none; }
+.leg-score-line .leg-team { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.leg-score-line .leg-live-score { flex: none; }
+/* Home's 你的投注: a slip as itself (how many, its kind, a segment a pick). */
+.bet-count { flex: none; width: 44px; height: 44px; border-radius: 14px; display: grid; place-content: center; justify-items: center; line-height: 1; background: var(--surface-sunken); color: var(--text-primary); }
+.bet-count strong { font-size: 1.15rem; font-weight: 800; }
+.bet-count small { font-size: 0.62rem; font-weight: 700; color: var(--text-muted); margin-top: 2px; }
+.bet-row.losing .bet-count { background: color-mix(in srgb, var(--bad) 15%, transparent); color: var(--bad-strong, var(--bad)); }
+.bet-row.winning .bet-count { background: color-mix(in srgb, var(--good) 15%, transparent); color: var(--good); }
+.bet-pic { flex: none; width: 44px; display: grid; place-items: center; }
+.bet-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.bet-title strong { flex: none; max-width: 70%; }
+.bet-title strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bet-title .bet-kind { flex: none; font-size: 0.72rem; font-weight: 700; color: var(--text-muted); }
+.bet-segs { display: flex; gap: 2px; height: 4px; margin: 3px 0 2px; max-width: 160px; }
+.bet-segs .seg { flex: 1 1 0; border-radius: 2px; background: var(--surface-sunken); }
+.bet-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
+.bet-state { flex: 0 1 auto; min-width: 0; font-size: 0.74rem; font-weight: 650; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bet-state.losing { color: var(--bad-strong, var(--bad)); }
+.bet-state.winning { color: var(--good); }
+.bet-foot .bet-money { flex: none; }
+.leg-score-line { align-items: center; }
+.leg-score-line .leg-team-logo, .leg-score-line picture { width: 16px; height: 16px; flex: none; }
+/* Cash out's word under its button: why it's paused, or what it pays held; the rules a tap away. */
+.cashout-why { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 0 4px; border: 0; background: none; font: inherit; font-size: 0.76rem; color: var(--text-muted); text-align: left; cursor: pointer; }
+.cashout-why > span:first-child { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cashout-why-more { flex: none; font-weight: 700; color: var(--accent); }
+/* F1 boards: a name on one row (the team under it); a head to head both drivers' faces. */
+.entry-title { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.h2h-faces { position: relative; flex: none; width: 50px; height: 40px; }
+.h2h-faces > :first-child { position: absolute; left: 0; top: 0; width: 40px; height: 40px; z-index: 1; }
+.h2h-faces > .h2h-rival, .h2h-faces > :last-child:not(:first-child) { position: absolute; right: 0; bottom: 0; width: 24px; height: 24px; z-index: 2; box-shadow: 0 0 0 2px var(--surface); border-radius: 50%; opacity: .85; }
+.h2h-faces img, .h2h-faces picture { width: 100%; height: 100%; }
+/* A game's markets while their lists come: the tabs' and rows' shape. */
+.more-shape { display: grid; gap: 12px; }
+.shape-tabs { display: flex; gap: 6px; }
+.shape-pill { width: 64px; height: 30px; border-radius: 999px; }
+.shape-rows { display: grid; gap: 8px; }
+.shape-row { display: grid; grid-template-columns: 1fr 72px 72px; gap: 8px; align-items: center; }
+.shape-line { height: 14px; width: 70%; border-radius: 7px; }
+.shape-odds { height: 38px; border-radius: 12px; }
+.more-shape i { display: block; background: var(--surface-sunken); animation: shape-pulse 1.2s ease-in-out infinite; }
+@keyframes shape-pulse { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .more-shape i { animation: none; } }
+.pick.stale { opacity: .55; }
+/* Cash out and editing side by side; editing's banner in the slip. */
+.cashout-actions { display: flex; gap: 8px; }
+.cashout-actions .cashout-btn { flex: 1 1 auto; }
+.edit-btn { flex: none; min-height: 46px; padding: 0 18px; border: 0; border-radius: 999px; background: var(--q-fill, var(--surface-sunken)); color: var(--text-primary); font: inherit; font-weight: 700; cursor: pointer; }
+.edit-btn:disabled { color: var(--text-muted); cursor: default; }
+.edit-btn:active:not(:disabled), .cashout-btn:active:not(:disabled) { transform: scale(0.97); }
+.edit-banner { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 12px; padding: 12px 14px; border-radius: 16px; background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.edit-banner > div { display: grid; gap: 3px; min-width: 0; }
+.edit-banner strong { font-size: 0.95rem; }
+.edit-banner small { font-size: 0.76rem; color: var(--text-secondary); }
+.edit-banner .ghost-button { flex: none; }
+.cashout-actions .cashout-btn { width: auto; min-width: 0; }
+.cashout-actions .cashout-btn > span { white-space: nowrap; }

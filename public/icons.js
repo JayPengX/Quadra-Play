@@ -17,6 +17,8 @@ const ICONS = {
   live: SVG('<circle cx="12" cy="12" r="5" fill="currentColor"/>'),
   waiting: SVG(`<circle cx="12" cy="12" r="8.5" ${LINE}/><path d="M12 7.5V12l3 2" ${LINE}/>`),
   cashed: SVG(`<path d="M6 12h12" ${LINE}/>`),
+  // A locked price (iOS's own lock: a body and a shackle, no emoji).
+  lock: SVG('<rect x="5" y="10.5" width="14" height="10" rx="2.6" fill="currentColor"/><path d="M8.2 10.5V8a3.8 3.8 0 0 1 7.6 0v2.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>'),
   gift: SVG(`<rect x="3.5" y="9" width="17" height="11.5" rx="2" ${LINE}/><path d="M2.5 9h19M12 9v11.5M12 9c-1.5-3.5-6-4.5-6-1.5C6 9 9 9 12 9zm0 0c1.5-3.5 6-4.5 6-1.5C18 9 15 9 12 9z" ${LINE}/>`)
 };
 

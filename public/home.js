@@ -26,7 +26,7 @@ const TXT = {
     balance: 'Quadra 餘額', atStake: '投注中', slipsN: '{n} 張', cashNow: '可兌現', most: '全中最多',
     live: '場中焦點', allLive: '全部場中 {n} 場',
     featured: '焦點賽事', allGames: '全部賽事', markets: '{n} 種玩法',
-    mine: '你的投注', seeAll: '全部', legs: '{n} 場', cashOut: '兌現', paused: '兌現暫停', freeBet: '免費投注',
+    mine: '你的投注', seeAll: '全部', legs: '{n} 場', legsUnit: '場', single: '單場', parlayN: '{n} 場串關', cashOut: '兌現', paused: '兌現暫停', freeBet: '免費投注',
     lottery: '彩券', drawIn: '{when} 開獎', none: '賽事載入中，或目前沒有開賣的比賽。', draw: '和',
     overdrawn: '透支 · 月息 1%', cover: '賣出持股補足',
     vipNone: 'VIP 回饋', vipNoneSub: '本月投注滿 {v} 起，最高回饋 {top}', vipBack: '本月回饋 {p} · 約 {v}', vipNext: '再投注 {v} 升{name}', vipTop: '最高等級', vipPaid: '上月回饋 {v} 已入帳',
@@ -39,7 +39,7 @@ const TXT = {
     balance: 'Quadra balance', atStake: 'In play', slipsN: '{n} slips', cashNow: 'Cash out now', most: 'Most to win',
     live: 'Live now', allLive: 'All {n} live',
     featured: 'Featured', allGames: 'All games', markets: '{n} markets',
-    mine: 'Your bets', seeAll: 'See all', legs: '{n} picks', cashOut: 'Cash out', paused: 'Suspended', freeBet: 'Free bet',
+    mine: 'Your bets', seeAll: 'See all', legs: '{n} picks', legsUnit: 'picks', single: 'Single', parlayN: '{n}-pick parlay', cashOut: 'Cash out', paused: 'Suspended', freeBet: 'Free bet',
     lottery: 'Lottery', drawIn: 'Draw {when}', none: 'Games are loading, or none are on sale right now.', draw: 'Draw',
     overdrawn: 'Overdrawn · 1% a month', cover: 'Sell to cover',
     vipNone: 'VIP cashback', vipNoneSub: 'From {v} staked this month, up to {top} back', vipBack: '{p} back this month · about {v}', vipNext: '{v} more for {name}', vipTop: 'Top tier', vipPaid: 'Last month’s {v} paid in',
@@ -233,18 +233,25 @@ export function renderHome(ctx) {
   const prices = new Map(open.filter(s => !s.free).map(s => [s.id, ctx.cashOutPrice(s)]));
   const cashable = [...prices.values()].reduce((s, v) => s + (v || 0), 0);
   const most = open.reduce((s, x) => s + Math.max(0, ctx.slipRange(x).most), 0);
-  // A slip: its picks' pictures (a team's logo, a driver's face) overlapping,
-  // the picks, when and how many, then what's in and what it can pay, each a
-  // line of its own; its cash-out (or the free bet's mark) at the side.
+  // A slip as itself: one pick, its picture and the pick; several, a badge
+  // with how many (6 關) and the kind (全部過關), a segment a pick coloured by
+  // where it stands, and a few words on it (1 場目前不中 / 比賽中都會中 /
+  // when the next starts); what's in and what it can pay; its cash-out (or
+  // the free bet's mark) at the side. (Three logos overlapping and "火箭、
+  // 火箭、兵工廠…" said little about a 6-pick parlay.)
   const slipRow = s => {
     const value = prices.get(s.id);
-    const first = s.legs.map(l => l.start).filter(Boolean).sort()[0];
     const most = Math.max(0, ctx.slipRange(s).most);
-    return el('div', { class: 'bet-row' }, [
-      el('span', { class: `bet-pics n${Math.min(3, s.legs.length)}`, 'aria-hidden': 'true' }, s.legs.slice(0, 3).map(l => ctx.legIcon(l))),
+    const g = ctx.slipGlance(s);
+    const n = s.legs.length;
+    const one = n === 1;
+    const kind = s.mode === 'system' ? s.sizes.map(k => ctx.sizeName(k, n)).join('、') : ctx.state.t(`slipMode_${s.mode}`);
+    return el('div', { class: `bet-row${g.tone ? ` ${g.tone}` : ''}` }, [
+      one ? el('span', { class: 'bet-pic', 'aria-hidden': 'true' }, [ctx.legIcon(s.legs[0], 'logo-md')]) : el('span', { class: 'bet-count', 'aria-hidden': 'true' }, [el('strong', { class: 'num', text: String(n) }), el('small', { text: T.legsUnit })]),
       el('button', { class: 'bet-main', type: 'button', onclick: () => ctx.showTab('history') }, [
-        el('strong', { text: s.legs.map(l => ctx.shortPick(l)).slice(0, 3).join('、') + (s.legs.length > 3 ? '…' : '') }),
-        el('small', { text: [first ? ctx.fmtShort(first) : null, f('legs', { n: s.legs.length })].filter(Boolean).join(' · ') }),
+        // The slip and where it stands on one row; a segment a pick; what's in and what it can pay.
+        el('span', { class: 'bet-title' }, [el('strong', { text: one ? ctx.shortPick(s.legs[0]) : s.mode === 'parlay' ? f('parlayN', { n }) : `${f('legs', { n })} · ${kind}` }), g.text ? el('small', { class: `bet-state${g.tone ? ` ${g.tone}` : ''}`, text: g.text }) : null]),
+        one ? null : el('span', { class: 'bet-segs', 'aria-hidden': 'true' }, g.segs.map(x => el('i', { class: `seg seg-${x.st}${x.tone ? ` ${x.tone}` : ''}` }))),
         el('span', { class: 'bet-money num' }, [el('span', { text: money(s.cost) }), el('span', { class: 'bet-arrow', text: '→' }), el('strong', { text: money(most) })])
       ]),
       s.free

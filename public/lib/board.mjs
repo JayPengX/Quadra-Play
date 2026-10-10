@@ -30,7 +30,7 @@ import {
 } from './odds.mjs';
 import { pointsModel, pointsMarkets, goalMarkets, fitHockey, baseballMarkets, marketOdds } from './markets.mjs';
 import { fitGoals } from './live.mjs';
-import { houseCut, houseRule } from './rules.mjs';
+import { houseCut, houseRule, withRules, shadeLong } from './rules.mjs';
 import { withModelLines } from './lines.mjs';
 import { LEAGUES, familyOf, isSoccer } from './teams.mjs';
 import { modelProps, teamScores, atLeast, MODEL_CUT } from './propmodel.mjs';
@@ -115,7 +115,7 @@ function lineOptions(game, base, probs) {
   const modeled = Boolean(total?.modeled);
   const mlb = game.sport === 'mlb';
   const baseball = familyOf(game.sport) === 'baseball';
-  const cut = k => houseCut({ base: k });
+  const cut = k => houseCut({ base: k, sport: game.sport });
 
   // 大小分. MLB: the lottery's three lines, from one line; elsewhere the
   // bookmaker's own half line; then the wider range from the model.
@@ -238,7 +238,7 @@ function lineOptions(game, base, probs) {
 // at the two-way cut.
 function tennisLines(game, base) {
   const out = [];
-  const k = houseCut({ base: 'twoWay' });
+  const k = houseCut({ base: 'twoWay', sport: game.sport });
   if (game.spread) {
     const { awayLine, awayFair } = game.spread;
     for (const side of ['away', 'home']) {
@@ -267,7 +267,7 @@ const CORNERS_DISPERSION = 12;
 function fallbackOptions(game, base, probs, made) {
   const family = familyOf(game.sport);
   const markets = [];
-  const twoWay = houseCut({ base: 'twoWay' });
+  const twoWay = houseCut({ base: 'twoWay', sport: game.sport });
   if (family === 'soccer' && probs.draw != null) {
     const h = probs.home / (probs.home + probs.away);
     markets.push({ kind: 'dnb', market: 'dnb', cut: twoWay, picks: [{ side: 'home', fair: h }, { side: 'away', fair: 1 - h }] });
@@ -316,15 +316,15 @@ function gameProps(game, probs) {
 export function offerOptions(game, offers, extra = {}) {
   const base = { gameId: game.id, game, sport: game.sport, start: game.startUtc, ...extra };
   const out = [...marketOptions(game, base, offers.markets || [], { real: true }), ...(LEAGUES[game.sport]?.path ? propOptions(game, base, offers.props || []) : [])];
-  for (const o of out) Object.assign(o, houseRule(o.kind, o.estOdds));
+  for (const o of out) withRules(o);
   return out;
 }
 
 // One option per player pick, at the two-way cut; a ticket with one is
 // capped (SLIP_RULES.capped).
 function propOptions(game, base, props) {
-  const k = houseCut({ base: 'twoWay' });
-  const modelCut = houseCut({ base: MODEL_CUT });
+  const k = houseCut({ base: 'twoWay', sport: game.sport });
+  const modelCut = houseCut({ base: MODEL_CUT, sport: game.sport });
   return props.map(p => {
     const key = `${p.stat}|${p.line ?? ''}|${p.player}`;
     const cut = p.model ? modelCut : k;
@@ -388,7 +388,7 @@ function optionId(game, m, pick) {
 function marketOptions(game, base, markets, { real = false } = {}) {
   const out = [];
   for (const m of markets) {
-    const k = houseCut({ base: m.cut });
+    const k = houseCut({ base: m.cut, sport: game.sport });
     for (const pick of m.picks) {
       const o = {
         ...base,
@@ -432,7 +432,7 @@ export function gameOptions(game) {
   const both = first && second && Object.keys(first).every(k => k in second);
   // Soccer's 不讓分 has three outcomes: the lottery's three-way cut (its 1X2
   // odds add up to about 120%), not the two-way one.
-  const mlCut = houseCut({ base: isSoccer(game.sport) ? 'threeWay' : blend.k });
+  const mlCut = houseCut({ base: isSoccer(game.sport) ? 'threeWay' : blend.k, sport: game.sport });
   const out = sides.map(side => ({
     ...base,
     id: `${game.id}|ml|${side}`,
@@ -472,7 +472,7 @@ export function gameOptions(game) {
   if (LEAGUES[game.sport]?.path) out.push(...propOptions(game, base, gameProps(game, blend.probs)));
   // Odd or even: a coin flip at a full cut, no longer sold.
   for (let i = out.length - 1; i >= 0; i--) if (out[i].kind === 'oddeven') out.splice(i, 1);
-  for (const o of out) Object.assign(o, houseRule(o.kind, o.estOdds));
+  for (const o of out) withRules(o);
   // The books far apart on the game: locked until they agree (blendOutcomes).
   if (blend.disputed) for (const o of out) o.lock = 'check';
   // Priced by the house alone (no bookmaker yet: weeks out, preseason, a
@@ -677,12 +677,21 @@ export function f1Markets(drivers, { runs = 40_000, seed = 7 } = {}) {
     const odds = Math.min(500, Math.max(1.01, Math.round((back / Math.min(0.995, fair)) * 100) / 100));
     return { fair: Math.min(0.995, fair), odds, ...houseRule(kind, odds) };
   };
+  // Yes-or-no markets (a teammate ahead, a top six, a top ten) at a two-way
+  // market's cut, as every sport's two-way lines are: the outright board's
+  // 20% made a 95% favourite 1.01 and locked it, and its rival long.
+  const twoWay = houseCut({ base: 'twoWay' });
+  const line = (fair, kind) => {
+    const f = Math.min(0.995, fair);
+    const odds = shadeLong(kind, Math.min(500, estimateLineOdds(f, twoWay)));
+    return { fair: f, odds, ...houseRule(kind, odds) };
+  };
   return {
-    top6: drivers.map((d, i) => price(top6[i] / runs, 'f1top')),
-    top10: drivers.map((d, i) => price(top10[i] / runs, 'f1top')),
+    top6: drivers.map((d, i) => line(top6[i] / runs, 'f1top6')),
+    top10: drivers.map((d, i) => line(top10[i] / runs, 'f1top10')),
     h2h: pairs.flatMap(([i, j], x) => {
       const pi = ahead[x] / runs;
-      return [{ driver: i, rival: j, ...price(pi, 'f1h2h') }, { driver: j, rival: i, ...price(1 - pi, 'f1h2h') }];
+      return [{ driver: i, rival: j, ...line(pi, 'f1h2h') }, { driver: j, rival: i, ...line(1 - pi, 'f1h2h') }];
     }),
     teams: teams.map(team => price(drivers.reduce((s, d) => s + (d.team === team ? d.fair / sum : 0), 0), 'f1team')).map((x, k) => ({ team: teams[k], ...x }))
   };
