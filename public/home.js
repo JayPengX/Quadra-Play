@@ -168,14 +168,14 @@ export function renderHome(ctx) {
   // A 為你推薦 pick: why it's here, the team, the pick and what it pays.
   const STAKE = 500;
   const forYouCard = ({ bet, game: g, why, side, tag }) => {
-    const team = side ? ctx.teamName(g[side]) : '';
+    const team = side ? ctx.shortTeam(g.sport, g[side]) : '';
     const league = state.t(`sport_${g.sport}`);
     const tone = why === 'follow' ? 'follow' : why === 'backed' ? 'backed' : tag || 'like';
     const face = side ?? (['home', 'away'].includes(bet.side) ? bet.side : null);
     return el('article', { class: `fy ${tone}` }, [
       el('button', { class: 'fy-top', type: 'button', onclick: () => ctx.openGame(g.id) }, [
         el('span', { class: 'fy-why', text: f(`why_${why}`, { team, league }) }),
-        el('span', { class: 'fy-time', text: gameTime(g) })
+        el('span', { class: 'fy-time', text: g.timeTbd ? gameTime(g) : ctx.legWhen(g.startUtc) })
       ]),
       el('button', { class: 'fy-game', type: 'button', onclick: () => ctx.openGame(g.id) }, [
         face ? ctx.logoImg(g.sport, g[face].en, ctx.teamName(g[face]), 'logo-lg') : ctx.leagueImg(g.sport, 'logo-lg'),

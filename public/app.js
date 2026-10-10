@@ -194,6 +194,12 @@ function legWhen(iso) {
 }
 // A saved pick's name as shown now: a driver as the apps name them today,
 // in English (a ticket from before keeps "G.羅素" or "羅素": George Russell).
+// A driver's surname as the grid writes it ("Carlos Sainz Jr." is Sainz, not "Jr.").
+function shortDriver(name) {
+  const words = String(name || '').split(' ').filter(w => !/^(jr|sr|ii|iii|iv)\.?$/i.test(w));
+  const known = f1Driver(name).surname;
+  return (known && words.find(w => w.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === known.toLowerCase())) || words.slice(-1)[0] || '';
+}
 const F1_EN = Object.fromEntries(Object.entries(F1_NAMES_ZH).map(([surname, zh]) => [zh, F1_PAGE[surname] ? F1_PAGE[surname].split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' ') : surname]));
 const shownLabel = leg => {
   const label = String(leg.shortLabel || leg.label || '').replace(/^[A-Z]{1,3}\.(?=[\u4e00-\u9fff])/, '');
@@ -395,7 +401,7 @@ function buildBets(data) {
     for (const p of more.h2h) {
       const w = winners[p.driver];
       const r = winners[p.rival];
-      bets.push({ ...w, id: `f1h2h|${w.driverEn}|${r.driverEn}`, gameId: `f1h2h|${[w.driverEn, r.driverEn].sort().join('|')}`, kind: 'f1h2h', market: `f1h2h|${[w.driverEn, r.driverEn].sort().join('|')}`, rival: r.driverEn, settle: { rival: r.driverEn }, rivalLabel: r.shortLabel, label: `F1 ${w.shortLabel} ${t('f1H2HBeats')} ${r.shortLabel}`, shortLabel: `${w.driverEn.split(' ').slice(-1)[0]} ${t('f1H2HBeats')} ${r.driverEn.split(' ').slice(-1)[0]}`, fairChance: p.fair, estOdds: p.odds, errKey: 'extra', lock: p.lock, minLegs: p.minLegs });
+      bets.push({ ...w, id: `f1h2h|${w.driverEn}|${r.driverEn}`, gameId: `f1h2h|${[w.driverEn, r.driverEn].sort().join('|')}`, kind: 'f1h2h', market: `f1h2h|${[w.driverEn, r.driverEn].sort().join('|')}`, rival: r.driverEn, settle: { rival: r.driverEn }, rivalLabel: r.shortLabel, label: `F1 ${w.shortLabel} ${t('f1H2HBeats')} ${r.shortLabel}`, shortLabel: `${shortDriver(w.driverEn)} ${t('f1H2HBeats')} ${shortDriver(r.driverEn)}`, fairChance: p.fair, estOdds: p.odds, errKey: 'extra', lock: p.lock, minLegs: p.minLegs });
     }
     for (const p of more.teams) {
       bets.push({ id: `f1team|${p.team}`, gameId: 'f1team', kind: 'f1team', sport: 'f1', market: 'f1team', matchup: raceName(data.f1.title, state.locale), start: data.f1.startUtc, team: p.team, label: `F1 ${t('f1TeamShort')} ${p.team}`, shortLabel: p.team, fairChance: p.fair, estOdds: p.odds, errKey: 'extra', lock: p.lock, minLegs: p.minLegs });
@@ -683,10 +689,15 @@ function redraw(root, draw) {
   }
 }
 // The picture `key` from the redraw's old screen, else a new one (`make`).
+// A stand-in (an initial: the logo wasn't known yet when it was first drawn,
+// e.g. the home page from the saved live copy before the leagues' logos
+// arrived) is never kept once the real picture can be drawn.
+const isStandIn = node => node.matches('.logo-fallback, .league-missing, .league-icon') || Boolean(node.querySelector?.('.logo-fallback, .league-missing, .league-icon'));
 function keptPic(key, make) {
   const old = recycled?.get(key)?.shift();
-  if (old) return old;
+  if (old && !isStandIn(old)) return old;
   const node = make();
+  if (old && isStandIn(node)) return old;
   node.dataset.pic = key;
   return node;
 }
@@ -1664,11 +1675,7 @@ function renderParlay() {
   // A free bet (Plus's weekly one, the welcome offer): a cut off the stake.
   // The stake is the person's usual one (never below the free bet); the free
   // bet pays its part and the rest comes from the balance. One slip.
-  // Editing a slip: the old one, its cash-out price now as credit (cashOutInfo).
-  const editing = state.editing ? state.account?.slips.find(x => x.id === state.editing.slipId && x.status === 'open') : null;
-  if (state.editing && !editing) endEdit({ restore: false });
-  const editInfo = editing ? cashOutInfo(editing) : null;
-  const tokens = editing ? [] : freeBetList();
+  const tokens = freeBetList();
   const free = tokens.find(x => x.id === state.useFree) || null;
   const freeShape = Boolean(free) && (mode === 'parlay' || (mode === 'single' && n === 1));
   const freeOn = freeShape && freeOddsOk(legs.map(b => ({ odds: effectiveOdds(b) })));
@@ -1680,7 +1687,6 @@ function renderParlay() {
   if (n === 0) {
     body.replaceChildren(
       el('div', { class: 'card slip-empty' }, [
-        editing ? el('p', { class: 'muted', text: t('editEmpty') }) : null,
         el('div', { class: 'big-emoji', 'aria-hidden': 'true', text: '🎫' }),
         el('p', { text: t('parlayEmpty') }),
         dropped ? el('p', { class: 'back-low', text: t('slipDroppedLive', { n: dropped }) }) : null,
@@ -1690,20 +1696,8 @@ function renderParlay() {
     return;
   }
 
-  // Editing: what's being edited and what it's worth now, a way out.
-  const editBanner = editing
-    ? el('div', { class: 'edit-banner' }, [
-        el('div', {}, [
-          el('strong', { text: t('editTitle', { n: editing.legs.length }) }),
-          el('small', { text: editInfo?.value != null ? t('editCredit', { v: fmtMoney(editInfo.value, { sign: false }) }) : `${t('editPaused')}：${cashOutWhy(editing, editInfo)}` }),
-          editing.legs.some(l => l.result === 'won') ? el('small', { text: t('editWonIn') }) : null
-        ]),
-        el('button', { class: 'ghost-button', type: 'button', text: t('editCancel'), onclick: () => (endEdit(), closeSlip(), renderParlay()) })
-      ])
-    : null;
   // Left: the ticket itself. Right: what it can pay and what it costs on average.
   const ticket = [
-    editBanner,
     el('div', { class: 'ticket-head' }, [
       el('strong', { text: t('slipLegs', { n }) }),
       el('button', {
@@ -1814,7 +1808,7 @@ function renderParlay() {
   // A free bet chosen that this slip can't take: said plainly by the button
   // (what to change), so it never looks as if it just didn't work.
   if (free && !freeOn) ticket.push(el('p', { class: 'note back-low free-off', role: 'status', text: `${t('freeOff')}${state.locale === 'en' ? ' ' : ''}${freeShape ? t('freeBetMinOdds', { v: FREE_MIN_ODDS.toFixed(2) }) : n > 1 && mode === 'single' ? t('freeBetSingles') : t('freeBetOneSlip')}` }));
-  ticket.push(placeButton(legs, sizes, cost, errors, freeOn ? free : null, editing ? { slip: editing, credit: editInfo?.value ?? null } : null));
+  ticket.push(placeButton(legs, sizes, cost, errors, freeOn ? free : null));
   ticket.push(el('details', { class: 'info' }, [el('summary', { text: t('slipRulesTitle') }), el('p', { text: t('slipRulesNote') })]));
 
   // The ticket and what it pays: no analysis beside it.
@@ -2297,16 +2291,13 @@ function freeBetRow(tokens, free, freeOn, rerender, freeShape = true) {
 }
 
 // The 模擬下注 button: buys the slip on the simulated account.
-function placeButton(legs, sizes, cost, errors, free = null, edit = null) {
+function placeButton(legs, sizes, cost, errors, free = null) {
   const t = state.t;
   const money = funds();
-  // Editing: the old slip's credit pays first; what's left (or what comes back) is the difference.
-  const owed = edit ? cost - (edit.credit ?? 0) : cost;
-  const short = owed > money;
+  const short = cost > money;
   // Opened on the last board saved: bets wait for today's odds.
   const updating = Boolean(state.fromSnapshot);
-  const blocked = errors.length > 0 || sizes.length === 0 || short || !state.accountReady || updating || (edit && edit.credit == null);
-  if (edit) return editButton(legs, sizes, cost, owed, blocked, edit);
+  const blocked = errors.length > 0 || sizes.length === 0 || short || !state.accountReady || updating;
   const paidBy = free && !short && !updating ? (cost > 0 ? t('placeFreePlus', { f: fmtMoney(free.value, { sign: false }), v: fmtMoney(cost, { sign: false }) }) : t('placeFree', { v: fmtMoney(free.value, { sign: false }) })) : '';
   const button = el('button', {
       class: `primary-button place-button${paidBy ? ' two-line' : ''}`,
@@ -2388,54 +2379,6 @@ function placeButton(legs, sizes, cost, errors, free = null, edit = null) {
   return el('div', { class: 'place-row' }, [button, el('small', { class: 'muted', text: t('placeNote', { v: fmtMoney(money, { sign: money < 0 }) }) })]);
 }
 
-// Editing's button: the old slip cashed out at its price now and the new one
-// bought with it, both or neither, in one save.
-function editButton(legs, sizes, cost, owed, blocked, edit) {
-  const t = state.t;
-  // (Nothing valid to buy yet, a lone pick on 全部過關: no sum said, the slip's own note says why.)
-  const label = blocked && !(cost > 0) ? t('editEven') : owed > 0 ? t('editPay', { v: fmtMoney(owed, { sign: false }) }) : owed < 0 ? t('editBack', { v: fmtMoney(-owed, { sign: false }) }) : t('editEven');
-  const button = el('button', {
-    class: 'primary-button place-button',
-    type: 'button',
-    disabled: blocked ? '' : null,
-    text: label,
-    onclick: async () => {
-      const board = new Map(slipCandidates().map(b => [b.id, b]));
-      const now = () => legs.map(b => board.get(b.id)).every(b => b && !b.lock && b.estOdds > 1 && !started(b));
-      if (!now()) return renderParlay(), tell({ lang: state.locale, icon: '⏳', title: t('pickGone'), body: t('pickGoneBody') });
-      const old = state.account.slips.find(x => x.id === edit.slip.id && x.status === 'open');
-      const fresh = old ? cashOutPrice(old) : null;
-      if (fresh == null) return renderParlay(), tell({ lang: state.locale, icon: '⏳', title: t('cashOutGone'), body: t('cashOutGoneBody') });
-      const pay = cost - fresh;
-      const asked = await ask({ lang: state.locale, icon: '✎', title: t('editAsk'), body: t('editAskBody', { credit: fmtMoney(fresh, { sign: false }), stake: fmtMoney(cost, { sign: false }), diff: pay >= 0 ? t('editAskPay', { v: fmtMoney(pay, { sign: false }) }) : t('editAskBack', { v: fmtMoney(-pay, { sign: false }) }) }), ok: t('editOk'), cancel: t('askCancel') });
-      if (!asked) return;
-      const again = state.account.slips.find(x => x.id === edit.slip.id && x.status === 'open');
-      const credit = again ? cashOutPrice(again) : null;
-      if (credit == null) return renderParlay(), tell({ lang: state.locale, icon: '⏳', title: t('cashOutGone'), body: t('cashOutGoneBody') });
-      if (cost - credit > funds()) return renderParlay();
-      const t0 = new Date();
-      let account = cashOut(state.account, again.id, credit, t0);
-      if (account === state.account) return;
-      const records = legs.map(legRecord);
-      const slip = { id: newSlipId(), mode: state.slipMode, sizes, stake: state.slipStake, cost, legs: records, editedFrom: again.id, ...(state.slipMode !== 'single' ? { boost: boostX() } : {}) };
-      const placed = placeSlip(account, slip, t0, { extra: Infinity });
-      if (placed.error) return;
-      account = placed.account;
-      endEdit({ restore: false });
-      state.parlay = [];
-      saveSlip();
-      state.freshSlips.add(slip.id);
-      state.justPlaced = { at: Date.now(), n: 1, cost: Math.max(0, cost - credit), free: 0 };
-      commitAccount(account);
-      clearTimeout(pushTimer);
-      syncNow();
-      slipChanged();
-      closeSlip();
-      showTab('history');
-    }
-  });
-  return el('div', { class: 'place-row' }, [button, el('small', { class: 'muted', text: t('editNote', { stake: fmtMoney(cost, { sign: false }), credit: fmtMoney(edit.credit ?? 0, { sign: false }) }) })]);
-}
 
 // Legs of open slips whose games are over get their results; a slip is paid
 // once every leg is decided. A game still not found three days after its
@@ -2620,35 +2563,6 @@ async function doCashOut(slip, value) {
   renderSaved();
   if (state.tab === 'home') drawHome();
 }
-// ---- Editing a slip (2026-10-11) ----------------------------------------------------
-//
-// As a sportsbook's Edit Bet: the slip is cashed out at its cash-out price
-// now and that money is the new slip's stake, at today's prices. Picks can
-// go, be added or swapped, and money added (or taken back: a stake under
-// the credit is a partial cash out). Its won picks are already in the
-// credit; the new slip holds the undecided ones. The house takes its margin
-// on both halves, so an edit is never worth more than holding the slip.
-function startEdit(slip) {
-  const t = state.t;
-  const info = cashOutInfo(slip);
-  if (info.value == null) return tell({ lang: state.locale, icon: '✎', title: t('editPaused'), body: cashOutWhy(slip, info) || t('cashRulePauseBody') });
-  const now = Date.now();
-  const ids = slip.legs.filter(l => !l.result).map(l => currentBet(l, now)?.id).filter(Boolean);
-  state.editing = { slipId: slip.id, before: { parlay: state.parlay, mode: state.slipMode, stake: state.slipStake, sizes: new Set(state.slipSizes) } };
-  state.parlay = ids;
-  state.slipMode = slip.mode;
-  state.slipSizes = new Set(slip.mode === 'system' ? slip.sizes : ['all']);
-  state.useFree = null;
-  // The credit as the stake to start with (nothing to add, nothing back).
-  const per = comboCount(ids.map(id => ({ gameId: id })), slipSizes(slip.mode, ids.length, [...state.slipSizes].map(k => (k === 'all' ? ids.length : k)))) || 1;
-  state.slipStake = Math.max(SLIP_RULES.unit, Math.floor(info.value / per / SLIP_RULES.unit) * SLIP_RULES.unit);
-  openSlip();
-}
-function endEdit({ restore = true } = {}) {
-  const was = state.editing;
-  state.editing = null;
-  if (restore && was?.before) Object.assign(state, { parlay: was.before.parlay, slipMode: was.before.mode, slipStake: was.before.stake, slipSizes: was.before.sizes });
-}
 function cashOutRow(slip) {
   const t = state.t;
   const info = cashOutInfo(slip);
@@ -2661,7 +2575,6 @@ function cashOutRow(slip) {
         el('span', { text: t('cashOut') }),
         el('strong', { class: 'num', text: value == null ? t('cashOutPaused') : fmtMoney(value, { sign: false }) })
       ]),
-      el('button', { class: 'edit-btn', type: 'button', disabled: value == null ? '' : null, onclick: () => startEdit(slip), text: t('editSlip') })
     ]),
     // Paused: why, and the rules a tap away (暫停中 alone said nothing).
     value == null && why ? el('button', { class: 'cashout-why', type: 'button', onclick: cashOutRules }, [el('span', { text: why }), el('span', { class: 'cashout-why-more', text: t('cashRulesLink') })]) : null,
@@ -2788,7 +2701,7 @@ function legSubLine(leg, st) {
   return el('small', { class: 'leg-sub', text: [legWhen(leg.start), shortMatchup(leg)].filter(Boolean).join(' · ') });
 }
 const sameName = (a, b) => String(a || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === String(b || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-const shortDriver = name => String(name || '').split(' ').slice(-1)[0];
+
 // A pick's state as a small word at its side: 目前會中 / 目前不中 / 平手 while on, 中 / 沒中 once decided.
 function legChip(leg, st) {
   const t = state.t;
@@ -2877,7 +2790,10 @@ function savedSlipCard(slip) {
       ? el('span', { class: 'slip-pill lost', text: t('slipDead') })
       : el('span', { class: `slip-pill ${states.includes('live') ? 'live' : 'open'}`, text: states.includes('live') ? t('slipLiveNow') : t('slipOpen') });
   const nextStart = slip.legs.filter((leg, k) => states[k] === 'waiting' && leg.start).map(leg => leg.start).sort()[0];
-  return el('article', { class: `card saved-slip ${state.freshSlips.has(slip.id) ? 'fresh' : ''} ${dead ? 'dead' : ''}` }, [
+  // Fresh: glows once as it's first shown, then plain (never on every redraw).
+  const fresh = state.freshSlips.has(slip.id);
+  if (fresh) setTimeout(() => state.freshSlips.delete(slip.id), 2600);
+  return el('article', { class: `card saved-slip ${fresh ? 'fresh' : ''} ${dead ? 'dead' : ''}` }, [
     el('div', { class: 'saved-head' }, [
       el('div', { class: 'saved-title' }, [
         el('span', { class: 'mode-tag', text: slip.free ? `${mode} · ${t('freeBetTag')}` : mode }),
@@ -3426,7 +3342,6 @@ function renderF1() {
   // A head to head: both drivers' faces (the pick in front), their surnames
   // on one line ("Verstappen 勝 Hadjar"), their team under it ("Max
   // Verstappen > Isack Hadjar" wrapped to two lines over "vs Isack Hadjar").
-  const surname = n => String(n || '').split(' ').slice(-1)[0];
   const badge = b =>
     current.flag
       ? icon(b.kind, 'flag-badge')
@@ -3436,7 +3351,7 @@ function renderF1() {
           ? el('span', { class: 'h2h-faces' }, [driverBadge(b), driverBadge({ driverEn: b.rival, driver: f1Driver(b.rival) }, 'h2h-rival')])
           : driverBadge(b);
   const sub = b => (current.flag ? null : b.kind === 'f1team' ? '' : state.locale === 'zh' ? f1Constructor(b.driver.team).zh || b.driver.team : b.driver.team);
-  const title = b => (b.kind === 'f1h2h' ? `${surname(b.driverEn)} ${t('f1H2HBeats')} ${surname(b.rival)}` : b.shortLabel);
+  const title = b => (b.kind === 'f1h2h' ? `${shortDriver(b.driverEn)} ${t('f1H2HBeats')} ${shortDriver(b.rival)}` : b.shortLabel);
   $('f1-body').replaceChildren(
     board({
       emblem: 'f1',
@@ -3780,8 +3695,7 @@ function openSlip() {
 function closeSlip() {
   if (slipSheet?.open) slipSheet.close();
 }
-// (Closed while editing: the edit's dropped, the slip being made before it back.)
-slipSheet?.addEventListener('close', () => (state.editing && (endEdit(), saveSlip()), renderSlipBar()));
+slipSheet?.addEventListener('close', () => renderSlipBar());
 // A tap on the dimmed page behind closes it.
 slipSheet?.addEventListener('click', e => e.target === slipSheet && closeSlip());
 $('slip-close')?.addEventListener('click', closeSlip);
@@ -4033,7 +3947,7 @@ function homeCtx() {
   };
   return {
     openSlip: () => openSlip(),
-    slipCount: () => slipLegs().legs.length, state, q, el, fmtMoney, fmtOdds, fmtTime, gameTime, legTime, fmtShort, shownLabel, shortPick, legIcon, slipGlance, sizeName, pickTitle, pickButton, teamName, gameSeries, matchupText, shortGameText, logoImg, leagueImg, toggleLeg, takeParlay, showTab, openGame, openLive, liveStateText, betKeys, track, funds, slipRange, cashOutPrice, doCashOut, leagueTier: shownTier, isSoccer, parlayPays, boostPct: n => Math.round(boostRate(n, boostX()) * 100) };
+    slipCount: () => slipLegs().legs.length, state, q, el, fmtMoney, fmtOdds, fmtTime, gameTime, legTime, legWhen, shortTeam: (sport, team) => (state.locale === 'zh' ? teamNameZh(sport, team.en, familyOf(sport))?.short : null) || teamName(team), fmtShort, shownLabel, shortPick, legIcon, slipGlance, sizeName, pickTitle, pickButton, teamName, gameSeries, matchupText, shortGameText, logoImg, leagueImg, toggleLeg, takeParlay, showTab, openGame, openLive, liveStateText, betKeys, track, funds, slipRange, cashOutPrice, doCashOut, leagueTier: shownTier, isSoccer, parlayPays, boostPct: n => Math.round(boostRate(n, boostX()) * 100) };
 }
 statsUi = mountStats({ state, el, svgEl, fmtMoney, fmtInt, fmtPctShort, fmtOdds, fmtTime, showTab, sportName: key => (key === 'mixed' ? state.t('sportMixed') : state.t(`sport_${key}`) === `sport_${key}` ? String(key).toUpperCase() : state.t(`sport_${key}`)), youCard, crowdCard, funCard, picksCard, breakdownCard });
 lotteryUi = mountLottery({ state, q, el, fmtMoney, funds, commitAccount, track, getAccount: () => state.account, syncNow, showTickets });

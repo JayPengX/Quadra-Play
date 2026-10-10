@@ -413,9 +413,10 @@ body.searching #live, body.searching #f1, body.searching #futures, body.searchin
 }
 
 /* Games heading: the day inline, the tap hint beside it. */
-.games-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 12px; margin: 6px 0 10px; }
-.games-head .section-heading { margin: 0; }
-.games-hint { font-size: 0.78rem; color: var(--text-muted); }
+.games-head { display: flex; align-items: baseline; flex-wrap: nowrap; gap: 12px; margin: 6px 0 10px; min-width: 0; }
+.games-head .section-heading { margin: 0; flex: none; white-space: nowrap; }
+/* The hint gives way (it's a tip), the heading never. */
+.games-hint { min-width: 0; font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 720px) {
   .sport-tile .tile-count { display: none; }
 }
@@ -465,7 +466,11 @@ body.searching #live, body.searching #f1, body.searching #futures, body.searchin
 .saved-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; font-size: 0.84rem; }
 .saved-list { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); margin-bottom: 12px; }
 .saved-slip { margin-bottom: 0; display: grid; gap: 10px; min-width: 0; }
-.saved-slip.fresh { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-wash), var(--shadow); }
+/* Just placed or just settled: a short glow that fades, never an outline
+   that stays (it read as "still open" on a settled slip). */
+.saved-slip.fresh { animation: slip-fresh 2.4s ease-out forwards; }
+@keyframes slip-fresh { 0%, 35% { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-wash), var(--shadow); } 100% { border-color: transparent; } }
+@media (prefers-reduced-motion: reduce) { .saved-slip.fresh { animation: none; } }
 .saved-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .saved-head small { font-size: 0.74rem; }
 .slip-pill { flex: none; font-size: 0.76rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: var(--surface-sunken); color: var(--text-secondary); white-space: nowrap; }
@@ -1292,8 +1297,8 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 .fy.value, .fy.shot { --tone: #e11d48; --wash: color-mix(in srgb, #e11d48 11%, transparent); }
 .fy-top, .fy-game { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
 .fy-top { justify-content: space-between; padding: 12px 12px 4px; }
-.fy-why { min-width: 0; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 750; color: var(--tone); background: var(--wash); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fy-time { flex: none; font-size: 0.72rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.fy-why { flex: none; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 750; color: var(--tone); background: var(--wash); white-space: nowrap; }
+.fy-time { min-width: 0; text-align: right; font-size: 0.72rem; white-space: nowrap; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .fy-game { gap: 12px; padding: 8px 12px 10px; }
 .fy-game .logo-lg { width: 44px; height: 44px; font-size: 1.1rem; }
 .fy-text { display: grid; gap: 2px; min-width: 0; }
@@ -1459,16 +1464,6 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 @keyframes shape-pulse { 50% { opacity: .55; } }
 @media (prefers-reduced-motion: reduce) { .more-shape i { animation: none; } }
 .pick.stale { opacity: .55; }
-/* Cash out and editing side by side; editing's banner in the slip. */
-.cashout-actions { display: flex; gap: 8px; }
-.cashout-actions .cashout-btn { flex: 1 1 auto; }
-.edit-btn { flex: none; min-height: 46px; padding: 0 18px; border: 0; border-radius: 999px; background: var(--q-fill, var(--surface-sunken)); color: var(--text-primary); font: inherit; font-weight: 700; cursor: pointer; }
-.edit-btn:disabled { color: var(--text-muted); cursor: default; }
-.edit-btn:active:not(:disabled), .cashout-btn:active:not(:disabled) { transform: scale(0.97); }
-.edit-banner { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 12px; padding: 12px 14px; border-radius: 16px; background: color-mix(in srgb, var(--accent) 12%, transparent); }
-.edit-banner > div { display: grid; gap: 3px; min-width: 0; }
-.edit-banner strong { font-size: 0.95rem; }
-.edit-banner small { font-size: 0.76rem; color: var(--text-secondary); }
-.edit-banner .ghost-button { flex: none; }
-.cashout-actions .cashout-btn { width: auto; min-width: 0; }
-.cashout-actions .cashout-btn > span { white-space: nowrap; }
+.cashout-actions { display: flex; }
+.cashout-actions .cashout-btn { flex: 1; }
+.cashout-btn:active:not(:disabled) { transform: scale(0.97); }

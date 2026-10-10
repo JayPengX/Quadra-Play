@@ -71,18 +71,3 @@ test('parlay boost: winnings of 3+ pick combinations raised, doubled for Plus, o
   assert.equal(slipPayoutTable({ legs: legs.slice(0, 2), sizes: [2], stake: 100, boost: 2 }).gross[3], 400);
   assert.equal(boostRate(12), boostRate(7));
 });
-
-test('editing a slip: cashed out at its price, the new slip staked from it; only the difference moves', () => {
-  let a = newAccount(new Date('2026-10-01T00:00:00Z'));
-  const old = { id: 'e1', mode: 'parlay', sizes: [2], stake: 500, cost: 500, legs: [leg('g1', 2), leg('g2', 2)] };
-  a = placeSlip(a, old, new Date('2026-10-01T01:00:00Z')).account;
-  const before = balance(a);
-  const credit = cashOutValue(a.slips[0], [0.5, 0.5]);
-  // Edited into a single at 1.9 staked 1,000: the credit pays first, the rest from the balance.
-  a = cashOut(a, 'e1', credit, new Date('2026-10-01T02:00:00Z'));
-  a = placeSlip(a, { id: 'e2', mode: 'single', sizes: [1], stake: 1000, cost: 1000, legs: [leg('g3', 1.9)], editedFrom: 'e1' }, new Date('2026-10-01T02:00:00Z'), { extra: Infinity }).account;
-  assert.equal(balance(a), before + credit - 1000);
-  assert.equal(a.slips.find(x => x.id === 'e1').cashedOut, true);
-  // Never worth more than holding the slip: its credit is under the slip's fair worth.
-  assert.ok(credit < 500 * 4 * 0.25);
-});
