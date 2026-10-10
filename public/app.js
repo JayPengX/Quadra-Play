@@ -3266,7 +3266,9 @@ const BOOT_IMAGES_MS = 2_500;
 // A saved board: the loading screen stays until today's board has replaced
 // it (so nothing reshuffles right after it lifts), this long at most; past
 // it the saved board opens and today's swaps in when it's ready.
-const SNAPSHOT_WAIT_MS = 6_000;
+// (2 s, as Orbit Sports opens on what it had: at 6 s Play was the slowest
+// app to open every time today's board took its time.)
+const SNAPSHOT_WAIT_MS = 2_000;
 const within = (promise, ms, fallback) => Promise.race([Promise.resolve(promise).catch(() => fallback), new Promise(resolve => setTimeout(() => resolve(fallback), ms))]);
 // Every picture on screen in `root` loaded (or failed): no logo pops in as
 // the page opens. Pictures further down wait for their turn (lazy), then
@@ -3322,11 +3324,15 @@ function warmImages() {
 // start of many seconds.
 const SNAPSHOT_KEY = 'oddsStudy.board';
 const SNAPSHOT_V = 2;
-const SNAPSHOT_MAX_AGE_MS = 24 * 3_600_000;
+// Three days (a phone not opened yesterday still opens at once), the games
+// that have started since left out: they'd only go when today's came in.
+const SNAPSHOT_MAX_AGE_MS = 3 * 24 * 3_600_000;
 function readSnapshot() {
   try {
     const saved = JSON.parse(localStorage.getItem(SNAPSHOT_KEY) || 'null');
     if (!saved?.data?.games || saved.v !== SNAPSHOT_V || !(Date.now() - saved.at < SNAPSHOT_MAX_AGE_MS)) return null;
+    const now = Date.now();
+    saved.data.games = saved.data.games.filter(g => !(Date.parse(g.startUtc) <= now));
     return saved.data;
   } catch {
     return null;
@@ -3422,7 +3428,10 @@ async function load() {
       // Swapped in whole (every league's games that came in time, the live
       // games too), so the list doesn't shrink to the main leagues and grow
       // back; a league later than that joins as it comes.
-      await within(Promise.all([liveIn, firstScreen()]), Math.max(500, SNAPSHOT_WAIT_MS - 300 - (Date.now() - startedAt)));
+      // Already open on the saved board: today's waits until it's whole
+      // (BOOT_FULL_MS at most) and swaps in once, not league by league.
+      const elapsed = Date.now() - startedAt;
+      await within(Promise.all([liveIn, firstScreen()]), state.booting ? Math.max(500, SNAPSHOT_WAIT_MS - 300 - elapsed) : Math.max(1_000, BOOT_FULL_MS - elapsed));
       const ids = new Set(fresh.games.map(g => g.id));
       fresh.games = [...fresh.games, ...pending.splice(0).filter(g => !ids.has(g.id))].sort((a, b) => a.startUtc.localeCompare(b.startUtc));
       const futures = await within(extraFutures, 300, null);
@@ -3689,6 +3698,16 @@ function fitNumbers(nodes) {
     return Math.max(full * 0.6, Math.floor(((full * (box - 0.5)) / need) * 10) / 10);
   });
   nodes.forEach((node, i) => sizes[i] && (node.style.fontSize = `${sizes[i]}px`));
+  // Text doesn't narrow exactly with its size (−NT$1,052 at 13.2px was still
+  // 75.9px in a 75px box, so cut): each one shrunk is checked again and
+  // stepped down until it fits.
+  nodes.forEach((node, i) => {
+    if (!sizes[i]) return;
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const floor = sizes[i] * 0.85;
+    for (let size = sizes[i]; size > floor && range.getBoundingClientRect().width > node.getBoundingClientRect().width - 0.5; ) node.style.fontSize = `${(size -= 0.4)}px`;
+  });
 }
 if ('ResizeObserver' in window) {
   const fitted = new WeakSet();

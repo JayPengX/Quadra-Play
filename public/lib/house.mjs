@@ -97,9 +97,17 @@ export function housePrices(sport, away, home, table, { neutral = false, preseas
 // standings gets an empty table (every team even).
 const tables = new Map();
 const BEFORE_WAIT_MS = 2_500;
-export async function loadStrengths(sport, path, getJson) {
+// Asked for alongside the league's games (sources.mjs), not after them: the
+// same reading is shared (it had been three round trips after the games').
+export function loadStrengths(sport, path, getJson) {
   const slot = tables.get(sport);
   if (slot && Date.now() - slot.at < 6 * 3_600_000) return slot.table;
+  const table = readStrengths(sport, path, getJson);
+  tables.set(sport, { at: Date.now(), table });
+  table.catch(() => tables.delete(sport));
+  return table;
+}
+async function readStrengths(sport, path, getJson) {
   const url = `${ESPN_STANDINGS}/${path}/standings`;
   // The regular season's table only (the US leagues): ESPN's default counts
   // the preseason in (the NBA's October: Brooklyn 1-0 before a real game),
@@ -110,9 +118,7 @@ export async function loadStrengths(sport, path, getJson) {
   const year = Number(now?.seasons?.[0]?.year ?? now?.season?.year ?? now?.children?.[0]?.standings?.season);
   // Last season's only refines the table: never worth holding the board for.
   const before = Number.isFinite(year) && year > 2000 ? await Promise.race([getJson(`${url}?${query(`season=${year - 1}`)}`).catch(() => null), new Promise(r => setTimeout(r, BEFORE_WAIT_MS, null))]) : null;
-  const table = strengths(sport, parseStandings(now), parseStandings(before));
-  tables.set(sport, { at: Date.now(), table });
-  return table;
+  return strengths(sport, parseStandings(now), parseStandings(before));
 }
 
 // Games (from parseEspnScoreboard) that no bookmaker prices get the house's

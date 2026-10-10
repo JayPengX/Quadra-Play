@@ -9,7 +9,7 @@ import { normalizeTeamName, teamZh, LEAGUES, familyOf, isSoccer, rememberLogo, r
 import { runOrder, shareLeft } from './live.mjs';
 import { KAMBI, kambiUrl, parseKambiEvents, parseKambiInPlay, useKambiToken, fetchKambiLeague, decidedTeamGame, parseKambiLiveData, kambiLiveDataUrl, watchKambiMatches, fetchKeptKambi } from './kambi.mjs';
 import { KAMBI_LEAGUES } from './teams.mjs';
-import { withHousePrices, sameSide } from './house.mjs';
+import { withHousePrices, sameSide, loadStrengths } from './house.mjs';
 import { SOLD_DAYS, ASIA_URL, asiaMonth, asiaMonthOf } from '#kit/catalog.mjs';
 import { parseAsiaSchedule } from './schedules.mjs';
 import { propOutcome } from './props.mjs';
@@ -358,6 +358,7 @@ const fetchEspnEpl = now => fetchMonths('epl', LEAGUES.epl.path, now);
 // (their default page can be a round long past, their calendar lists stages).
 async function fetchMonths(key, path, now) {
   kambiBook(key);
+  loadStrengths(key, path, getJson).catch(() => {});
   const pages = await Promise.all(monthsAhead(now, -1).map(m => getJson(`${ESPN}/${path}/scoreboard?dates=${m}&limit=1000`).catch(() => null)));
   if (pages.every(p => p === null)) throw new Error(`ESPN ${key} unreachable`);
   const post = key === 'mlb' ? await mlbPostseason(pages, now) : null;
@@ -372,6 +373,7 @@ async function fetchLeague(key, now) {
   const { family, path } = LEAGUES[key];
   if (family !== 'football') return fetchMonths(key, path, now);
   kambiBook(key);
+  loadStrengths(key, path, getJson).catch(() => {});
   return withLaterGames(key, path, parseEspnScoreboard(await getJson(`${ESPN}/${path}/scoreboard`), key), now, 0);
 }
 
