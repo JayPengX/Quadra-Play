@@ -8,12 +8,11 @@ import { LEAGUES, familyOf } from '../public/lib/teams.mjs';
 import { gameOptions } from '../public/lib/board.mjs';
 import { legResult } from '../public/lib/account.mjs';
 
-test('Play leagues come from the shared catalogue; the purged sports are gone, not hidden; tennis, UFC and the new leagues are back', () => {
+test('Play leagues come from the shared catalogue; the purged sports are gone, not hidden', () => {
   assert.equal(LEAGUES.facup.path, 'soccer/eng.fa');
   assert.equal(familyOf('euroleague'), 'basketball');
-  for (const key of ['badminton', 'boxing', 'tennis', 'tabletennis', 'volleyball', 'snooker', 'cricket', 'rugbyunion', 'acb', 'cba', 'kbl', 'bleague', 'acl', 'asiancup', 'wcqeurope', 'nrl', 'afl']) assert.equal(LEAGUES[key], undefined, key);
+  for (const key of ['atp', 'wta', 'ufc', 'badminton', 'boxing', 'tennis', 'tabletennis', 'volleyball', 'snooker', 'cricket', 'rugbyunion', 'acb', 'cba', 'kbl', 'bleague', 'acl', 'asiancup', 'wcqeurope', 'nrl', 'afl']) assert.equal(LEAGUES[key], undefined, key);
   for (const l of Object.values(LEAGUES)) assert.equal(l.off, undefined);
-  for (const key of ['atp', 'wta', 'ufc']) assert.ok(LEAGUES[key].kambi && LEAGUES[key].results, key);
   for (const key of ['ncaaf', 'nbl', 'championship', 'eredivisie', 'ligamx', 'brasileirao']) assert.ok(LEAGUES[key].path && LEAGUES[key].book, key);
   // An ESPN league Kambi lists: Kambi's prices first.
   assert.equal(LEAGUES.epl.book, 'football/england/premier_league');

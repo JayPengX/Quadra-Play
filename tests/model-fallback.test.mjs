@@ -1,10 +1,9 @@
 // Play's own model fills every market Kambi leaves out: players' picks from
-// their season numbers, soccer's draw no bet and corners, tennis's sets and games.
+// their season numbers, soccer's draw no bet and corners.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseRoster, parseAthletes, totalsOf, blendTotals, playerByName } from '../public/lib/players.mjs';
 import { modelProps, atLeast, binomAtLeast, normalOver, teamScores } from '../public/lib/propmodel.mjs';
-import { matchModel, tennisMarkets, matchWin, setWin, gameEdge } from '../public/lib/tennis.mjs';
 import { gameOptions } from '../public/lib/board.mjs';
 
 test('distributions add up', () => {
@@ -44,28 +43,10 @@ test('the model prices every regular, scaled by the team\'s expected score', () 
   assert.ok(!soccer.some(p => p.player === 'Keeper'));
 });
 
-test('tennis from the winner\'s price: sets and games that add up', () => {
-  const q = gameEdge(0.7);
-  assert.ok(Math.abs(matchWin(setWin(q)) - 0.7) < 1e-6);
-  const m = matchModel(0.7);
-  assert.ok(Math.abs([...m.setScore.values()].reduce((a, b) => a + b, 0) - 1) < 1e-9);
-  const markets = tennisMarkets(0.3, { cut: { twoWay: 1.158, bands: 1.35 } });
-  // The away side is the favourite: the first set leans away.
-  const set1 = markets.find(x => x.kind === 'set1');
-  assert.ok(set1.picks.find(p => p.side === 'away').fair > 0.55);
-  assert.equal(markets.filter(x => x.kind === 'gametotal').length, 3);
-  assert.equal(markets.filter(x => x.kind === 'gamehcap').length, 3);
-  const best5 = matchModel(0.7, 5);
-  assert.ok([...best5.setScore.keys()].includes('3-2'));
-});
-
-test('the board falls back to the model: draw no bet and corners for soccer, sets for tennis, players once read', () => {
+test('the board falls back to the model: draw no bet and corners for soccer, players once read', () => {
   const soccer = { id: 's', sport: 'epl', startUtc: '2026-10-10T11:30:00.000Z', home: { en: 'A' }, away: { en: 'B' }, draftKings: { home: 0.5, draw: 0.27, away: 0.23 }, polymarket: null, house: null, total: { line: 2.5, overFair: 0.5 }, spread: null };
   const kinds = new Set(gameOptions(soccer).map(o => o.kind));
   for (const k of ['dnb', 'corners', 'btts', 'dc', 'score']) assert.ok(kinds.has(k), k);
-  const tennis = { id: 't', sport: 'atp', startUtc: '2026-10-10T03:00:00.000Z', home: { en: 'P' }, away: { en: 'Q' }, draftKings: { home: 0.6, away: 0.4 }, polymarket: null, house: null, total: null, spread: null, group: 'Tokyo' };
-  const tk = new Set(gameOptions(tennis).map(o => o.kind));
-  for (const k of ['ml', 'set1', 'setscore', 'gametotal', 'gamehcap']) assert.ok(tk.has(k), k);
   // Players: the model's picks, with the player's picture.
   const withPlayers = { ...soccer, players: [{ name: 'Striker', side: 'home', pos: 'F', gp: 10, photo: 'x.png', totals: { gp: 10, subIns: 0, goals: 7, assists: 2, sot: 15 } }] };
   const props = gameOptions(withPlayers).filter(o => o.kind === 'prop');

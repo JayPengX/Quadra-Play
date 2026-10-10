@@ -793,12 +793,6 @@ export const SIM_SPORTS = {
   nbl: { family: 'basketball', kind: 'basketball', pop: 0.3, games: w => (between(w, 38, 8) ? 5 : between(w, 9, 11) ? 2 : 0) },
   // College football: late August to early December, then the bowls and the playoff.
   ncaaf: { family: 'football', kind: 'football', pop: 0.4, games: w => (between(w, 34, 49) ? 50 : between(w, 50, 1) ? 8 : 0) },
-  // Tennis: the tours' tournaments January to November, every round's matches
-  // (fewer in the Slams' second weeks and the Finals).
-  atp: { family: 'tennis', kind: 'tennis', pop: 1, games: w => (between(w, 0, 46) ? 45 : 0) },
-  wta: { family: 'tennis', kind: 'tennis', pop: 0.6, games: w => (between(w, 0, 45) ? 45 : 0) },
-  // UFC: about 40 cards a year, a dozen fights each.
-  ufc: { family: 'mma', kind: 'mma', pop: 0.5, games: w => (w % 4 === 3 ? 0 : 12) },
   // F1: the 24 races of the 2027 calendar, Bahrain 14 March to Abu Dhabi 12 December.
   f1: { family: 'racing', kind: 'f1', pop: 1.2, headline: true, games: w => (F1_RACE_WEEKS.has(w) ? 1 : 0) }
 };
@@ -848,9 +842,9 @@ export function weekOfYear(date) {
 // (board.mjs), so they get the same markets, the same house cut for the
 // league and the same locks. A sport off the board is then no cheaper, or
 // dearer, to bet on than one on it. Seeded, so it's the same every time.
-const TEMPLATE_WIN = { baseball: [0.35, 0.65], basketball: [0.15, 0.85], football: [0.2, 0.8], hockey: [0.35, 0.65], tennis: [0.15, 0.85], mma: [0.2, 0.8] };
+const TEMPLATE_WIN = { baseball: [0.35, 0.65], basketball: [0.15, 0.85], football: [0.2, 0.8], hockey: [0.35, 0.65] };
 // Each sport's usual total line (none: its own model sets one).
-const TEMPLATE_TOTAL = { mlb: 8.5, npb: 7.5, kbo: 9.5, cpbl: 9.5, nfl: 44.5, ncaaf: 54.5, nba: 224.5, wnba: 162.5, euroleague: 160.5, nbl: 175.5, nhl: 5.5, atp: 22.5, wta: 21.5 };
+const TEMPLATE_TOTAL = { mlb: 8.5, npb: 7.5, kbo: 9.5, cpbl: 9.5, nfl: 44.5, ncaaf: 54.5, nba: 224.5, wnba: 162.5, euroleague: 160.5, nbl: 175.5, nhl: 5.5 };
 // An F1 field as the market usually prices it: the average shape of two real
 // 2026 boards (Polymarket, one flat before qualifying, one with a 64%
 // favourite after), so a typical race returns what a real one does

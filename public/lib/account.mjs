@@ -270,25 +270,6 @@ export function legResult(leg, outcome) {
       const n = outcome.corners.home + outcome.corners.away;
       return push(leg.side === 'over' ? n - leg.line : leg.line - n);
     }
-    case 'set1': {
-      // Tennis: the first set's winner.
-      const a = Number(outcome.awayInnings?.[0]);
-      const h = Number(outcome.homeInnings?.[0]);
-      if (!Number.isFinite(a) || !Number.isFinite(h) || a === h) return null;
-      return win(leg.side === 'away' ? a > h : h > a);
-    }
-    case 'setscore':
-      // Tennis: the sets each won, home first ("2-1").
-      return win(`${home}-${away}` === leg.score);
-    case 'gamehcap':
-    case 'gametotal': {
-      // Tennis: every set's games (a retirement settles void before this).
-      const a = (outcome.awayInnings || []).reduce((sum, x) => sum + (Number(x) || 0), 0);
-      const h = (outcome.homeInnings || []).reduce((sum, x) => sum + (Number(x) || 0), 0);
-      if (!outcome.awayInnings?.length) return null;
-      if (leg.kind === 'gametotal') return push(leg.side === 'over' ? a + h - leg.line : leg.line - a - h);
-      return push(leg.side === 'away' ? a + leg.line - h : h + leg.line - a);
-    }
     case 'inning':
       if (!outcome.awayInnings?.length) return null;
       return win(topInning(outcome.awayInnings, outcome.homeInnings || []) === leg.inning);

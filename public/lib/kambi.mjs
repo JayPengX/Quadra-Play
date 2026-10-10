@@ -96,8 +96,7 @@ export function parseKambiEvents(data, sport, now = new Date(), { unpriced = fal
 
 export async function fetchKambiLeague(key, now = new Date(), getJson) {
   const league = LEAGUES[key];
-  // Tennis and UFC only when Kambi prices the match (no house price for a player).
-  return parseKambiEvents(await getJson(kambiUrl(league.kambi), 'kambi-events'), key, now, { unpriced: !league.schedule && !league.results });
+  return parseKambiEvents(await getJson(kambiUrl(league.kambi), 'kambi-events'), key, now, { unpriced: !league.schedule });
 }
 
 // ---- In play -------------------------------------------------------------------
@@ -114,9 +113,8 @@ const PART = /\b(\d(st|nd|rd|th)|set|frame|game \d|quarter|half|inning|period|by
 export function parseKambiInPlay(data, sport) {
   const league = LEAGUES[sport];
   // Every team sport has a main total live; a handicap where its lines are
-  // whole games' (not soccer's Asian ones); tennis and UFC the winner only.
+  // whole games' (not soccer's Asian ones).
   const family = league?.family;
-  const team = !['tennis', 'mma'].includes(family);
   const handicaps = ['baseball', 'basketball', 'football', 'hockey'].includes(family);
   const games = [];
   for (const item of data?.events || []) {
@@ -149,12 +147,10 @@ export function parseKambiInPlay(data, sport) {
       const away = handicap && outcome(handicap, 'OT_TWO');
       if (open(home) && open(away) && lineOk(away.line)) game.spread = { awayLine: away.line / 1000, awayFair: fairPair(away, home)[0] };
     }
-    if (team) {
-      const total = offers.find(o => o.betOfferType?.englishName === 'Over/Under' && !PART.test(o.criterion?.englishLabel || ''));
-      const over = total && outcome(total, 'OT_OVER');
-      const under = total && outcome(total, 'OT_UNDER');
-      if (open(over) && open(under) && lineOk(over.line)) game.total = { line: over.line / 1000, overFair: fairPair(over, under)[0] };
-    }
+    const total = offers.find(o => o.betOfferType?.englishName === 'Over/Under' && !PART.test(o.criterion?.englishLabel || ''));
+    const over = total && outcome(total, 'OT_OVER');
+    const under = total && outcome(total, 'OT_UNDER');
+    if (open(over) && open(under) && lineOk(over.line)) game.total = { line: over.line / 1000, overFair: fairPair(over, under)[0] };
     const live = item.liveData || {};
     const score = { home: Number(live.score?.home) || 0, away: Number(live.score?.away) || 0 };
     Object.assign(game, { homeScore: score.home, awayScore: score.away });

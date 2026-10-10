@@ -8,7 +8,6 @@ const game = (sport, extra = {}) => ({ id: `t-${sport}`, sport, startUtc: '2026-
 test('league totals: the average for an even game, a little more for a blowout', () => {
   assert.equal(modelMean('mlb', { home: 0.5, away: 0.5 }), LEAGUE_TOTALS.mlb);
   assert.ok(modelMean('nba', { home: 0.9, away: 0.1 }) > modelMean('nba', { home: 0.5, away: 0.5 }));
-  assert.equal(modelMean('tennis', { home: 0.5, away: 0.5 }), null);
 });
 
 test('soccer: the total from the game\'s own 1X2, fewer goals when a draw is likelier', () => {

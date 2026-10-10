@@ -168,7 +168,6 @@ test('the sport calendar has a realistic number of games per year, and every lea
   assert.ok(perYear.cpbl > 350 && perYear.cpbl < 500, `${perYear.cpbl}`);
   assert.ok(perYear.npb > 800 && perYear.npb < 1100, `${perYear.npb}`);
   assert.equal(gamesInWeek('mlb', 2), 0);
-  assert.equal(gamesInWeek('tennis', 50), 0);
   for (const key of Object.keys(LEAGUES)) assert.ok(SIM_SPORTS[key], `${key} missing from SIM_SPORTS`);
   for (const [key, sport] of Object.entries(SIM_SPORTS)) {
     assert.equal(familyOf(key), sport.family, key);

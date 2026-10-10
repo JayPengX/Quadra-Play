@@ -34,7 +34,6 @@ import { houseCut, houseRule, withRules, shadeLong } from './rules.mjs';
 import { withModelLines } from './lines.mjs';
 import { LEAGUES, familyOf, isSoccer } from './teams.mjs';
 import { modelProps, teamScores, atLeast, MODEL_CUT } from './propmodel.mjs';
-import { tennisMarkets, bestOfFor } from './tennis.mjs';
 import { normPlayer } from './props.mjs';
 import { playerByName } from './players.mjs';
 
@@ -234,37 +233,14 @@ function lineOptions(game, base, probs) {
   return out;
 }
 
-// Tennis: the bookmaker's game handicap and total games (every set's games),
-// at the two-way cut.
-function tennisLines(game, base) {
-  const out = [];
-  const k = houseCut({ base: 'twoWay', sport: game.sport });
-  if (game.spread) {
-    const { awayLine, awayFair } = game.spread;
-    for (const side of ['away', 'home']) {
-      const p = side === 'away' ? awayFair : 1 - awayFair;
-      const line = side === 'away' ? awayLine : -awayLine;
-      out.push({ ...base, id: `${game.id}|gh|${line}|${side}`, kind: 'gamehcap', side, runLine: line, awayLine, giver: awayLine < 0 ? 'away' : 'home', posted: true, market: `gh|${awayLine}`, fairMargin: 0.03, errKey: 'extra', fairChance: p, cut: k, estOdds: estimateLineOdds(p, k) });
-    }
-  }
-  if (game.total) {
-    const { line, overFair } = game.total;
-    for (const side of ['over', 'under']) {
-      const p = side === 'over' ? overFair : 1 - overFair;
-      out.push({ ...base, id: `${game.id}|gt|${line}|${side}`, kind: 'gametotal', side, totalLine: line, mainLine: true, posted: true, market: `gt|${line}`, fairMargin: 0.03, errKey: 'extra', fairChance: p, cut: k, estOdds: estimateLineOdds(p, k) });
-    }
-  }
-  return out;
-}
-
 // ---- The model's fallbacks ----------------------------------------------------------
 //
 // Markets Kambi has and the model otherwise wouldn't: soccer's draw no bet
-// and corners, tennis's first set, set score and game lines. Kambi's own
+// and corners. Kambi's own
 // (offers.mjs) take their place once read.
 export const CORNERS_MEAN = 10.2;
 const CORNERS_DISPERSION = 12;
-function fallbackOptions(game, base, probs, made) {
+function fallbackOptions(game, base, probs) {
   const family = familyOf(game.sport);
   const markets = [];
   const twoWay = houseCut({ base: 'twoWay', sport: game.sport });
@@ -278,11 +254,6 @@ function fallbackOptions(game, base, probs, made) {
         markets.push({ kind: 'corners', market: `corners|${line}`, line, main: line === 9.5, cut: twoWay, picks: [{ side: 'over', fair: over }, { side: 'under', fair: 1 - over }] });
       }
     }
-  }
-  if (family === 'tennis') {
-    const have = new Set(made.map(o => o.kind));
-    const model = tennisMarkets(probs.home / (probs.home + probs.away), { bestOf: bestOfFor(game.sport, game.group), cut: { twoWay, bands: houseCut({ base: 'bands' }) } });
-    markets.push(...model.filter(m => !have.has(m.kind)));
   }
   return marketOptions(game, base, markets);
 }
@@ -372,7 +343,7 @@ function sideOptions(game, base, probs) {
 
 // Options from markets in markets.mjs's shape (the models', or Kambi's own:
 // offers.mjs). A line market of baseball and soccer keeps lineOptions' ids,
-// tennis's tennisLines', so a pick on the slip stays the same pick whichever
+// so a pick on the slip stays the same pick whichever
 // priced it.
 function optionId(game, m, pick) {
   const family = familyOf(game.sport);
@@ -381,8 +352,6 @@ function optionId(game, m, pick) {
     if (m.kind === 'runline') return `${game.id}|rl|${pick.line}|${pick.side}`;
     if (m.kind === 'teamtotal') return `${game.id}|tt|${m.team}|${m.line}|${pick.side}`;
   }
-  if (m.kind === 'gametotal') return `${game.id}|gt|${m.line}|${pick.side}`;
-  if (m.kind === 'gamehcap') return `${game.id}|gh|${pick.line}|${pick.side}`;
   return `${game.id}|${m.kind}|${m.market}|${pick.side}`;
 }
 function marketOptions(game, base, markets, { real = false } = {}) {
@@ -407,10 +376,10 @@ function marketOptions(game, base, markets, { real = false } = {}) {
         pick,
         settle: { lo: pick.lo, hi: pick.hi, score: pick.score, listed: m.listed, team: pick.team, ht: pick.ht, ft: pick.ft, ...(m.line != null && m.kind !== 'total' ? { line: m.line } : {}) }
       };
-      if (m.kind === 'runline' || m.kind === 'gamehcap') Object.assign(o, { runLine: pick.line, awayLine: m.awayLine, giver: m.giver });
+      if (m.kind === 'runline') Object.assign(o, { runLine: pick.line, awayLine: m.awayLine, giver: m.giver });
       if (m.kind === 'teamtotal') Object.assign(o, { team: m.team, teamLine: m.line });
       if (m.kind === 'htotal' || m.kind === 'f5total' || m.kind === 'corners') Object.assign(o, { line: m.line });
-      if (m.kind === 'total' || m.kind === 'gametotal') Object.assign(o, { totalLine: m.line, mainLine: m.main });
+      if (m.kind === 'total') Object.assign(o, { totalLine: m.line, mainLine: m.main });
       out.push(o);
     }
   }
@@ -448,9 +417,8 @@ export function gameOptions(game) {
   }));
   const family = familyOf(game.sport);
   if (family === 'baseball' || family === 'soccer') out.push(...lineOptions(game, base, blend.probs));
-  if (family === 'tennis') out.push(...tennisLines(game, base));
   out.push(...sideOptions(game, base, blend.probs));
-  out.push(...fallbackOptions(game, base, blend.probs, out));
+  out.push(...fallbackOptions(game, base, blend.probs));
   // 得分最高單局: the lottery's own (nearly fixed) table, its cut removed;
   // every baseball league (the table barely moves from game to game).
   if (family === 'baseball') {
@@ -481,7 +449,7 @@ export function gameOptions(game) {
   // A game settled from its final score alone (schedules.mjs): nothing on a part of it.
   return game.scoreOnly ? out.filter(o => !PART_KINDS.has(o.kind)) : out;
 }
-const PART_KINDS = new Set(['htft', 'htotal', 'f5', 'f5total', 'q1', 'half', 'regulation', 'firstinning', 'inning', 'nextrun', 'firstset', 'gamehcap', 'gametotal']);
+const PART_KINDS = new Set(['htft', 'htotal', 'f5', 'f5total', 'q1', 'half', 'regulation', 'firstinning', 'inning', 'nextrun']);
 
 // ---- The simulated crowd's pool ----------------------------------------------
 

@@ -78,7 +78,7 @@ Calm on purpose: no banners, no one-tap "hot" parlays, no nags.
 ### Making money the way a real book does
 
 - **The board** opens on the big leagues; with every sport shown, thinly
-  traded games (table tennis, lower tennis tours…) fold behind one row
+  traded games (lower leagues…) fold behind one row
   ("其他 N 場").
 - **Parlay boost** (`PARLAY_BOOST` in `odds.mjs`): the winnings of any
   winning combination of 3+ picks grow by 5% (3), 8%, 12%, 15%, up to 20%
@@ -129,8 +129,7 @@ banner on screen or a system notice when allowed.
   finishing order.
 - **Every match settles by itself.** Kambi never publishes results; a
   match is settled from its live score once decided, and when Kambi drops
-  it with no deciding score kept (short table-tennis matches such as the
-  Czech Liga Pro used to end between the Worker's checks) the pick is void
+  it with no deciding score kept the pick is void
   (stake back) within hours, instead of waiting three days. The Worker's
   watch now checks every 2 minutes.
 
@@ -183,11 +182,11 @@ The page stays simple: odds, colours and the amounts that matter. What the numbe
 - **What's listed:** every game of every league starting within the next 14 days (one reach for all, see the house cut below):
   - MLB and the Premier League (DraftKings and Polymarket).
   - **More sports from ESPN** (DraftKings' lines, else the house's own prices): football, basketball, hockey and the soccer leagues.
-  - **More sports from Kambi** (a European bookmaker's public odds, `public/lib/kambi.mjs`): NPB, KBO and CPBL baseball, EuroLeague, Liga ACB, NBL, CBA, KBL and B.League basketball, K League 1 soccer (three-way; full-time markets, settled from Kambi's last score), tennis (ATP, WTA), UFC, boxing (only the cards TheSportsDB lists, settled from its write-ups), international cricket (settled from ESPN's score panel), international rugby union (results from ESPN's competitions), badminton, table tennis, volleyball and snooker (table tennis: the pro tours only, WTT, ITTF and the title events, not Kambi's round-the-clock betting leagues such as Czech Liga Pro or TT Elite Series). Every game on each league's own schedule is sold, not only the ones Kambi prices (`public/lib/schedules.mjs`): Asian baseball's month lists (clubs' strength from this season's results; settled from the lists' final scores, so only winner, totals, run lines, team totals, odd/even and margin), ESPN's UFC cards (fighters' records), tennis draws (ranking points), NRL and AFL schedules (ESPN standings), and for the rest every match in Kambi's list, priced or not. Kambi's price takes over a game once it has one.
+  - **More sports from Kambi** (a European bookmaker's public odds, `public/lib/kambi.mjs`): NPB, KBO and CPBL baseball, EuroLeague and NBL basketball, K League 1 soccer (three-way; full-time markets, settled from Kambi's last score). Every game on each league's own schedule is sold, not only the ones Kambi prices (`public/lib/schedules.mjs`): Asian baseball's month lists (clubs' strength from this season's results; settled from the lists' final scores, so only winner, totals, run lines, team totals, odd/even and margin), and for the rest every match in Kambi's list, priced or not. Kambi's price takes over a game once it has one. Tennis and UFC were removed on 2026-10-11 (a pick still open on one is void).
   - The next F1 race winner, every driver by their English name (George Russell, Kimi Antonelli …), as every other sport's players.
   - Championships (see Boards below).
   Everything but MLB, the Premier League and F1 loads in the background after the page opens.
-- **Filters:** one tile per sport, never several sports in one (棒球, 籃球, 足球, 美式足球, 冰球, 網球, 羽球, 桌球, 排球, 撞球, F1, each with its games listed). Picking one with several leagues shows its leagues as chips underneath (全部聯賽, MLB, 日職 …). Then a day strip.
+- **Filters:** one tile per sport, never several sports in one (棒球, 籃球, 足球, 美式足球, 冰球, F1, each with its games listed). Picking one with several leagues shows its leagues as chips underneath (全部聯賽, MLB, 日職 …). Then a day strip.
 - **Picks:** tap one to add it to the bet slip. It shows the estimated lottery odds, and:
   - 🔒 (just the lock) when the lottery doesn't sell it, and 限2關 / 限3關 when it's sold only in parlays (see House rules);
   - a corner tag when it's recommended: 划算 (value), 穩 (steady) or 值博 (worth a shot) (see Recommendations);
@@ -198,12 +197,10 @@ The page stays simple: odds, colours and the amounts that matter. What the numbe
   - football and basketball: 讓分, 大小分, **單隊總分** (team totals), 單雙, 勝分差, 上半場, **上半場大小** (first-half total) and **第一節** (first quarter);
   - hockey: puck lines, totals, **單隊大小**, 60 分鐘勝負, 單雙;
   - soccer: 讓球, 大小, **單隊大小**, 雙方進球, 波膽, 上半場, **上半場大小**, **雙重機會** (double chance: either of two results), **半全場** (half-time and full-time results together, 9 outcomes) and **總進球數** (0–1, 2–3, 4–6, 7+);
-  - tennis, badminton, table tennis, volleyball, snooker: **第一局, 局數比分** ("Sinner 2:1"), **總局數, 讓局**, and handicaps and totals in games (tennis), points or frames on every match: Kambi's own line plus lines from a point-by-point model (each game or point won with the chance that gives the set chance; a set to 6 with a tiebreak, 11, 21 capped at 30, or 25 with a 15-point decider), shifted so it agrees with Kambi's price. Snooker's match length isn't in the feed: it's the one whose frame total best matches Kambi's line. Set chances come from the match chance (best of 3 or 5, sets independent);
   - F1: the race winner and **前三名** (podium): top-three chances from the win chances (Harville), priced to return what the winner board does.
-- **Cards:** each shows its series (日職 · NPB, 網球 WTA · Seoul: the league and, for tours and cups, the event). Players' sports (tennis, badminton, table tennis, snooker) have no 主/客: players are listed in the draw's order as "A vs B".
+- **Cards:** each shows its series (日職 · NPB: the league and, for cups, the round).
 - **Leagues:** each nation's first tier and the big international competitions. Removed on 2026-09-30: the second divisions (英冠, 英甲, 德乙, 西乙, 義乙, 法乙, USL), NCAA basketball, the smaller countries' leagues (Austria, Switzerland, Denmark, Norway, Sweden, Greece, Colombia, Chile, the A-League, the Chinese Super League, NWSL), NRL, AFL, NASCAR and IndyCar.
 - **Loading:** every ESPN league from its months' pages (`dates=YYYYMM`, odds and all: one or two requests a league; cups and national teams too, whose default page can be a past round); the other leagues join one by one as each arrives, and the loading screen stays until the whole board is in (at most `BOOT_FULL_MS`).
-- **Pro events only** (`pro` in the catalogue, `kambiKept`): table tennis's pro tours, volleyball's national teams, big club events and top leagues, rugby union's internationals and the Champions Cup.
 - **場中 (live):** only on today's board (the day strip keeps today while games are on); games in progress (MLB and the Premier League), refreshed every 30 seconds while on screen, with the same market tabs, 第N分 for MLB, and the live model (`public/lib/live.mjs`) checked on one real snapshot of the lottery's 場中 page. The house rules apply live too, so lopsided games show their lopsided side locked.
 
 - **Boards:** F1 (drivers with team-coloured badges, and whether the odds are before or after qualifying) and every championship: World Series, AL, NL, NBA, Premier League, and from Polymarket's search NFL, NHL, WNBA, college football, Champions League, Europa League, La Liga, Serie A, Bundesliga, Ligue 1, MLS, and the F1 drivers' and constructors' titles.
@@ -211,7 +208,7 @@ The page stays simple: odds, colours and the amounts that matter. What the numbe
 ### House rules, the house cut and recommendations
 
 - **House rules** (`public/lib/rules.mjs`), for you and the simulated crowd alike:
-  - locked (🔒): odds of 1.05 or less, or 8+ on ordinary markets (80+ on correct scores, margins, set scores and the like). F1 and championships are priced one by one up to 500 and never locked;
+  - locked (🔒): odds of 1.05 or less, or 8+ on ordinary markets (80+ on correct scores, margins and the like). F1 and championships are priced one by one up to 500 and never locked;
   - parlay only: under 1.30 only in parlays of 2+ games (限2關), under 1.15 of 3+ (限3關). The slip refuses a ticket with any combination too small for one of its picks. These thresholds are the house's usual shape, not measured on the lottery's board.
 - **One house cut:** every market takes what the lottery was measured taking on that kind of market (1.158 two-way, 1.20 three-way, 1.35 bands, 1.50 correct scores, 1.92 the top inning, 1.16 live), whatever the league and whoever priced the game, so Play stays close to 運彩's prices (1.72-1.73 each side of a coin flip).
 - **Every game, two weeks ahead** (`SOLD_DAYS` in the kit's `catalog.mjs`, shared with Orbit Sports' 投注): every league's games up to 14 days out. A game no bookmaker prices yet (preseason, a game past DraftKings' posting, a small league) is priced by the house (`public/lib/house.mjs`): each team's share of wins in ESPN's standings (last season, pulled a third of the way to even, weighted like 30% of a season, this season's games on top), log5 between the two, plus the home side's edge; soccer takes a draw out (27% between even sides); preseason pulled halfway to even. A bookmaker's line replaces it as soon as one is posted.
@@ -249,8 +246,7 @@ The page stays simple: odds, colours and the amounts that matter. What the numbe
   - MLB and Premier League from ESPN's final scores (innings for the top-scoring inning);
   - F1 from ESPN's race result;
   - championships from Polymarket once it resolves the market;
-  - tennis from ESPN's tennis scoreboards (sets and games, whichever side each player is on; a retirement is void);
-  - the other Kambi sports have no public results: they settle when Kambi's live score shows the match decided (a side has won the sets it needs, each sport's set target counted: 11 in table tennis, 21 in badminton, 25 and 15 in volleyball), otherwise 3 hours after the start the pick shows 中 / 沒中 / 取消 buttons to settle it by hand.
+  - the other Kambi leagues have no public results: they settle when Kambi's live score shows the game over, otherwise 3 hours after the start the pick shows 中 / 沒中 / 取消 buttons to settle it by hand.
 
   Each pick is marked won, lost or void. Once all are decided the slip pays like a real ticket: a postponed or cancelled game counts at odds 1.00, every combination over NT$5,000 is taxed 20.4%, NT$20 million at most. A game still without a result three days after its start counts as void.
 - **The card** shows the balance, the money on open slips, the total won or lost, and each slip with its picks (✓ ✗ ↺ ⏳, each with its market tag and odds) and a row of large figures: cost, total odds (全部過關), and what all correct pays or, once settled, the payout and profit.
@@ -296,7 +292,6 @@ The simulator tab itself was removed.
 | F1 winner, after qualifying | `1 ÷ (1.17 × fair^0.765)`, at least 1.05; drivers under 1% get the lottery's fixed 65 (0.4–1%) / 275 (0.15–0.4%) / 500. About 10% off on 8 drivers the eve of the 2026 Azerbaijan GP (`tests/fixtures/lottery-f1-2026-09-26.json`) |
 | F1 winner, before qualifying | `1 ÷ fair^0.692`; 65 (0.4–1%) / 325 (0.1–0.4%) / 500. About 8% off on 9 prices from the same race's board the morning before qualifying. The phase comes from ESPN's F1 schedule (qualifying start + 90 minutes); without it, over 21 hours before the race counts as before |
 | House cut | The measured cut of the market's kind, the same for every league and source |
-| Sets (tennis …) | Per-set chance q from the match chance (best of 3 or 5); set scores `C(need−1+lost, lost) q^need (1−q)^lost` |
 | Extra lines | Totals from the same negative binomial; run lines and team totals from the per-team score grid; odds `1 ÷ (p × 1.158)` (totals × 1.153), never above halfway from p to 1 in implied chance, at least 1.01. Not checked against the lottery |
 | Championships | Implied chance ∝ `fair^0.7`, scaled to the lottery's total (MLB 200%, EPL 160%, others 180%, unchecked); longshots 133 / 300 |
 | Back per NT$100 | `fair chance × odds × 100`; below 100 loses on average |
@@ -345,7 +340,7 @@ Premiership were added this way (ESPN's DraftKings winner odds).
 
 ## How it works
 
-A static site with no build step and no dependencies. The browser fetches odds live through the `sports-proxy` Cloudflare Worker from [Shared-Proxy](https://github.com/JayPengX/Shared-Proxy) (`PROXY_URL` in `public/lib/sources.mjs`). The Worker adds the CORS headers Polymarket doesn't send, and caches responses. A failed request is retried once. Team logos load straight from ESPN's image server; for the leagues ESPN doesn't cover (NPB, KBO, CPBL, B.League, EuroLeague, and the badminton, table tennis, snooker and WTA tours) they come from TheSportsDB's free badges, matched by the words the club names share. Players (tennis and the like) show initials.
+A static site with no build step and no dependencies. The browser fetches odds live through the `sports-proxy` Cloudflare Worker from [Shared-Proxy](https://github.com/JayPengX/Shared-Proxy) (`PROXY_URL` in `public/lib/sources.mjs`). The Worker adds the CORS headers Polymarket doesn't send, and caches responses. A failed request is retried once. Team logos load straight from ESPN's image server; for the leagues ESPN doesn't cover (NPB, KBO, CPBL, EuroLeague) they come from TheSportsDB's free badges, matched by the words the club names share. Players (tennis and the like) show initials.
 
 The page depends on that Worker:
 
@@ -366,7 +361,7 @@ The account lives on the Quadra Pass: Shared-Proxy's `orbit-workers-proxy`, rout
 | `public/lib/audit.mjs` | The fairness audit of sports and series |
 | `public/lib/rules.mjs` | House rules (locks, parlay only) and the house cut |
 | `public/lib/house.mjs` | The house's own prices for games no bookmaker prices: standings, records, ranking points |
-| `public/lib/schedules.mjs` | Kambi leagues' own schedules (Asian baseball, UFC cards, tennis draws), every game on them |
+| `public/lib/schedules.mjs` | Kambi leagues' own schedules (Asian baseball), every game on them |
 | `public/lib/recommend.mjs` | Recommendations on single picks |
 | `public/lib/sim.mjs` | The simulated crowd: traits, calendar, the shared world, leaderboards |
 | `public/lib/profile.mjs` | One person's betting from their tickets, for you and for anyone in the crowd |

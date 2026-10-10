@@ -4,7 +4,7 @@
 //
 // Every market here is one whose result the page can settle exactly as Kambi
 // does: the whole game's lines (with overtime where the sport's final score
-// has it), the first half's, soccer's corners, tennis's games and sets, and
+// has it), the first half's, soccer's corners, and
 // the players' numbers in ESPN's box score (props.mjs). A market Kambi lists
 // some other way (quarter lines, Asian quarter handicaps, "first to 20
 // points") is left out.
@@ -39,8 +39,7 @@ const FULL = {
   baseball: { total: /^Total Runs$/, spread: /^Run Line$/, team: /^Total Runs by (.+)$/ },
   football: { total: /^Total Points - Including Overtime$/, spread: /^Point Spread - Including Overtime$/, team: /^Total Points by (.+) - Including Overtime$/ },
   basketball: { total: /^Total Points - Including Overtime$/, spread: /^Point Spread - Including Overtime$/, team: /^Total Points by (.+) - Including Overtime$/ },
-  hockey: { total: /^Total Goals - Including Overtime and Penalty Shootout$/, spread: /^Puck Line - Including Overtime and Penalty Shootout$/, team: /^Total Goals by (.+) - Including Overtime and Penalty Shootout$/ },
-  tennis: { total: /^Total Games$/, spread: /^Game Handicap$/ }
+  hockey: { total: /^Total Goals - Including Overtime and Penalty Shootout$/, spread: /^Puck Line - Including Overtime and Penalty Shootout$/, team: /^Total Goals by (.+) - Including Overtime and Penalty Shootout$/ }
 };
 
 // The game's markets and players' markets: { markets, props } (markets in
@@ -68,8 +67,8 @@ export function parseOffers(data, game) {
       props.push(...playerPicks(game, family, label, type, outs));
       continue;
     }
-    if (full.total?.test(label) && type === 'Over/Under') push(overUnder(family === 'tennis' ? 'gametotal' : 'total', outs, { main, family }));
-    else if (full.spread?.test(label) && /Handicap/.test(type)) push(handicap(family === 'tennis' ? 'gamehcap' : 'runline', outs, sideOf, family, kHome));
+    if (full.total?.test(label) && type === 'Over/Under') push(overUnder('total', outs, { main, family }));
+    else if (full.spread?.test(label) && /Handicap/.test(type)) push(handicap('runline', outs, sideOf, family, kHome));
     else if (full.team && type === 'Over/Under' && full.team.exec(label)) {
       const team = teamOf(full.team.exec(label)[1]);
       if (team) push(overUnder('teamtotal', outs, { team, family }));
@@ -77,7 +76,6 @@ export function parseOffers(data, game) {
     else if (family === 'baseball') push(baseballMarket(label, type, outs, sideOf));
     else if (family === 'football' || family === 'basketball') push(pointsMarket(label, type, outs, sideOf));
     else if (family === 'hockey') push(hockeyMarket(label, type, outs, sideOf, flip));
-    else if (family === 'tennis') push(tennisMarket(label, type, outs, sideOf, flip));
   }
   return { markets: fewLines(dedupe(markets)), props };
 }
@@ -123,7 +121,7 @@ function overUnder(kind, outs, { team = null, main = false, family }) {
 function halfOk(line, family) {
   const frac = Math.abs(line % 1);
   if (frac === 0.5) return true;
-  return frac === 0 && ['football', 'basketball', 'tennis'].includes(family);
+  return frac === 0 && ['football', 'basketball'].includes(family);
 }
 
 // A two-way handicap from each side's line (OT_ONE is Kambi's home; Asian
@@ -252,15 +250,6 @@ function pointsMarket(label, type, outs, sideOf) {
 function hockeyMarket(label, type, outs, sideOf, flip) {
   if (label === 'Match Odds - Regular Time' && type === 'Match') return threeWay('regulation', 'regulation', outs, sideOf);
   if (label === 'Both Teams To Score - Including Overtime and Penalty Shootout' && type === 'Yes/No') return yesNo('btts', 'btts', outs);
-  return null;
-}
-
-function tennisMarket(label, type, outs, sideOf, flip) {
-  if (label === 'Set 1' && type === 'Match') return threeWay('set1', 'set1', outs, sideOf);
-  if (label === 'Set Betting' && type === 'Correct Score') {
-    const m = correctScore('setscore', outs, flip);
-    return m ? { ...m, cut: CUT.bands } : null;
-  }
   return null;
 }
 

@@ -10,8 +10,7 @@ export { teamZh, teamNameZh } from '#kit/names.mjs';
 // Every league Play sells, from the shared catalogue (catalog.mjs, the kit's
 // leagues.mjs): its kind of markets (family) and where its games and odds
 // come from: an ESPN `path` (its schedule and results) with Kambi's list as
-// its first price (`book`), or a `kambi` list alone (its schedule and prices;
-// tennis and UFC with an ESPN path for their `results`).
+// its first price (`book`), or a `kambi` list alone (its schedule and prices).
 export const LEAGUES = Object.fromEntries(
   Object.values(CATALOG)
     .filter(l => l.bet && l.odds)
@@ -22,7 +21,6 @@ export const LEAGUES = Object.fromEntries(
         if (l.kambi) league.book = l.kambi;
       } else {
         league.kambi = l.kambi;
-        if (l.espn) league.results = l.espn;
         // Its own schedule besides Kambi's list (schedules.mjs): the league's
         // month lists (Asian baseball).
         if (l.data === 'asia') league.schedule = { asia: l.asia };
@@ -41,9 +39,6 @@ export function familyOf(sport) {
 }
 
 export const isSoccer = sport => familyOf(sport) === 'soccer';
-// One player against another (tennis, UFC): no home side, no draw.
-export const isDuel = sport => ['tennis', 'mma'].includes(familyOf(sport));
-
 // Every club of a league we have a logo for, one name each (aliases dropped):
 // English names as the feeds write them. For games that show a team.
 const titleCase = key => key.replace(/\b[a-z]/g, c => c.toUpperCase());

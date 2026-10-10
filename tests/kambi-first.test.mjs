@@ -1,9 +1,8 @@
 // Kambi first: its prices on ESPN's games, DraftKings the cross-check; the
-// house's own price only for the winner on a small ticket; tennis and UFC
-// settled from ESPN's scoreboards.
+// house's own price only for the winner on a small ticket.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { attachKambi, mergeGames, parseEspnDuel } from '../public/lib/sources.mjs';
+import { attachKambi, mergeGames } from '../public/lib/sources.mjs';
 import { blendOutcomes, BOOKS_APART, slipErrors, SLIP_RULES } from '../public/lib/odds.mjs';
 import { gameOptions } from '../public/lib/board.mjs';
 import { legResult } from '../public/lib/account.mjs';
@@ -49,34 +48,11 @@ test('a house-priced pick caps the ticket', () => {
   assert.deepEqual(slipErrors({ mode: 'single', legs: [leg(undefined, 'a')], sizes: [1], stake: SLIP_RULES.capped + 10 }), []);
 });
 
-const duelBoard = (competitors, name = 'STATUS_FINAL', date = '2026-10-02T03:00Z') => ({
-  events: [{ date: '2026-09-27T04:00Z', groupings: [{ grouping: { displayName: "Men's Singles" }, competitions: [{ date, status: { type: { name, state: 'post', completed: true } }, competitors }] }] }]
-});
-const player = (name, winner, sets) => ({ athlete: { displayName: name }, winner, linescores: sets.map(value => ({ value })) });
-
-test('tennis from ESPN: sets won, every set\'s games; a retirement is void', () => {
-  const leg = { start: '2026-10-02T02:00:00Z', home: 'Jaume Munar', away: 'Jaime Faria' };
-  const data = duelBoard([player('Jaime Faria', false, [4, 7, 3]), player('Jaume Munar', true, [6, 5, 6])]);
-  const r = parseEspnDuel(data, leg);
-  assert.deepEqual([r.status, r.homeScore, r.awayScore], ['final', 2, 1]);
-  assert.equal(legResult({ kind: 'ml', side: 'home' }, r), 'won');
-  // 17 games to 14: Munar -2.5 covers, the total 31.
-  assert.equal(legResult({ kind: 'gamehcap', side: 'home', line: -2.5 }, r), 'won');
-  assert.equal(legResult({ kind: 'gamehcap', side: 'away', line: 2.5 }, r), 'lost');
-  assert.equal(legResult({ kind: 'gametotal', side: 'over', line: 30.5 }, r), 'won');
-  assert.equal(parseEspnDuel(duelBoard([player('Jaime Faria', false, [4, 1]), player('Jaume Munar', true, [6, 0])], 'STATUS_RETIRED'), leg).status, 'void');
-  // Not these two, or days away: not found.
-  assert.equal(parseEspnDuel(data, { ...leg, away: 'Someone Else' }), null);
-  assert.equal(parseEspnDuel(duelBoard([player('Jaime Faria', false, [4]), player('Jaume Munar', true, [6])], 'STATUS_FINAL', '2026-10-09T03:00Z'), leg), null);
-});
-
-test('UFC from ESPN: the winner 1-0, a draw or no contest void', () => {
-  const leg = { start: '2026-10-03T20:00:00Z', home: 'Marvin Vettori', away: 'Ismail Naurdiev' };
-  const card = (a, b) => ({ events: [{ date: '2026-10-03T20:00Z', competitions: [{ date: '2026-10-03T22:00Z', status: { type: { name: 'STATUS_FINAL', state: 'post', completed: true } }, competitors: [a, b] }] }] });
-  const r = parseEspnDuel(card({ athlete: { displayName: 'Ismail Naurdiev' }, winner: true }, { athlete: { displayName: 'Marvin Vettori' }, winner: false }), leg);
-  assert.deepEqual([r.homeScore, r.awayScore], [0, 1]);
-  assert.equal(legResult({ kind: 'ml', side: 'away' }, r), 'won');
-  assert.equal(parseEspnDuel(card({ athlete: { displayName: 'Ismail Naurdiev' }, winner: false }, { athlete: { displayName: 'Marvin Vettori' }, winner: false }), leg).status, 'void');
+test('tennis and UFC are no longer sold: an open pick on one is void', async () => {
+  const { fetchOutcomes } = await import('../public/lib/sources.mjs');
+  const legs = ['atp', 'ufc'].map(sport => ({ id: sport, sport, kind: 'ml', side: 'home', start: '2026-10-02T02:00:00Z', home: 'A', away: 'B' }));
+  const out = await fetchOutcomes(legs, new Date('2026-10-11T00:00:00Z'));
+  for (const leg of legs) assert.equal(out.get(leg.id)?.status, 'void', leg.sport);
 });
 
 test('live: Kambi\'s in-play prices on ESPN\'s live games, turned to ESPN\'s sides; soccer with its draw', async () => {

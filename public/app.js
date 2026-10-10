@@ -26,7 +26,7 @@ import {
 import { pack, unpack } from './lib/codec.mjs';
 import { historyStats, funFacts, crowdPercentile, accountRecord } from './lib/history.mjs';
 import { detectLocale, makeT } from './lib/i18n.mjs';
-import { f1Driver, f1Constructor, F1_NAMES_ZH, F1_PAGE, findTeamLogo, countryFlag, countryCode, leagueLogo, teamLogo, teamZh, teamNameZh, LEAGUES, familyOf, isSoccer, isDuel, normalizeTeamName } from './lib/teams.mjs';
+import { f1Driver, f1Constructor, F1_NAMES_ZH, F1_PAGE, findTeamLogo, countryFlag, countryCode, leagueLogo, teamLogo, teamZh, teamNameZh, LEAGUES, familyOf, isSoccer, normalizeTeamName } from './lib/teams.mjs';
 import { flagUrl } from '#kit/logos.mjs';
 import { logoPicture, raceName } from '#kit/logos.mjs';
 import { houseRule, houseCut, minLegsProblem, leagueTier, withRules } from './lib/rules.mjs';
@@ -229,8 +229,8 @@ function teamName(team) {
 // ---- Bets -------------------------------------------------------------------
 
 function matchupText(game) {
-  // Soccer and one player against another (Kambi's first player first): "A vs B".
-  return isSoccer(game.sport) || isDuel(game.sport)
+  // Soccer: "A vs B".
+  return isSoccer(game.sport)
     ? `${teamName(game.home)} vs ${teamName(game.away)}`
     : `${teamName(game.away)} @ ${teamName(game.home)}`;
 }
@@ -239,7 +239,7 @@ function matchupText(game) {
 // pick that has a league in front of it too (the full names were cut).
 function shortGameText(game) {
   const name = team => (state.locale === 'zh' ? teamNameZh(game.sport, team.en, familyOf(game.sport))?.short : null) || teamName(team);
-  return isSoccer(game.sport) || isDuel(game.sport) ? `${name(game.home)} vs ${name(game.away)}` : `${name(game.away)} @ ${name(game.home)}`;
+  return isSoccer(game.sport) ? `${name(game.home)} vs ${name(game.away)}` : `${name(game.away)} @ ${name(game.home)}`;
 }
 
 // Which competition a game is in: its league, and for tours and cups the
@@ -283,14 +283,6 @@ function named(game, o, matchup) {
       const what = propText(o.stat, o.propLine, o.side);
       return { ...o, matchup, chip: o.side === 'yes' ? o.player : t(o.side), label: `${matchup} ${o.player} ${what}`, shortLabel: `${o.player} ${what}` };
     }
-    case 'gametotal': {
-      const text = `${t(o.side)} ${o.totalLine} ${t('gamesUnit')}`;
-      return { ...o, matchup, marketLabel: String(o.totalLine), chip: t(o.side), label: `${matchup} ${text}`, shortLabel: text };
-    }
-    case 'gamehcap': {
-      const text = `${team(o.side)} ${fmtLine(o.runLine)}`;
-      return { ...o, matchup, marketLabel: `${team(o.giver)} ${fmtLine(-Math.abs(o.awayLine))}`, chip: text, label: `${text} ${t('gamesUnit')}`, shortLabel: `${t('secGameHcap')} ${text}` };
-    }
     case 'inning': {
       const name = o.inning < 9 ? t('inningN', { n: o.inning + 1 }) : t('inningTie');
       return { ...o, matchup, chip: name, label: `${matchup} ${t('topInning')} ${name}`, shortLabel: name };
@@ -328,7 +320,7 @@ function pickName(game, market, pick) {
   if (market.kind === 'htft') return `${t(RESULT_SHORT[pick.ht])}/${t(RESULT_SHORT[pick.ft])}`;
   if (market.kind === 'goalbands') return pick.hi == null ? `${pick.lo}+` : `${pick.lo}-${pick.hi}`;
   if (market.kind === 'margin') return `${teamName(game[pick.team])} ${pick.hi == null ? `${pick.lo}+` : pick.lo === pick.hi ? pick.lo : `${pick.lo}-${pick.hi}`}`;
-  if (market.kind === 'score' || market.kind === 'setscore') return pick.score === 'other' ? t('scoreOther') : pick.score.replace('-', ':');
+  if (market.kind === 'score') return pick.score === 'other' ? t('scoreOther') : pick.score.replace('-', ':');
   if (pick.side === 'away' || pick.side === 'home') return teamName(game[pick.side]);
   return t({ draw: 'draw', odd: 'odd', even: 'even', yes: 'yes', no: 'no', over: 'over', under: 'under' }[pick.side] ?? pick.side);
 }
@@ -521,8 +513,6 @@ const SPORT_GROUPS_ALL = {
   soccer: { icon: '⚽', leagues: Object.keys(LEAGUES).filter(key => LEAGUES[key].family === 'soccer' && !LEAGUES[key].off) },
   football: { icon: '🏈', leagues: ['nfl', 'ncaaf'] },
   hockey: { icon: '🏒', leagues: ['nhl'] },
-  tennis: { icon: '🎾', leagues: ['atp', 'wta'] },
-  mma: { icon: '🥊', leagues: ['ufc'] },
   f1: { icon: '🏎️', leagues: ['f1'] }
 };
 // Only leagues on sale (Taiwan can watch them); a kind with none left goes.
@@ -860,8 +850,7 @@ function hhmm(iso) {
 function gameCard(game, bets, { inSheet = false } = {}) {
   const t = state.t;
   const ml = bets.filter(b => b.kind === 'ml');
-  const duel = isDuel(game.sport);
-  const sides = isSoccer(game.sport) ? ['home', 'draw', 'away'] : duel ? ['home', 'away'] : ['away', 'home'];
+  const sides = isSoccer(game.sport) ? ['home', 'draw', 'away'] : ['away', 'home'];
   const rows = sides.map(side => {
     const bet = ml.find(b => b.side === side);
     const who =
@@ -869,7 +858,7 @@ function gameCard(game, bets, { inSheet = false } = {}) {
         ? [badge('=', 'var(--text-muted)'), el('span', { class: 'team-name', text: t('draw') })]
         : [
             logoImg(game.sport, game[side].en, teamName(game[side])),
-            el('span', { class: 'team-name' }, [document.createTextNode(teamName(game[side])), duel ? null : el('small', { text: t(side === 'home' ? 'homeTag' : 'awayTag') })])
+            el('span', { class: 'team-name' }, [document.createTextNode(teamName(game[side])), el('small', { text: t(side === 'home' ? 'homeTag' : 'awayTag') })])
           ];
     const score = game.live && side !== 'draw' ? el('span', { class: `live-score${scoreMoved(`${game.id}|${side}`, game.live[`${side}Score`]) ? ' moved' : ''}`, text: String(game.live[`${side}Score`]) }) : null;
     return el('div', { class: 'team-row' }, [...who, score, bet ? pickButton(bet, '') : null]);
@@ -1181,8 +1170,8 @@ function marketPanel(game, section, bets, { titled = false } = {}) {
 }
 
 // Kinds laid out as tables of lines: over/under, and one team giving a line.
-const TOTAL_KINDS = new Set(['total', 'htotal', 'f5total', 'gametotal', 'corners']);
-const HCAP_KINDS = new Set(['runline', 'gamehcap']);
+const TOTAL_KINDS = new Set(['total', 'htotal', 'f5total', 'corners']);
+const HCAP_KINDS = new Set(['runline']);
 
 // One section per kind of bet, each market of it with its own take. The
 // inning market's ten results take a whole row.
@@ -1190,9 +1179,6 @@ const SECTIONS = [
   { kind: 'ml', title: 'secMoneyline' },
   { kind: 'total', title: 'secTotal' },
   { kind: 'runline', title: 'secRunLine' },
-  { kind: 'gamehcap', title: 'secGameHcap' },
-  { kind: 'gametotal', title: 'secGameTotal' },
-  { kind: 'set1', title: 'secSet1' },
   { kind: 'prop', title: 'secProps' },
   { kind: 'teamtotal', title: 'secTeamTotal' },
   { kind: 'dnb', title: 'secDnb' },
@@ -1209,7 +1195,6 @@ const SECTIONS = [
   { kind: 'nextrun', title: 'secNextRun' },
   // Long shots, together under 更多.
   { kind: 'score', title: 'secScore', extra: true },
-  { kind: 'setscore', title: 'secSetScore', extra: true },
   { kind: 'htft', title: 'secHtft', extra: true },
   { kind: 'margin', title: 'secMargin', extra: true },
   { kind: 'goalbands', title: 'secGoalBands', extra: true },

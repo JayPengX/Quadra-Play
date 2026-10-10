@@ -956,55 +956,6 @@ export function parseFutureResult(events) {
   return { status: 'pending' };
 }
 
-// ---- Tennis and UFC results ----------------------------------------------------------
-//
-// ESPN's tour and card scoreboards: a tennis day lists every tournament on
-// with all its matches (groupings: singles, doubles), a UFC card every
-// fight. A match is found by its two players (in either order) nearest the
-// pick's start; Kambi's start times are the order of play's guesses, so up to
-// two days off. Sides follow the pick's: its `home` is Kambi's first player.
-//   tennis   the sets each won as the score, each set's games as the periods
-//            (game handicap, total games); a retirement or walkover is void
-//   UFC      the winner 1-0; a draw or no contest is void
-const DUEL_FINAL = /^STATUS_FINAL$/;
-export function parseEspnDuel(data, leg) {
-  const t = Date.parse(leg.start);
-  let best = null;
-  for (const event of data?.events || []) {
-    const comps = event.groupings ? event.groupings.flatMap(g => (/doubles/i.test(g.grouping?.displayName || '') ? [] : g.competitions || [])) : event.competitions || [];
-    for (const comp of comps) {
-      const players = comp.competitors || [];
-      if (players.length !== 2) continue;
-      const name = c => c.athlete?.displayName || c.athlete?.fullName || '';
-      const home = players.find(c => sameSide(name(c), leg.home));
-      const away = players.find(c => c !== home && sameSide(name(c), leg.away));
-      if (!home || !away) continue;
-      const gap = Math.abs(Date.parse(comp.date || event.date) - t);
-      if (gap > 2 * DAY_MS || (best && gap >= best.gap)) continue;
-      best = { gap, comp, home, away };
-    }
-  }
-  if (!best) return null;
-  const type = best.comp.status?.type || {};
-  if (VOID_STATUS.test(type.name || '')) return { status: 'void' };
-  if (type.state === 'in') return { status: 'pending', state: 'in' };
-  if (!type.completed) return { status: 'pending' };
-  const { home, away } = best;
-  // Retired, walkover, draw or no contest: no winner to settle on.
-  if (!DUEL_FINAL.test(type.name || '') || !(home.winner || away.winner)) return { status: 'void' };
-  const homeSets = (home.linescores || []).map(l => Number(l.value) || 0);
-  const awaySets = (away.linescores || []).map(l => Number(l.value) || 0);
-  const won = (a, b) => a.filter((x, i) => x > (b[i] ?? 0)).length;
-  const sets = homeSets.length > 0;
-  return {
-    status: 'final',
-    homeScore: sets ? won(homeSets, awaySets) : home.winner ? 1 : 0,
-    awayScore: sets ? won(awaySets, homeSets) : away.winner ? 1 : 0,
-    homeInnings: homeSets,
-    awayInnings: awaySets
-  };
-}
-
 // ESPN files games under the US Eastern date.
 function espnDates(startUtc) {
   const t = Date.parse(startUtc);
@@ -1017,7 +968,7 @@ export async function fetchOutcomes(legs, now = new Date()) {
   const out = new Map();
   const kambiGone = [];
   // Kambi matches with bets on them: the Worker keeps their scores from now on.
-  watchKambiMatches(legs.filter(l => LEAGUES[l.sport]?.kambi && !LEAGUES[l.sport].results && l.kambiId)).catch(() => {});
+  watchKambiMatches(legs.filter(l => LEAGUES[l.sport]?.kambi && l.kambiId)).catch(() => {});
   const pages = new Map();
   const page = url => {
     if (!pages.has(url)) pages.set(url, getJson(url).catch(() => null));
@@ -1073,17 +1024,9 @@ export async function fetchOutcomes(legs, now = new Date()) {
         return;
       }
       const league = LEAGUES[leg.sport];
-      // Tennis and UFC: ESPN's tour or card scoreboard, the pick's day and the next two.
-      if (league?.results) {
-        for (const days of [0, 1, 2]) {
-          const day = new Date(Date.parse(leg.start) + days * DAY_MS);
-          if (day.getTime() > now.getTime() + DAY_MS) break;
-          const data = await page(`${ESPN}/${league.results}/scoreboard?dates=${yyyymmdd(day)}`);
-          const result = data && parseEspnDuel(data, leg);
-          if (result) return out.set(leg.id, result);
-        }
-        return;
-      }
+      // Tennis and UFC are no longer sold (2026-10-11): a pick still open on
+      // one is void, its stake back.
+      if (!league && ['atp', 'wta', 'ufc'].includes(leg.sport)) return out.set(leg.id, { status: 'void' });
       // Asian baseball from the league's own list (a game Kambi didn't price):
       // the final score in its month's list.
       if (league?.schedule?.asia && !leg.kambiId) {
@@ -1401,17 +1344,8 @@ export async function loadExtraLeagues(now = new Date(), onPart) {
       })
     )
   );
-  const results = await Promise.allSettled([...espn, ...kambi, ...KAMBI_LEAGUES.filter(key => LEAGUES[key].results).map(key => rememberPlayers(key).then(() => []))]);
+  const results = await Promise.allSettled([...espn, ...kambi]);
   return results.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
-}
-
-// Tennis players' and fighters' flags from ESPN's current scoreboard (the
-// tour's tournaments, the next card), shown as their pictures.
-async function rememberPlayers(key) {
-  const data = await getJson(`${ESPN}/${LEAGUES[key].results}/scoreboard`).catch(() => null);
-  for (const event of data?.events || [])
-    for (const comp of event.groupings ? event.groupings.flatMap(g => g.competitions || []) : event.competitions || [])
-      for (const c of comp.competitors || []) if (c.athlete?.displayName && c.athlete.flag?.href) rememberLogo(key, c.athlete.displayName, c.athlete.flag.href);
 }
 
 // A league's clubs, logos and nicknames from ESPN's team list (for the

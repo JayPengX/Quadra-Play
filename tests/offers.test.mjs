@@ -109,13 +109,10 @@ test('players settle from the box score; a player who didn\'t play is void', () 
   assert.equal(propResult({ stat: 'hits', line: 1.5, side: 'under' }, { status: 'final', value: 2 }), 'lost');
 });
 
-test('new kinds settle: draw no bet, corners, the first set, the set score', () => {
+test('new kinds settle: draw no bet, corners', () => {
   const draw = { status: 'final', awayScore: 1, homeScore: 1 };
   assert.equal(legResult({ kind: 'dnb', side: 'home' }, draw), 'void');
   assert.equal(legResult({ kind: 'corners', side: 'over', line: 9.5 }, { ...draw, corners: { home: 7, away: 4 } }), 'won');
   assert.equal(legResult({ kind: 'corners', side: 'over', line: 9.5 }, draw), null);
-  const tennis = { status: 'final', homeScore: 2, awayScore: 1, homeInnings: [4, 6, 6], awayInnings: [6, 3, 2] };
-  assert.equal(legResult({ kind: 'set1', side: 'away' }, tennis), 'won');
-  assert.equal(legResult({ kind: 'setscore', score: '2-1' }, tennis), 'won');
   assert.ok(LINES_SHOWN >= 5);
 });
