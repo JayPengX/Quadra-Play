@@ -153,6 +153,7 @@ function ttlFor(url) {
   // Rosters and players' seasons (players.mjs): a few hours.
   if (url.includes('/roster') || url.includes('/statistics/byathlete')) return 3 * 60 * 60_000;
   if (url.startsWith(ASIA_URL)) return 10 * 60_000;
+  if (url.includes('statsapi.mlb.com') && url.includes('gameType=')) return 5 * 60_000;
   if (/scoreboard\?dates=\d{6}$/.test(url)) return 10 * 60_000;
   // A day's scoreboard: live around today (games on now), else a minute.
   const day = /scoreboard\?dates=(\d{8})$/.exec(url)?.[1];
@@ -194,7 +195,7 @@ function closeProbability(side) {
 const seenStarts = new Map();
 const espnPregame = new Map();
 
-export function parseEspnScoreboard(data, sport) {
+export function parseEspnScoreboard(data, sport, post = null) {
   const games = [];
   for (const event of data.events || []) {
     const comp = event.competitions?.[0];
@@ -203,9 +204,16 @@ export function parseEspnScoreboard(data, sport) {
       seenStarts.get(sport).add(Date.parse(event.date));
     }
     if (!comp || comp.status?.type?.state !== 'pre') continue;
+    // MLB's own list of its postseason (kit/postseason.mjs), over ESPN's
+    // copy of it: whether the game is still "If Necessary", its time, and
+    // whether it's off the list (its series over).
+    const note = comp.notes?.[0]?.headline || '';
+    const sides = Object.fromEntries((comp.competitors || []).map(c => [c.homeAway, { displayName: c.team?.displayName }]));
+    const mlb = post?.list && note ? post.k.mlbGameFor(post.list, { note, ...sides }) : null;
+    if (post?.list && !mlb && post.k.mlbGone?.(post.list, { note, ...sides }, mlbDay(event.date), post.from)) continue;
     // A play-off game not to sell: a side not known yet ("TBD", "CLE/CHW"),
     // or one only played if needed (sold once it's sure, by Kambi or ESPN).
-    if (comp.competitors.some(c => undecidedSide(c.team)) || /if necessary/i.test(comp.notes?.[0]?.headline || '')) continue;
+    if (comp.competitors.some(c => undecidedSide(c.team)) || (mlb ? mlb.maybe : /if necessary/i.test(note))) continue;
     const teams = Object.fromEntries(comp.competitors.map(c => [c.homeAway, c.team.displayName]));
     // ESPN's team ids: the rosters of the game's players (players.mjs).
     const teamIds = Object.fromEntries(comp.competitors.map(c => [c.homeAway, c.team.id ? String(c.team.id) : null]));
@@ -245,8 +253,8 @@ export function parseEspnScoreboard(data, sport) {
     // York): a book's time for it (Kambi's, Polymarket's) when one lists it,
     // else the earliest it can start (noon there, 00:00 the next day here),
     // sold until then, its time shown as 待定.
-    const timeTbd = comp.timeValid === false || undefined;
-    const start = timeTbd && ET_MIDNIGHT.test(event.date) ? Date.parse(event.date) + 12 * 3_600_000 : Date.parse(event.date);
+    const timeTbd = (mlb ? mlb.timeTbd : comp.timeValid === false) || undefined;
+    const start = mlb ? (timeTbd ? Date.parse(`${mlb.day}T16:00:00Z`) : Date.parse(mlb.start)) : timeTbd && ET_MIDNIGHT.test(event.date) ? Date.parse(event.date) + 12 * 3_600_000 : Date.parse(event.date);
     games.push({ sport, startUtc: new Date(start).toISOString(), away: teams.away, home: teams.home, teamIds, neutral: Boolean(comp.neutralSite), preseason: event.season?.type === 1, outcomes, total, spread, ...(timeTbd ? { timeTbd } : {}) });
   }
   return games;
@@ -329,6 +337,19 @@ async function withKambiBook(games, key, now) {
 }
 
 const fetchEspnMlb = now => fetchMonths('mlb', 'baseball/mlb', now);
+
+// MLB's postseason list (kit/postseason.mjs; an older kit without it: none),
+// read with MLB's months while any of its games to come is a play-off one.
+const mlbDay = t => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(t));
+const postKit = import('#kit/postseason.mjs').catch(() => null);
+async function mlbPostseason(pages, now) {
+  const playoff = pages.some(p => (p?.events || []).some(e => e.season?.type === 3 && e.status?.type?.state === 'pre'));
+  const k = playoff ? await postKit : null;
+  if (!k?.mlbPostseason) return null;
+  const from = mlbDay(now.getTime() - DAY_MS);
+  const data = await getJson(k.mlbPostseasonUrl(from.slice(0, 4))).catch(() => null);
+  return data?.dates ? { k, from, list: k.mlbPostseason(data) } : null;
+}
 const fetchEspnEpl = now => fetchMonths('epl', LEAGUES.epl.path, now);
 
 // A league's games from the months' pages (ESPN answers `dates=YYYYMM` with
@@ -339,7 +360,8 @@ async function fetchMonths(key, path, now) {
   kambiBook(key);
   const pages = await Promise.all(monthsAhead(now, -1).map(m => getJson(`${ESPN}/${path}/scoreboard?dates=${m}&limit=1000`).catch(() => null)));
   if (pages.every(p => p === null)) throw new Error(`ESPN ${key} unreachable`);
-  const games = laterGames(pages.filter(Boolean).flatMap(page => parseEspnScoreboard(page, key)), [], now, -1);
+  const post = key === 'mlb' ? await mlbPostseason(pages, now) : null;
+  const games = laterGames(pages.filter(Boolean).flatMap(page => parseEspnScoreboard(page, key, post)), [], now, -1);
   return withHousePrices(await withKambiBook(games, key, now), key, path, getJson);
 }
 
