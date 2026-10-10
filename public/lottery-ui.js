@@ -71,6 +71,15 @@ export function mountLottery(ctx) {
     const when = new Date(at).toLocaleString(lang === 'en' ? 'en-US' : 'zh-TW', { weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Taipei' });
     return t('drawAt', { when });
   }
+  // A drawn tick, the same in every theme (no font's ✓).
+  const checkMark = () => {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M5 12.5l4.5 4.5L19 7.5');
+    svg.append(path);
+    return svg;
+  };
   // The balls a selection makes.
   function selBalls(id, sel) {
     const g = GAMES[id];
@@ -200,11 +209,18 @@ export function mountLottery(ctx) {
       if (st.done)
         return fill(
           el('div', { class: 'q-sheet-head' }, [el('h2', { text: gameName(id, lang) }), el('button', { class: 'q-close', type: 'button', text: '×', 'aria-label': 'close', onclick: close })]),
-          el('div', { class: 'lotto-done' }, [
-            el('div', { class: 'lotto-done-mark', text: '✓' }),
-            el('strong', { text: t('boughtN', { n: st.done.bought, v: money(st.done.cost) }) }),
-            el('span', { class: 'muted', text: d ? untilText(d.at) : '' }),
-            el('div', { class: 'lotto-buybar' }, [
+          // Bought: the tickets as they were picked, when they're drawn, and the two ways on.
+          el('div', { class: 'lotto-bought' }, [
+            el('div', { class: 'lotto-bought-mark', 'aria-hidden': 'true' }, [checkMark()]),
+            el('strong', { class: 'lotto-bought-title', text: t('boughtN', { n: st.done.bought, v: money(st.done.cost) }) }),
+            el('span', { class: 'lotto-bought-when', text: d ? untilText(d.at) : '' }),
+            st.done.lines?.length
+              ? el('div', { class: 'lotto-bought-lines' }, [
+                  ...st.done.lines.slice(0, 4).map((sel, i) => el('div', { class: 'lotto-bought-line' }, [el('small', { text: t('slipN', { n: i + 1 }) }), el('div', { class: 'balls' }, selBalls(id, sel))])),
+                  st.done.lines.length > 4 ? el('small', { class: 'muted', text: `+${st.done.lines.length - 4}` }) : null
+                ].filter(Boolean))
+              : null,
+            el('div', { class: 'lotto-bought-actions' }, [
               el('button', { class: 'q-btn', type: 'button', text: t('seeTickets'), onclick: () => (close(), ctx.showTickets()) }),
               el('button', { class: 'q-btn primary', type: 'button', text: t('again'), onclick: () => ((st.done = null), paint()) })
             ])
@@ -264,7 +280,7 @@ export function mountLottery(ctx) {
               if (!(await confirmBuy(GAMES[id].icon || '🎱', t('buyAsk', { n: bets, v: money(cost) }), t('buyAskBody', { name: GAMES[id][lang] || '' })))) return;
               const r = buyLines(id, lines, st.multiple);
               if (r.error) return void ((st.msg = t(r.error === 'funds' ? 'funds' : 'closed')), paint());
-              st.done = r;
+              st.done = { ...r, lines: lines.slice(0, r.bought).map(x => structuredClone(x)) };
               st.lines = [];
               st.sel = blankSel(id);
               st.msg = '';

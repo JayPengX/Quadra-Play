@@ -179,7 +179,7 @@ export function renderHome(ctx) {
       ]),
       el('button', { class: 'fy-game', type: 'button', onclick: () => ctx.openGame(g.id) }, [
         face ? ctx.logoImg(g.sport, g[face].en, ctx.teamName(g[face]), 'logo-lg') : ctx.leagueImg(g.sport, 'logo-lg'),
-        el('span', { class: 'fy-text' }, [el('strong', { text: bet.shortLabel || bet.label }), el('small', { text: `${state.t(`sport_${g.sport}`)} · ${ctx.matchupText(g)}` })])
+        el('span', { class: 'fy-text' }, [el('strong', { text: bet.shortLabel || bet.label }), el('small', { text: `${state.t(`sport_${g.sport}`)} · ${(ctx.shortGameText || ctx.matchupText)(g)}` })])
       ]),
       el('div', { class: 'fy-foot' }, [el('small', { class: 'num', text: f('payLine', { s: money(STAKE), w: money(Math.round(STAKE * bet.estOdds)) }) }), ctx.pickButton(bet, '')])
     ]);

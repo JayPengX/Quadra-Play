@@ -28,3 +28,16 @@ test('Baseball: first five innings total, settled from the innings', () => {
   assert.equal(legResult({ kind: 'f5total', side: 'under', line: 4.5 }, outcome), 'lost');
   assert.equal(legResult({ kind: 'f5total', side: 'over', line: 4.5 }, { status: 'final', awayScore: 1, homeScore: 0, awayInnings: [1, 0, 0, 0], homeInnings: [0, 0, 0, 0] }), 'void');
 });
+
+test("a preseason game's players: their regular season's numbers at a preseason's minutes (Durant isn't favoured to pass 25.5 in an exhibition)", async () => {
+  const { modelProps } = await import('../public/lib/propmodel.mjs');
+  const durant = { name: 'Kevin Durant', side: 'home', pos: 'F', gp: 62, totals: { pts: 62 * 26.6, reb: 62 * 6, ast: 62 * 4.2, threes: 62 * 2.2, min: 62 * 36 } };
+  const pts = list => list.filter(p => p.stat === 'pts' && p.side === 'over');
+  const regular = pts(modelProps('nba', [durant], null));
+  const pre = pts(modelProps('nba', [durant], null, { preseason: true }));
+  assert.equal(regular[0].line, 26.5);
+  // About 60% of the minutes: a line in the mid-teens, and nothing at 25.5.
+  assert.ok(pre[0].line <= 16.5 && pre[0].line >= 14.5, `line ${pre[0].line}`);
+  assert.ok(!pre.some(p => p.line >= 25.5));
+  assert.ok(pre[0].fair < 0.55);
+});

@@ -78,14 +78,22 @@ export function teamScores(family, { homeMean, awayMean, total, spread, homeWin 
   return { home: total * share, away: total * (1 - share) };
 }
 
+// A preseason game: the share of a regular game's playing time its regulars
+// get (a star plays a half or so, then rests; football's starters a series
+// or two), and how much less sure that makes their numbers. Their numbers
+// are last season's full games: priced as they were, Kevin Durant was
+// favoured to pass 25.5 points in an October exhibition.
+export const PRESEASON = { basketball: { share: 0.6, spread: 1.35 }, football: { share: 0.3, spread: 1.6 }, hockey: { share: 0.8, spread: 1.2 }, baseball: { share: 0.5, spread: 1.3 }, soccer: { share: 0.6, spread: 1.3 } };
+
 // Every model pick for the game's players. `scores`: teamScores' answer (or
-// null: league-average teams).
-export function modelProps(sport, players, scores) {
+// null: league-average teams). `preseason`: an exhibition game (PRESEASON).
+export function modelProps(sport, players, scores, { preseason = false } = {}) {
   const family = familyOf(sport);
   const avg = TEAM_AVERAGE[family];
+  const pre = preseason ? PRESEASON[family] || { share: 0.6, spread: 1.3 } : { share: 1, spread: 1 };
   const scale = side => {
     const s = scores?.[side];
-    return s > 0 && avg ? Math.min(1.5, Math.max(0.6, s / avg)) : 1;
+    return (s > 0 && avg ? Math.min(1.5, Math.max(0.6, s / avg)) : 1) * pre.share;
   };
   const out = [];
   const add = (p, stat, line, side, fair) => {
@@ -93,6 +101,7 @@ export function modelProps(sport, players, scores) {
   };
   const ou = (p, stat, mean, sd) => {
     if (!(mean > 0)) return;
+    sd *= pre.spread;
     const line = Math.floor(mean) + 0.5;
     const over = normalOver(mean, sd, line);
     if (over >= RANGE[0] && 1 - over >= RANGE[0]) {
@@ -133,7 +142,7 @@ export function modelProps(sport, players, scores) {
       // Everyday batters only (pitchers and bench players aside).
       if (/^(P|SP|RP)$/.test(p.pos) || p.gp < 10 || t.ab / Math.max(1, p.gp) < 2.6) continue;
       const f = scale(p.side);
-      const ab = Math.min(5, Math.max(3, Math.round(t.ab / p.gp)));
+      const ab = Math.min(5, Math.max(preseason ? 2 : 3, Math.round((t.ab / p.gp) * pre.share)));
       const avgHit = (t.hits + 0.245 * 60) / (t.ab + 60);
       const hr = rate(t.hr, p.gp, 0.12, 20) * f;
       const rbi = rate(t.rbi, p.gp, 0.45, 20) * f;
@@ -155,9 +164,9 @@ export function modelProps(sport, players, scores) {
       const f = scale(p.side);
       const pts = (t.pts / p.gp) * f;
       ou(p, 'pts', pts, 0.3 * pts + 2.5);
-      const reb = t.reb / p.gp;
+      const reb = (t.reb / p.gp) * pre.share;
       ou(p, 'reb', reb, 0.38 * reb + 1.2);
-      const ast = t.ast / p.gp;
+      const ast = (t.ast / p.gp) * pre.share;
       ou(p, 'ast', ast, 0.4 * ast + 1);
       const threes = (t.threes / p.gp) * f;
       for (const k of [1, 2, 3]) add(p, 'threes', k, 'yes', atLeast(threes, k, 10));
@@ -171,12 +180,12 @@ export function modelProps(sport, players, scores) {
       if (t.passAtt / g >= 15) {
         const yds = (t.passYds / g) * f;
         ou(p, 'passYds', yds, 0.24 * yds + 12);
-        ou(p, 'passComp', t.passComp / g, 0.15 * (t.passComp / g) + 2);
+        ou(p, 'passComp', (t.passComp / g) * pre.share, 0.15 * (t.passComp / g) * pre.share + 2);
         add(p, 'passTD', 2, 'yes', atLeast((t.passTD / g) * f, 2, 12));
       }
       if (t.rushAtt / g >= 5) ou(p, 'rushYds', (t.rushYds / g) * f, 0.45 * (t.rushYds / g) + 8);
       if (t.rec / g >= 2) {
-        ou(p, 'rec', t.rec / g, 0.35 * (t.rec / g) + 0.8);
+        ou(p, 'rec', (t.rec / g) * pre.share, 0.35 * (t.rec / g) * pre.share + 0.8);
         ou(p, 'recYds', (t.recYds / g) * f, 0.55 * (t.recYds / g) + 8);
       }
       if (t.rushAtt / g >= 5 || t.rec / g >= 2) add(p, 'td', 1, 'yes', atLeast(rate(t.td, g, 0.25, 4) * f, 1));

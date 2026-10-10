@@ -24,7 +24,7 @@ import {
   othersBalance, installGate, watchUpdates, quadraSession, tabBar, topActions, recordAffinity, affinityPatch, notify, schedulePush, storedAccount, PLUS, plusMember, openPlus, ask, tell, freeBets
 } from '#kit/quadra.mjs';
 import { pack, unpack } from './lib/codec.mjs';
-import { historyStats, funFacts, crowdPercentile } from './lib/history.mjs';
+import { historyStats, funFacts, crowdPercentile, accountRecord } from './lib/history.mjs';
 import { detectLocale, makeT } from './lib/i18n.mjs';
 import { f1Driver, f1Constructor, F1_NAMES_ZH, F1_PAGE, findTeamLogo, countryFlag, countryCode, leagueLogo, teamLogo, teamZh, teamNameZh, LEAGUES, familyOf, isSoccer, isDuel, normalizeTeamName } from './lib/teams.mjs';
 import { flagUrl } from '#kit/logos.mjs';
@@ -224,6 +224,13 @@ function matchupText(game) {
     : `${teamName(game.away)} @ ${teamName(game.home)}`;
 }
 
+// The same by the teams' short names ("火箭 @ 獨行俠"), for a line under a
+// pick that has a league in front of it too (the full names were cut).
+function shortGameText(game) {
+  const name = team => (state.locale === 'zh' ? teamNameZh(game.sport, team.en, familyOf(game.sport))?.short : null) || teamName(team);
+  return isSoccer(game.sport) || isDuel(game.sport) ? `${name(game.home)} vs ${name(game.away)}` : `${name(game.away)} @ ${name(game.home)}`;
+}
+
 // Which competition a game is in: its league, and for tours and cups the
 // event (Kambi's group: "Chengdu", "Italy Serie A" …).
 function gameSeries(game) {
@@ -407,7 +414,8 @@ function buildBets(data) {
           kind: 'f1pole',
           sport: 'f1',
           market: 'f1pole',
-          matchup: `${raceName(data.f1.title, state.locale)} ${t('f1PoleShort')}`,
+          // The race alone: the pick's tag already says 排位賽第一.
+          matchup: raceName(data.f1.title, state.locale),
           start: data.f1.qualifyingUtc,
           label: `F1 ${t('f1PoleShort')} ${name}`,
           shortLabel: name,
@@ -1862,7 +1870,8 @@ function shortPick(leg) {
 // so the line fits; the game's own text when there are no two teams.
 function shortMatchup(leg) {
   const [away, home] = [leg.away ?? leg.game?.away?.en, leg.home ?? leg.game?.home?.en];
-  if (!away || !home) return leg.matchup;
+  // A race's pick: the race alone (an older ticket's "新加坡站 排位賽第一" said the tag again and was cut).
+  if (!away || !home) return leg.sport === 'f1' ? String(leg.matchup || '').replace(/\s+(排位賽|衝刺|正賽|Pole\b|Qualifying\b|Sprint\b).*$/i, '') : leg.matchup;
   const name = n => (state.locale === 'zh' ? teamNameZh(leg.sport, n, familyOf(leg.sport))?.short : null) || n;
   return isSoccer(leg.sport) ? `${name(home)} vs ${name(away)}` : `${name(away)} @ ${name(home)}`;
 }
@@ -1886,8 +1895,9 @@ function payoutBox(legs, sizes, stake, mode, free = 0) {
   const rows = [];
   if (mode === 'parlay') {
     const product = legs.reduce((p, l) => p * l.odds, 1);
+    // The odds multiplied out on one line: each one up to three picks, past that "6 關賠率相乘" (six of them wrapped onto a second row).
     rows.push(el('div', { class: 'pay-line pay-formula' }, [
-      el('span', { text: `${legs.map(l => fmtOdds(l.odds)).join(' × ')} =` }),
+      el('span', { text: n <= 3 ? `${legs.map(l => fmtOdds(l.odds)).join(' × ')} =` : t('payOddsTimes', { n }) }),
       el('strong', { text: `×${fmtOdds(product)}` })
     ]));
     rows.push(payLine(t('payStake'), fmtMoney(stake, { sign: false })));
@@ -1897,7 +1907,12 @@ function payoutBox(legs, sizes, stake, mode, free = 0) {
     for (const k of sizes) rows.push(payLine(t('paySize', { size: sizeName(k, n), c: fmtInt(bySize[k] ?? 0) }), fmtMoney((bySize[k] ?? 0) * stake, { sign: false })));
   }
   const boost = mode === 'single' ? 0 : boostRate(Math.max(...sizes, 0), boostX());
-  if (boost > 0) rows.push(payLine(t('payBoost'), `+${Math.round(boost * 100)}%`, 'pay-boost'));
+  // The boost in money too: how much more all correct pays with it than without.
+  if (boost > 0) {
+    const plain = slipPayoutTable({ legs, sizes, stake, boost: 0 }).net[all];
+    const more = Math.max(0, Math.round(table.net[all] - plain));
+    rows.push(payLine(t('payBoost', { v: `+${Math.round(boost * 100)}%` }), more > 0 ? `+${fmtMoney(more, { sign: false })}` : `+${Math.round(boost * 100)}%`, 'pay-boost'));
+  }
   // With a free bet: what's paid from the balance (the free part isn't).
   rows.push(payLine(free ? t('payYouPay', { f: fmtMoney(free, { sign: false }) }) : t('payCost', { c: fmtInt(combos) }), fmtMoney(cost, { sign: false }), 'pay-cost'));
   // Tax is the payout table's own (the free part taken off isn't tax).
@@ -2382,25 +2397,19 @@ function renderAccount() {
   const account = state.account;
   const now = new Date();
   const money = funds();
-  const open = account.slips.filter(x => x.status === 'open');
-  const atStake = open.reduce((sum, x) => sum + x.cost, 0);
-  // Everything won: slips paid (cashed out too) and lottery prizes.
-  const won = account.ledger.filter(e => e.kind === 'payout' || e.kind === 'cashout' || e.kind === 'prize').reduce((sum, e) => sum + Math.max(0, e.amount), 0);
-  // The whole record at a glance: what's riding now, won so far, the net
-  // result of everything settled and how much of the stakes came back.
-  const total = historyStats(account).total || {};
-  const net = Number(total.net) || 0;
-  const cell = (label, value, cls = '', sub = '') => el('div', { class: 'acct-cell' }, [el('span', { text: label }), el('strong', { class: `num ${cls}`, text: value }), sub ? el('small', { text: sub }) : null]);
+  const r = accountRecord(account);
+  const cell = (label, value, cls = '', sub = '') => el('div', { class: 'acct-cell' }, [el('span', { text: label }), el('strong', { class: `num ${cls}`, text: value }), el('small', { text: sub || '\u00a0' })]);
   $('account-body').replaceChildren(
     el('div', { class: 'card account-card' }, [
       el('div', { class: 'account-top' }, [
         el('div', {}, [el('p', { class: 'muted', text: t('poolTotal') }), el('p', { class: `account-balance stat-value${money < 0 ? ' back-low' : ''}`, text: fmtMoney(money, { sign: money < 0 }) })])
       ]),
       el('div', { class: 'acct-cells' }, [
-        cell(t('accountAtStake'), fmtMoney(atStake, { sign: false }), '', t('sumSlips', { n: open.length })),
-        cell(t('accountWon'), fmtMoney(won, { sign: false }), won > 0 ? 'back-high' : ''),
-        cell(t('accountNet'), fmtMoney(net, { sign: true }), net > 0 ? 'back-high' : net < 0 ? 'back-low' : ''),
-        cell(t('accountBack'), total.back == null ? '—' : `${Math.round(total.back)}%`, '', total.slips ? t('sumSlips', { n: total.slips }) : '')
+        cell(t('accountAtStake'), fmtMoney(r.open, { sign: false }), '', t('sumSlips', { n: r.openCount })),
+        cell(t('accountWon'), fmtMoney(r.won, { sign: false }), r.won > 0 ? 'back-high' : ''),
+        // Nothing decided yet: said so, not a NT$0 or a dash that reads as a result.
+        cell(t('accountNet'), r.net == null ? t('accountNone') : fmtMoney(r.net, { sign: true }), r.net > 0 ? 'back-high' : r.net < 0 ? 'back-low' : r.net == null ? 'acct-none' : '', r.decided ? t('accountDecided', { n: r.decided }) : ''),
+        cell(t('accountBack'), r.back == null ? t('accountNone') : `${Math.round(r.back)}%`, r.back == null ? 'acct-none' : r.back >= 100 ? 'back-high' : '')
       ]),
       canClaim(account, now) || state.grantNote ? el('p', { class: 'muted', text: state.grantNote ? t('grantAdded', { v: fmtMoney(WEEKLY_GRANT, { sign: false }) }) : '' }) : null
     ])
@@ -2540,7 +2549,8 @@ function slipNowLine(slip, states) {
 // A game's score in one line, the teams in the card's order: "太空人 4 : 6
 // 運動家".
 function scoreText(leg, score) {
-  const name = side => teamName({ en: leg[side], zh: teamZh(leg.sport, leg[side]) });
+  // Short names ("火箭 76 : 64 獨行俠"): the full ones were cut on a phone.
+  const name = side => (state.locale === 'zh' ? teamNameZh(leg.sport, leg[side], familyOf(leg.sport))?.short : null) || teamName({ en: leg[side], zh: teamZh(leg.sport, leg[side]) });
   const first = isSoccer(leg.sport) ? ['home', 'away'] : ['away', 'home'];
   return `${name(first[0])} ${score[first[0]]} : ${score[first[1]]} ${name(first[1])}`;
 }
@@ -2555,6 +2565,13 @@ function legFinalLine(leg) {
   return el('span', { class: 'leg-inplay leg-final muted', text });
 }
 
+// Where a pick in play stands now, as a class: 'winning', 'losing', or '' (level, or no score yet).
+function liveTone(leg) {
+  if (!state.legLive.has(leg.id)) return '';
+  const standing = legStanding(leg);
+  return standing === 'won' ? 'winning' : standing === 'lost' ? 'losing' : '';
+}
+
 function legLiveLine(leg) {
   const t = state.t;
   const live = state.legLive.get(leg.id);
@@ -2563,8 +2580,9 @@ function legLiveLine(leg) {
   const moved = scoreMoved(`leg|${leg.id}`, score);
   const standing = legStanding(leg);
   const tag = { won: ['winning', 'legNowWinning'], lost: ['losing', 'legNowLosing'], void: ['level', 'legNowLevel'], level: ['level', 'legNowLevel'] }[standing];
+  // The score in the pick's colour: green while it would win, red while it would lose.
   return el('span', { class: 'leg-inplay' }, [
-    el('span', { class: `leg-live-score${moved ? ' moved' : ''}`, text: score }),
+    el('span', { class: `leg-live-score${tag ? ` ${tag[0]}` : ''}${moved ? ' moved' : ''}`, text: score }),
     el('span', { class: 'muted', text: ` · ${liveDetail(live, leg.sport)}` }),
     tag ? el('span', { class: `leg-now ${tag[0]}`, text: t(tag[1]) }) : null
   ]);
@@ -2622,7 +2640,8 @@ function savedSlipCard(slip) {
       pill
     ]),
     // One segment per pick, coloured by where it stands.
-    el('div', { class: 'leg-bar', role: 'img', 'aria-label': t('slipProgress', { k: decided, n }) }, states.map(st => el('span', { class: `seg seg-${st}` }))),
+    // A pick in play: green while it would win, red while it would lose.
+    el('div', { class: 'leg-bar', role: 'img', 'aria-label': t('slipProgress', { k: decided, n }) }, states.map((st, k) => el('span', { class: `seg seg-${st}${st === 'live' ? ` ${liveTone(slip.legs[k])}` : ''}` }))),
     el('p', { class: 'saved-progress' }, [
       document.createTextNode(t('slipProgress', { k: decided, n })),
       !settled && nextStart ? el('span', { class: 'muted', text: ` · ${t('slipNextStart', { time: fmtShort(nextStart) })}` }) : null
@@ -2630,7 +2649,7 @@ function savedSlipCard(slip) {
     !settled ? slipNowLine(slip, states) : null,
     el('ul', { class: 'parlay-legs saved-legs' },
       slip.legs.map((leg, k) =>
-        el('li', { class: `leg-${states[k]}` }, [
+        el('li', { class: `leg-${states[k]}${states[k] === 'live' ? ` ${liveTone(leg)}` : ''}` }, [
           el('span', { class: 'leg-result', role: 'img', 'aria-label': t(`legState_${states[k]}`), title: t(`legState_${states[k]}`) }, [icon(states[k])]),
           legIcon(leg),
           el('span', { class: 'leg-body' }, [legMain(leg), states[k] === 'live' ? legLiveLine(leg) : leg.result ? legFinalLine(leg) : null]),
@@ -3655,7 +3674,7 @@ topActions(q, { refresh: load });
 // its text changes and when its box resizes (which also covers a tab showing
 // it for the first time). Only the slip and simulator
 // have such numbers. All reads, then all writes, so the page lays out once.
-const FIT_SELECTOR = '.stat-value, .player-line strong, .lapse-stats strong, .story-big, .buy strong, .you-end';
+const FIT_SELECTOR = '.stat-value, .acct-cell strong, .player-line strong, .lapse-stats strong, .story-big, .buy strong, .you-end';
 function fitNumbers(nodes) {
   for (const node of nodes) node.style.fontSize = '';
   const sizes = nodes.map(node => {
@@ -3690,7 +3709,7 @@ if ('ResizeObserver' in window) {
     }
     if (found.size) fitNumbers([...found]);
   });
-  for (const id of ['slip-sheet', 'panel-history']) if ($(id)) watch.observe($(id), { childList: true, subtree: true, characterData: true });
+  for (const id of ['slip-sheet', 'panel-history', 'account-body']) if ($(id)) watch.observe($(id), { childList: true, subtree: true, characterData: true });
 }
 
 // Tells the page's failsafe (in index.html) that the scripts loaded and started.
@@ -3752,7 +3771,7 @@ function homeCtx() {
   };
   return {
     openSlip: () => openSlip(),
-    slipCount: () => slipLegs().legs.length, state, q, el, fmtMoney, fmtOdds, fmtTime, gameTime, legTime, fmtShort, shownLabel, shortPick, legIcon, pickTitle, pickButton, teamName, gameSeries, matchupText, logoImg, leagueImg, toggleLeg, takeParlay, showTab, openGame, openLive, liveStateText, betKeys, track, funds, slipRange, cashOutPrice, doCashOut, leagueTier: shownTier, isSoccer, parlayPays, boostPct: n => Math.round(boostRate(n, boostX()) * 100) };
+    slipCount: () => slipLegs().legs.length, state, q, el, fmtMoney, fmtOdds, fmtTime, gameTime, legTime, fmtShort, shownLabel, shortPick, legIcon, pickTitle, pickButton, teamName, gameSeries, matchupText, shortGameText, logoImg, leagueImg, toggleLeg, takeParlay, showTab, openGame, openLive, liveStateText, betKeys, track, funds, slipRange, cashOutPrice, doCashOut, leagueTier: shownTier, isSoccer, parlayPays, boostPct: n => Math.round(boostRate(n, boostX()) * 100) };
 }
 statsUi = mountStats({ state, el, svgEl, fmtMoney, fmtInt, fmtPctShort, fmtOdds, fmtTime, showTab, sportName: key => (key === 'mixed' ? state.t('sportMixed') : state.t(`sport_${key}`) === `sport_${key}` ? String(key).toUpperCase() : state.t(`sport_${key}`)), youCard, crowdCard, funCard, picksCard, breakdownCard });
 lotteryUi = mountLottery({ state, q, el, fmtMoney, funds, commitAccount, track, getAccount: () => state.account, syncNow, showTickets });

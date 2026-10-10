@@ -306,7 +306,7 @@ function gameProps(game, probs) {
     let scores = null;
     if (family === 'soccer' && probs.draw != null) scores = fitGoals(probs.home, probs.away);
     else scores = teamScores(family, { total: game.total?.line, spread: game.spread?.awayLine ?? null, homeWin: probs.home / (probs.home + probs.away) });
-    model = modelProps(game.sport, players, scores).filter(p => !seen.has(key(p)));
+    model = modelProps(game.sport, players, scores, { preseason: Boolean(game.preseason) }).filter(p => !seen.has(key(p)));
   }
   return [...kambi, ...model].map(p => ({ ...p, ...photoOf(players, p.player) }));
 }
