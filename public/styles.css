@@ -1467,3 +1467,6 @@ body:has(.slip-bar:not([hidden])) main { padding-bottom: 84px; }
 .cashout-actions { display: flex; }
 .cashout-actions .cashout-btn { flex: 1; }
 .cashout-btn:active:not(:disabled) { transform: scale(0.97); }
+/* A lost slip's games still to play: not counted, shown done (a filled grey bar, the row faded). */
+.seg-moot { background: color-mix(in srgb, var(--text-muted) 45%, transparent) !important; }
+.saved-legs li.leg-moot { opacity: 0.55; }
