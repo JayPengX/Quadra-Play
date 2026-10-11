@@ -21,7 +21,7 @@ import { mountLottery } from './lottery-ui.js';
 import { mountStats } from './stats-ui.js';
 import { icon } from './icons.js';
 import {
-  othersBalance, installGate, watchUpdates, quadraSession, tabBar, topActions, recordAffinity, affinityPatch, notify, schedulePush, storedAccount, PLUS, plusMember, openPlus, ask, tell, freeBets
+  othersBalance, installGate, watchUpdates, quadraSession, tabBar, topActions, recordAffinity, affinityPatch, notify, schedulePush, storedAccount, PLUS, plusMember, openPlus, ask, tell, freeBets, dev, everyDev
 } from '#kit/quadra.mjs';
 import { pack, unpack } from './lib/codec.mjs';
 import { historyStats, funFacts, crowdPercentile, accountRecord } from './lib/history.mjs';
@@ -1458,7 +1458,8 @@ function drawLive() {
 // Live games and open bets on games under way refresh every 15 seconds while
 // on screen (the proxy keeps live answers 10 seconds), at once on coming back
 // to the app or to a tab that shows them.
-const LIVE_REFRESH_MS = 15_000;
+// The live beat: the admin panel's 開發 (kit dev 'playLive'), 5 seconds by default.
+const liveMs = () => dev('playLive') * 1000;
 let liveBusy = null;
 let liveAgain = false;
 // Resolves once the games in play are drawn (a read already on its way: that one).
@@ -1508,7 +1509,7 @@ function livePulse({ force = false } = {}) {
   if (state.tab === 'games' || state.tab === 'home' || (slipOpen() && state.parlay.some(id => id.startsWith('live|')))) refreshLive();
   if (state.data && (state.tab === 'history' || state.tab === 'home' || slipOpen())) checkResults(force);
 }
-setInterval(() => livePulse(), LIVE_REFRESH_MS);
+everyDev('playLive', () => livePulse());
 
 // ---- Championships and F1: one board each -------------------------------------
 
@@ -2401,7 +2402,7 @@ async function checkResults(force = false) {
   const pending = open.flatMap(s => s.legs.filter(l => !l.result && (l.kind === 'future' || (l.start && Date.parse(l.start) <= now.getTime()))));
   if (!pending.length || state.checking) return;
   // (A beat's own timer runs a little early or late: a second's slack.)
-  if (!force && now.getTime() - state.checkedAt < (state.legLive.size ? LIVE_REFRESH_MS - 1000 : RESULT_CHECK_MS)) return;
+  if (!force && now.getTime() - state.checkedAt < (state.legLive.size ? liveMs() - 1000 : RESULT_CHECK_MS)) return;
   state.checking = true;
   state.checkedAt = now.getTime();
   renderSaved();

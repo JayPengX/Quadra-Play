@@ -164,7 +164,8 @@ function ttlFor(url) {
   return LIVE_TTL;
 }
 // What's on now is read again after this long (the proxy keeps it 10 s).
-const LIVE_TTL = 10_000;
+// Kept on the phone only to share one read: the refresh speed is the admin panel's (kit dev).
+const LIVE_TTL = 2_000;
 // The kit already asks a failing list again (a batch's failure on its own,
 // then once more): no third and fourth try here.
 export function getJson(url, trim) {
