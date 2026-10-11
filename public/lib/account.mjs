@@ -290,10 +290,15 @@ export function applyResults(account, slipId, results, now = new Date(), finals 
     if (leg.result || !results[i]) return leg;
     return { ...leg, result: results[i], ...(finals[i] ? { final: finals[i] } : {}) };
   });
-  if (legs.every((leg, i) => leg.result === slip.legs[i].result)) return account;
+  // Settled once every pick is decided, or as soon as nothing left can pay
+  // (a parlay with a pick lost: lost now, not after the other games end;
+  // one already lost and open, from before, settles on the next check).
+  const best = settleSlip({ legs: legs.map(leg => ({ ...leg, result: leg.result ?? 'won' })), sizes: slip.sizes, stake: slip.stake, boost: slip.boost ?? 0 }).net;
+  const dead = best <= 0 && legs.some(leg => leg.result);
+  if (!dead && legs.every((leg, i) => leg.result === slip.legs[i].result)) return account;
   let updated = { ...slip, legs };
   let ledger = account.ledger;
-  if (legs.every(leg => leg.result)) {
+  if (legs.every(leg => leg.result) || dead) {
     const settle = boost => {
       const { gross, net } = settleSlip({ legs, sizes: slip.sizes, stake: slip.stake, boost });
       // A free bet pays what it won, less the stake it never cost.

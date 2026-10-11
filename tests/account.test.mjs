@@ -104,6 +104,23 @@ test('a slip settles once every leg is decided, and pays in once', () => {
   assert.equal(applyResults(account, 's', ['won', 'won']), account);
 });
 
+test('a parlay with a pick lost settles at once, the other games not waited for', () => {
+  let account = newAccount(at('2026-09-25T00:00:00Z'));
+  ({ account } = placeSlip(account, slip('p', 100, [{ id: 'a', odds: 2 }, { id: 'b', odds: 1.5 }, { id: 'c', odds: 1.8 }])));
+  account = applyResults(account, 'p', [null, 'lost', null]);
+  assert.equal(account.slips[0].status, 'settled');
+  assert.equal(account.slips[0].payout, 0);
+  assert.ok(!account.slips[0].legs[0].result);
+  assert.equal(balance(account), START_BALANCE - 100);
+  assert.equal(applyResults(account, 'p', ['won', null, 'won']), account);
+  // One lost before this, still open: settled on the next check, nothing new in.
+  let older = newAccount(at('2026-09-25T00:00:00Z'));
+  ({ account: older } = placeSlip(older, slip('q', 100, [{ id: 'a', odds: 2 }, { id: 'b', odds: 1.5 }])));
+  older = { ...older, slips: older.slips.map(s => ({ ...s, legs: s.legs.map((l, i) => (i ? l : { ...l, result: 'lost' })) })) };
+  older = applyResults(older, 'q', [null, null]);
+  assert.equal(older.slips[0].status, 'settled');
+});
+
 test('a free bet: no cost, the token spent once, only the winnings paid, no cash out', () => {
   let account = newAccount(at('2026-09-25T00:00:00Z'));
   const token = { id: 'vocab:fb:2026-09-25:parlay3', value: 100 };

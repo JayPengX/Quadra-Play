@@ -2387,8 +2387,17 @@ const RESULT_CHECK_MS = 90_000;
 const VOID_AFTER_MS = 3 * 86_400_000;
 async function checkResults(force = false) {
   if (!state.accountReady) return;
-  const open = state.account.slips.filter(s => s.status === 'open');
+  let open = state.account.slips.filter(s => s.status === 'open');
   const now = new Date();
+  // A slip with nothing left that can pay (a parlay's pick lost) settles now,
+  // its other games not started yet.
+  const settled = open.reduce((a, s) => applyResults(a, s.id, s.legs.map(() => null), now), state.account);
+  if (settled !== state.account) {
+    open.forEach(s => settled.slips.find(x => x.id === s.id)?.status === 'settled' && state.freshSlips.add(s.id));
+    commitAccount(settled);
+    open = settled.slips.filter(s => s.status === 'open');
+    renderSaved();
+  }
   const pending = open.flatMap(s => s.legs.filter(l => !l.result && (l.kind === 'future' || (l.start && Date.parse(l.start) <= now.getTime()))));
   if (!pending.length || state.checking) return;
   // (A beat's own timer runs a little early or late: a second's slack.)
@@ -2611,7 +2620,7 @@ function liveDetail(live, sport) {
 }
 
 // Where an open slip stands now, in one sentence and a colour. A parlay
-// lives or dies on every pick: one losing and it loses ("1 場目前不中，這張
+// lives or dies on every pick: one losing and it loses ("1 場目前猜錯，這張
 // 串關會輸"), all winning and it pays ("照目前比分全中，可拿 NT$3,090"); a
 // level pick says so. Singles and systems: what it would pay if the games on
 // now ended now. Null with nothing in play or decided.
@@ -2702,7 +2711,7 @@ function legSubLine(leg, st) {
 }
 const sameName = (a, b) => String(a || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === String(b || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
-// A pick's state as a small word at its side: 目前會中 / 目前不中 / 平手 while on, 中 / 沒中 once decided.
+// A pick's state as a small word at its side: 目前猜對 / 目前猜錯 / 平手 while on, 猜對了 / 猜錯了 once decided.
 function legChip(leg, st) {
   const t = state.t;
   if (st === 'live') {
@@ -2748,8 +2757,8 @@ function recoveredSlipCard(slip) {
 }
 
 // A slip at a glance (home's 你的投注): each pick's state in start order,
-// its colour, and a few words on where it stands ("1 場目前不中",
-// "比賽中都會中", or when the next game starts).
+// its colour, and a few words on where it stands ("1 場目前猜錯",
+// "比賽中都猜對", or when the next game starts).
 function slipGlance(slip) {
   const t = state.t;
   const now = Date.now();

@@ -235,7 +235,7 @@ export function renderHome(ctx) {
   const most = open.reduce((s, x) => s + Math.max(0, ctx.slipRange(x).most), 0);
   // A slip as itself: one pick, its picture and the pick; several, a badge
   // with how many (6 關) and the kind (全部過關), a segment a pick coloured by
-  // where it stands, and a few words on it (1 場目前不中 / 比賽中都會中 /
+  // where it stands, and a few words on it (1 場目前猜錯 / 比賽中都猜對 /
   // when the next starts); what's in and what it can pay; its cash-out (or
   // the free bet's mark) at the side. (Three logos overlapping and "火箭、
   // 火箭、兵工廠…" said little about a 6-pick parlay.)
