@@ -2707,7 +2707,8 @@ function legSubLine(leg, st) {
     const text = f.winner ? `${t('finalWinner')} ${String(f.winner).replace(/^[A-Z]{1,3}\.(?=[\u4e00-\u9fff])/, '')}` : `${t('finalScore')} ${scoreText(leg, f)}`;
     return el('small', { class: 'leg-sub', text });
   }
-  return el('small', { class: 'leg-sub', text: [legWhen(leg.start), shortMatchup(leg)].filter(Boolean).join(' · ') });
+  // (Not counted: the game alone, no time to wait for.)
+  return el('small', { class: 'leg-sub', text: [st === 'moot' ? '' : legWhen(leg.start), shortMatchup(leg)].filter(Boolean).join(' · ') });
 }
 const sameName = (a, b) => String(a || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === String(b || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
